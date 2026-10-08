@@ -1,10 +1,10 @@
 use arc_core::*;
 use arc_geometry::*;
-use nalgebra::{Point3, Vector3};
+use crate::{Point3, Vector3};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Annotation {
     pub id: EntityId,
     pub name: String,
@@ -26,7 +26,7 @@ pub struct Annotation {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnotationType {
     Text,
     Dimension,
@@ -47,7 +47,7 @@ pub enum AnnotationType {
     LevelMark,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TextStyle {
     pub font_family: String,
     pub font_size: f64,
@@ -61,7 +61,7 @@ pub struct TextStyle {
     pub oblique_angle: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAlignment {
     Left,
     Center,
@@ -86,7 +86,7 @@ impl Default for TextStyle {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Leader {
     pub points: Vec<Point3>,
     pub arrowhead: ArrowheadType,
@@ -95,7 +95,7 @@ pub struct Leader {
     pub content: LeaderContent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrowheadType {
     Closed,
     Open,
@@ -105,14 +105,14 @@ pub enum ArrowheadType {
     None,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub enum LeaderContent {
     Text(String),
     Block(String),
     None,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Dimension {
     pub dimension_type: DimensionType,
     pub points: Vec<Point3>,
@@ -134,7 +134,7 @@ pub struct Dimension {
     pub alternate_units_precision: u8,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionType {
     Linear,
     Aligned,
@@ -147,7 +147,7 @@ pub enum DimensionType {
     Continue,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionTextPosition {
     Above,
     Below,
@@ -156,7 +156,7 @@ pub enum DimensionTextPosition {
     Custom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DimensionUnits {
     Architectural,
     Decimal,
@@ -166,7 +166,7 @@ pub enum DimensionUnits {
     Metric,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZeroSuppression {
     None,
     Leading,
@@ -174,7 +174,7 @@ pub enum ZeroSuppression {
     Both,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Tag {
     pub tag_type: TagType,
     pub family: String,
@@ -183,7 +183,7 @@ pub struct Tag {
     pub leader: Option<Leader>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagType {
     Door,
     Window,
@@ -196,7 +196,7 @@ pub enum TagType {
     Custom,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     pub symbol_type: SymbolType,
     pub name: String,
@@ -205,7 +205,7 @@ pub struct Symbol {
     pub definition: SymbolDefinition,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolType {
     NorthArrow,
     SectionMark,
@@ -219,13 +219,13 @@ pub enum SymbolType {
     Custom,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SymbolDefinition {
     pub geometry: Vec<SymbolGeometry>,
     pub attributes: Vec<SymbolAttribute>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub enum SymbolGeometry {
     Line(Point3, Point3),
     Arc(Point3, f64, f64, f64),
@@ -234,7 +234,7 @@ pub enum SymbolGeometry {
     Polygon(Vec<Point3>),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SymbolAttribute {
     pub name: String,
     pub value: String,
@@ -243,7 +243,7 @@ pub struct SymbolAttribute {
     pub visible: bool,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct RevisionCloud {
     pub points: Vec<Point3>,
     pub arc_length: f64,
@@ -253,7 +253,7 @@ pub struct RevisionCloud {
     pub revision_date: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloudStyle {
     Rectangular,
     Polygonal,

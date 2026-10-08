@@ -1,10 +1,11 @@
 use arc_core::*;
 use arc_geometry::*;
-use nalgebra::{Point3, Vector3};
+use crate::{Point3, Vector3};
 use std::sync::Arc;
 use parking_lot::RwLock;
+use crate::level::{Level, LevelType, LevelRef, LevelBuilder};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Grid {
     pub id: EntityId,
     pub name: String,
@@ -33,7 +34,7 @@ pub struct Grid {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GridType {
     Rectangular,
     Radial,
@@ -259,137 +260,4 @@ impl GridBuilder {
 
 pub fn grid_builder(name: String, origin: Point3, x_axis: Vector3, y_axis: Vector3, spacing_x: f64, spacing_y: f64, count_x: usize, count_y: usize) -> GridBuilder {
     GridBuilder::new(name, origin, x_axis, y_axis, spacing_x, spacing_y, count_x, count_y)
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Level {
-    pub id: EntityId,
-    pub name: String,
-    pub elevation: f64,
-    pub height: f64,
-    pub level_type: LevelType,
-    pub associated_plan: Option<String>,
-    pub color: crate::Color,
-    pub show_in_3d: bool,
-    pub show_in_plan: bool,
-    pub transform: Transform,
-    pub visible: bool,
-    pub locked: bool,
-    pub properties: std::collections::HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum LevelType {
-    Story,
-    Reference,
-    Datum,
-    Roof,
-    Basement,
-    Mezzanine,
-    Penthouse,
-}
-
-impl Level {
-    pub fn new(name: String, elevation: f64, height: f64) -> Self {
-        Self {
-            id: EntityId::new(),
-            name,
-            elevation,
-            height,
-            level_type: LevelType::Story,
-            associated_plan: None,
-            color: crate::Color::BLUE,
-            show_in_3d: true,
-            show_in_plan: true,
-            transform: Transform::identity(),
-            visible: true,
-            locked: false,
-            properties: std::collections::HashMap::new(),
-        }
-    }
-
-    pub fn story(name: String, elevation: f64, height: f64) -> Self {
-        let mut level = Self::new(name, elevation, height);
-        level.level_type = LevelType::Story;
-        level
-    }
-
-    pub fn reference(name: String, elevation: f64) -> Self {
-        let mut level = Self::new(name, elevation, 0.0);
-        level.level_type = LevelType::Reference;
-        level
-    }
-
-    pub fn roof(name: String, elevation: f64) -> Self {
-        let mut level = Self::new(name, elevation, 0.0);
-        level.level_type = LevelType::Roof;
-        level.color = crate::Color::RED;
-        level
-    }
-
-    pub fn basement(name: String, elevation: f64, height: f64) -> Self {
-        let mut level = Self::new(name, elevation, height);
-        level.level_type = LevelType::Basement;
-        level.color = crate::Color::GRAY;
-        level
-    }
-
-    pub fn set_plan(&mut self, plan_name: String) {
-        self.associated_plan = Some(plan_name);
-    }
-
-    pub fn absolute_elevation(&self, relative: f64) -> f64 {
-        self.elevation + relative
-    }
-
-    pub fn relative_elevation(&self, absolute: f64) -> f64 {
-        absolute - self.elevation
-    }
-}
-
-pub type LevelRef = Arc<RwLock<Level>>;
-
-pub struct LevelBuilder {
-    level: Level,
-}
-
-impl LevelBuilder {
-    pub fn new(name: String, elevation: f64, height: f64) -> Self {
-        Self {
-            level: Level::new(name, elevation, height),
-        }
-    }
-
-    pub fn level_type(mut self, level_type: LevelType) -> Self {
-        self.level.level_type = level_type;
-        self
-    }
-
-    pub fn plan(mut self, plan_name: String) -> Self {
-        self.level.set_plan(plan_name);
-        self
-    }
-
-    pub fn color(mut self, color: crate::Color) -> Self {
-        self.level.color = color;
-        self
-    }
-
-    pub fn show_in_3d(mut self, show: bool) -> Self {
-        self.level.show_in_3d = show;
-        self
-    }
-
-    pub fn show_in_plan(mut self, show: bool) -> Self {
-        self.level.show_in_plan = show;
-        self
-    }
-
-    pub fn build(mut self) -> Level {
-        self.level
-    }
-}
-
-pub fn level_builder(name: String, elevation: f64, height: f64) -> LevelBuilder {
-    LevelBuilder::new(name, elevation, height)
 }

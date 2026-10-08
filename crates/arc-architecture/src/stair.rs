@@ -1,10 +1,10 @@
 use arc_core::*;
 use arc_geometry::*;
-use nalgebra::{Point3, Vector3};
+use crate::{Point3, Vector3};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Stair {
     pub id: EntityId,
     pub name: String,
@@ -36,7 +36,7 @@ pub struct Stair {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StairType {
     Straight,
     LShaped,
@@ -47,7 +47,7 @@ pub enum StairType {
     Grand,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurnType {
     None,
     QuarterLanding,
@@ -56,7 +56,7 @@ pub enum TurnType {
     Spiral,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringerType {
     Closed,
     Open,
@@ -65,7 +65,7 @@ pub enum StringerType {
     Cantilevered,
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Railing {
     pub enabled: bool,
     pub height: f64,
@@ -76,8 +76,9 @@ pub struct Railing {
     pub extensions: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RailingProfile {
+    #[default]
     Round,
     Square,
     Rectangular,

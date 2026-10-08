@@ -1,10 +1,23 @@
 use arc_core::*;
 use arc_geometry::*;
-use nalgebra::{Point3, Vector3};
+use crate::{Point3, Vector3};
 use std::sync::Arc;
 use parking_lot::RwLock;
+use crate::wall::WallRef;
+use crate::level::LevelRef;
+use crate::grid::GridRef;
+use crate::stair::StairRef;
+use crate::roof::RoofRef;
+use crate::slab::SlabRef as DoorSlabRef;
+use crate::column::ColumnRef;
+use crate::beam::BeamRef;
+use crate::room::RoomRef;
+use crate::space::SpaceRef;
+use crate::annotation::AnnotationRef;
+use crate::window::WindowRef;
+use crate::wall::OpeningRef;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Door {
     pub id: EntityId,
     pub name: String,
@@ -33,7 +46,7 @@ pub struct Door {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoorType {
     Single,
     Double,
@@ -47,7 +60,7 @@ pub enum DoorType {
     Custom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoorStyle {
     Panel,
     Flush,
@@ -59,7 +72,7 @@ pub enum DoorStyle {
     Pivot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwingDirection {
     In,
     Out,
@@ -67,13 +80,13 @@ pub enum SwingDirection {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HingeSide {
     Left,
     Right,
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct HardwareSet {
     pub handle: Option<String>,
     pub lock: Option<String>,
@@ -145,12 +158,14 @@ impl Door {
     pub fn set_in_wall(&mut self, wall: WallRef, position_along: f64) {
         self.wall = Some(wall.clone());
         let wall_guard = wall.read();
-        let segment = wall_guard.baseline_segments().get(position_along as usize % wall_guard.baseline_segments().len().max(1)).cloned();
+        let segments = wall_guard.baseline_segments();
+        let segment = segments.get(position_along as usize % segments.len().max(1)).cloned();
+        let thickness = wall_guard.thickness;
         drop(wall_guard);
         
         if let Some((start, end)) = segment {
             let dir = (end - start).normalize();
-            let pos = start + dir * position_along + Vector3::new(-dir.y, dir.x, 0.0) * (wall_guard.thickness * 0.5);
+            let pos = start + dir * position_along + Vector3::new(-dir.y, dir.x, 0.0) * (thickness * 0.5);
             self.position = pos;
             self.orientation = dir;
         }

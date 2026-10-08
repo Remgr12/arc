@@ -19,6 +19,22 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
+pub use arc_geometry::{Point3, Vector3};
+
+use crate::wall::WallRef;
+use crate::door::DoorRef;
+use crate::window::WindowRef;
+use crate::level::LevelRef;
+use crate::grid::GridRef;
+use crate::stair::StairRef;
+use crate::roof::RoofRef;
+use crate::slab::SlabRef as SlabRef2;
+use crate::column::ColumnRef;
+use crate::beam::BeamRef;
+use crate::room::RoomRef;
+use crate::space::SpaceRef;
+use crate::annotation::AnnotationRef;
+
 pub use wall::*;
 pub use door::*;
 pub use window::*;
@@ -33,7 +49,7 @@ pub use level::*;
 pub use space::*;
 pub use annotation::*;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ArchitecturalModel {
     pub id: EntityId,
     pub name: String,
@@ -44,7 +60,7 @@ pub struct ArchitecturalModel {
     pub windows: Vec<WindowRef>,
     pub stairs: Vec<StairRef>,
     pub roofs: Vec<RoofRef>,
-    pub slabs: Vec<SlabRef>,
+    pub slabs: Vec<SlabRef2>,
     pub columns: Vec<ColumnRef>,
     pub beams: Vec<BeamRef>,
     pub rooms: Vec<RoomRef>,
@@ -137,7 +153,7 @@ impl ArchitecturalModel {
         roof_ref
     }
 
-    pub fn add_slab(&mut self, slab: Slab) -> SlabRef {
+    pub fn add_slab(&mut self, slab: crate::slab::Slab) -> crate::slab::SlabRef {
         let slab_ref = Arc::new(RwLock::new(slab));
         self.slabs.push(slab_ref.clone());
         slab_ref
@@ -173,7 +189,7 @@ impl ArchitecturalModel {
         annotation_ref
     }
 
-    pub fn get_elements_at_point(&self, point: Point3<f64>, tolerance: f64) -> Vec<ArchElement> {
+    pub fn get_elements_at_point(&self, point: Point3, tolerance: f64) -> Vec<ArchElement> {
         let mut elements = Vec::new();
         
         for wall in &self.walls {
@@ -195,7 +211,7 @@ impl ArchitecturalModel {
         }
         
         for room in &self.rooms {
-            if room.read().contains_point(point) {
+            if room.read().contains_point(point, 0.01) {
                 elements.push(ArchElement::Room(room.clone()));
             }
         }
@@ -207,28 +223,28 @@ impl ArchitecturalModel {
         let mut bbox = crate::BoundingBox::empty();
         
         for wall in &self.walls {
-            bbox.expand(&wall.read().bounding_box());
+            bbox.expand(&wall.read().bounding_box);
         }
         for door in &self.doors {
-            bbox.expand(&door.read().bounding_box());
+            bbox.expand(&door.read().bounding_box);
         }
         for window in &self.windows {
-            bbox.expand(&window.read().bounding_box());
+            bbox.expand(&window.read().bounding_box);
         }
         for stair in &self.stairs {
-            bbox.expand(&stair.read().bounding_box());
+            bbox.expand(&stair.read().bounding_box);
         }
         for roof in &self.roofs {
-            bbox.expand(&roof.read().bounding_box());
+            bbox.expand(&roof.read().bounding_box);
         }
         for slab in &self.slabs {
-            bbox.expand(&slab.read().bounding_box());
+            bbox.expand(&slab.read().bounding_box);
         }
         for column in &self.columns {
-            bbox.expand(&column.read().bounding_box());
+            bbox.expand(&column.read().bounding_box);
         }
         for beam in &self.beams {
-            bbox.expand(&beam.read().bounding_box());
+            bbox.expand(&beam.read().bounding_box);
         }
         
         bbox
@@ -242,7 +258,7 @@ pub enum ArchElement {
     Window(WindowRef),
     Stair(StairRef),
     Roof(RoofRef),
-    Slab(SlabRef),
+    Slab(SlabRef2),
     Column(ColumnRef),
     Beam(BeamRef),
     Room(RoomRef),
@@ -254,7 +270,7 @@ pub enum ArchElement {
 
 pub type ArchModelRef = Arc<RwLock<ArchitecturalModel>>;
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct MaterialLibrary {
     pub materials: std::collections::HashMap<String, Material>,
 }
@@ -273,7 +289,7 @@ impl MaterialLibrary {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
     pub color: crate::Color,
@@ -286,7 +302,7 @@ pub struct Material {
     pub category: MaterialCategory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MaterialCategory {
     Concrete,
     Steel,
@@ -315,7 +331,7 @@ impl Default for Material {
     }
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct LayerManager {
     pub layers: std::collections::HashMap<String, ArchLayer>,
     pub active_layer: Option<String>,
@@ -356,7 +372,7 @@ impl LayerManager {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ArchLayer {
     pub name: String,
     pub color: crate::Color,
@@ -381,7 +397,7 @@ impl ArchLayer {
     }
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct ProjectInfo {
     pub project_name: String,
     pub project_number: String,
@@ -396,8 +412,9 @@ pub struct ProjectInfo {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectStatus {
+    #[default]
     Concept,
     SchematicDesign,
     DesignDevelopment,
@@ -407,8 +424,9 @@ pub enum ProjectStatus {
     Complete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectPhase {
+    #[default]
     PreDesign,
     Schematic,
     DesignDevelopment,

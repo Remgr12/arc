@@ -45,7 +45,7 @@ impl Default for EntityId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct Color {
     pub r: f32,
     pub g: f32,
@@ -59,6 +59,10 @@ impl Color {
     pub const RED: Self = Self { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
     pub const GREEN: Self = Self { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
     pub const BLUE: Self = Self { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+    pub const YELLOW: Self = Self { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
+    pub const MAGENTA: Self = Self { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
+    pub const CYAN: Self = Self { r: 0.0, g: 1.0, b: 1.0, a: 1.0 };
+    pub const ORANGE: Self = Self { r: 1.0, g: 0.5, b: 0.0, a: 1.0 };
     pub const GRAY: Self = Self { r: 0.5, g: 0.5, b: 0.5, a: 1.0 };
     pub const LIGHT_GRAY: Self = Self { r: 0.8, g: 0.8, b: 0.8, a: 1.0 };
     pub const TRANSPARENT: Self = Self { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
