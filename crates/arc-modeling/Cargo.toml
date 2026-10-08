@@ -1,0 +1,26 @@
+[package]
+name = "arc-modeling"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+
+[dependencies]
+arc-core = { path = "../arc-core" }
+arc-geometry = { path = "../arc-geometry" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+nalgebra = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+indexmap = { workspace = true }
+smallvec = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+default = []
