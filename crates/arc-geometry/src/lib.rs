@@ -3,18 +3,14 @@ pub mod surface;
 pub mod solid;
 pub mod mesh;
 pub mod builder;
+pub mod face;
 pub mod primitives;
 pub mod intersection;
 pub mod boolean;
 pub mod tessellation;
 pub mod conversion;
 
-use truck_geometry::*;
-use truck_topology::*;
-use truck_modeling::*;
-use nalgebra::{Point3, Vector3, Matrix4};
-use crate::conversion::*;
-
+pub use face::*;
 pub use curve::*;
 pub use surface::*;
 pub use solid::*;
@@ -26,16 +22,14 @@ pub use boolean::*;
 pub use tessellation::*;
 pub use conversion::*;
 
-pub type Point3 = truck_geometry::Point3;
-pub type Vector3 = truck_geometry::Vector3;
-pub type Matrix4 = truck_geometry::Matrix4;
-pub type Wire = truck_topology::Wire;
-pub type Face = truck_topology::Face;
-pub type Shell = truck_topology::Shell;
-pub type Solid = truck_topology::Solid;
-pub type Vertex = truck_topology::Vertex;
-pub type Edge = truck_topology::Edge;
-pub type PolygonMesh = truck_meshalgo::PolygonMesh;
+pub use arc_core::{BoundingBox, Transform, Color, EntityId, EntityType, EntityCategory};
+pub use truck_polymesh::PolygonMesh;
+
+pub use nalgebra::UnitQuaternion;
+
+pub type Point3 = nalgebra::Point3<f64>;
+pub type Vector3 = nalgebra::Vector3<f64>;
+pub type Matrix4 = nalgebra::Matrix4<f64>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct GeometryId(pub uuid::Uuid);
@@ -62,7 +56,7 @@ pub struct GeometryData {
     pub transform: crate::Transform,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum GeometryType {
     Curve,
     Surface,
@@ -78,11 +72,13 @@ pub enum GeometryType {
 pub trait Geometry: Send + Sync + std::fmt::Debug {
     fn id(&self) -> GeometryId;
     fn geometry_type(&self) -> GeometryType;
+    fn name(&self) -> &str;
     fn bounding_box(&self) -> crate::BoundingBox;
     fn transform(&self) -> crate::Transform;
     fn set_transform(&mut self, transform: crate::Transform);
     fn apply_transform(&mut self, transform: crate::Transform);
     fn clone_box(&self) -> Box<dyn Geometry>;
+    fn as_data(&self) -> GeometryData;
 }
 
 pub struct GeometryContainer {
@@ -121,8 +117,8 @@ impl GeometryContainer {
         self.geometries.get(&id).map(|g| g.as_ref())
     }
 
-    pub fn get_mut(&mut self, id: GeometryId) -> Option<&mut dyn Geometry> {
-        self.geometries.get_mut(&id).map(|g| g.as_mut())
+    pub fn get_mut<'a>(&'a mut self, id: GeometryId) -> Option<&'a mut Box<dyn Geometry>> {
+        self.geometries.get_mut(&id)
     }
 
     pub fn get_by_type(&self, gtype: GeometryType) -> Vec<GeometryId> {

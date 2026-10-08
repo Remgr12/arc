@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use nalgebra::{Point3, Vector3, UnitQuaternion, Matrix4};
 use parking_lot::RwLock;
 use dashmap::DashMap;
-use crate::{EntityId, EntityType, EntityCategory, BoundingBox, Color, Transform};
+use crate::{EntityId, EntityType, EntityCategory, BoundingBox, Color};
 
 pub trait Entity: Send + Sync + Debug + Any {
     fn id(&self) -> EntityId;
@@ -80,7 +80,9 @@ impl Metadata {
     }
 
     pub fn set<T: Serialize>(&mut self, key: &str, value: T) {
-        self.properties.insert(key.to_string(), serde_json::to_value(value).ok()?);
+        if let Ok(val) = serde_json::to_value(value) {
+            self.properties.insert(key.to_string(), val);
+        }
     }
 
     pub fn has_tag(&self, tag: &str) -> bool {
@@ -100,6 +102,7 @@ impl Metadata {
 
 pub type EntityRef = Arc<RwLock<dyn Entity>>;
 
+#[derive(Debug)]
 pub struct EntityContainer {
     entities: DashMap<EntityId, EntityRef>,
     by_type: DashMap<EntityType, Vec<EntityId>>,
@@ -249,11 +252,31 @@ impl Transform {
 
     pub fn mul(&self, other: &Transform) -> Transform {
         let matrix = self.to_matrix() * other.to_matrix();
-        let (scale, rotation, translation) = matrix.decompose();
+        let rot_matrix: nalgebra::Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).clone().try_into().unwrap();
+        let rotation = UnitQuaternion::from_matrix(&rot_matrix);
         Transform {
-            translation,
-            rotation: UnitQuaternion::from_quaternion(rotation),
-            scale: Vector3::new(scale.x, scale.y, scale.z),
+            translation: Vector3::new(matrix[(3, 0)], matrix[(3, 1)], matrix[(3, 2)]),
+            rotation,
+            scale: Vector3::new(1.0, 1.0, 1.0),
+        }
+    }
+
+    pub fn transform_bounding_box(&self, bbox: &crate::BoundingBox) -> crate::BoundingBox {
+        let min = self.transform_point(bbox.min);
+        let max = self.transform_point(bbox.max);
+        crate::BoundingBox::new(
+            Point3::new(min.x.min(max.x), min.y.min(max.y), min.z.min(max.z)),
+            Point3::new(min.x.max(max.x), min.y.max(max.y), min.z.max(max.z)),
+        )
+    }
+
+    pub fn from_matrix(matrix: nalgebra::Matrix4<f64>) -> Self {
+        let rot_matrix: nalgebra::Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).clone().try_into().unwrap();
+        let rotation = UnitQuaternion::from_matrix(&rot_matrix);
+        Transform {
+            translation: Vector3::new(matrix[(3, 0)], matrix[(3, 1)], matrix[(3, 2)]),
+            rotation,
+            scale: Vector3::new(1.0, 1.0, 1.0),
         }
     }
 }

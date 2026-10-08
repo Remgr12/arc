@@ -114,7 +114,7 @@ impl Selection {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectionFilter {
     All,
     Sketch,

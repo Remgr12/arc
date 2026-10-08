@@ -1,5 +1,5 @@
 [package]
-name = "arc-core"
+name = "arc-architecture"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
@@ -7,10 +7,12 @@ repository = { workspace = true }
 authors = { workspace = true }
 
 [dependencies]
+arc-core = { path = "../arc-core" }
+arc-geometry = { path = "../arc-geometry" }
+arc-modeling = { path = "../arc-modeling" }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 uuid = { workspace = true }
 nalgebra = { workspace = true }
 parking_lot = { workspace = true }
@@ -20,9 +22,6 @@ smallvec = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-glam = { workspace = true }
-ron = { workspace = true }
-bincode = { workspace = true }
 
 [features]
 default = []

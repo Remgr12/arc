@@ -173,7 +173,7 @@ impl SnapEngine {
                 continue;
             }
             
-            self.cache_entity_snap_points(&entity);
+            self.cache_entity_snap_points(&*entity);
         }
     }
 
@@ -228,7 +228,7 @@ impl SnapEngine {
                 if self.settings.quadrant_snap {
                     let center = entity.bounding_box().center();
                     let radius = (entity.bounding_box().size().x * 0.5).abs();
-                    for angle in [0.0, 90.0, 180.0, 270.0].iter() {
+                    for angle in [0.0_f64, 90.0, 180.0, 270.0].iter() {
                         let rad = angle.to_radians();
                         let point = Point3::new(
                             center.x + radius * rad.cos(),
