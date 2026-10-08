@@ -20,8 +20,8 @@ dashmap = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-mlua = { version = "0.9", features = ["send"] }
-wasmtime = { version = "24.0", features = ["component-model-async"] }
+mlua = { version = "0.9", features = ["send", "async", "lua54"] }
+wasmtime = { version = "24.0", features = ["component-model"] }
 
 [features]
 default = ["lua", "wasm"]

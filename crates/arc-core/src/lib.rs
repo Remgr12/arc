@@ -1,5 +1,4 @@
 pub mod entity;
-pub mod transform;
 pub mod selection;
 pub mod document;
 pub mod layer;
@@ -17,7 +16,6 @@ use nalgebra::{Point3, Vector3, UnitQuaternion, Matrix4};
 use glam::{Vec3, Quat, Mat4};
 
 pub use entity::*;
-pub use transform::*;
 pub use selection::*;
 pub use document::*;
 pub use layer::*;
@@ -148,7 +146,7 @@ impl BoundingBox {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntityType {
     // Sketch entities
     Point,
@@ -200,6 +198,15 @@ pub enum EntityType {
     Group,
     Block,
     ExternalReference,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RenderMode {
+    Solid,
+    Wireframe,
+    Edges,
+    Points,
+    Shaded,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

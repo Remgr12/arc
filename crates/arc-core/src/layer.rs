@@ -72,7 +72,7 @@ impl LayerContainer {
         Self::default()
     }
 
-    pub fn create_layer(&self, name: String, color: Option<Color>) -> LayerRef {
+    pub fn create_layer(&mut self, name: String, color: Option<Color>) -> LayerRef {
         let layer = Arc::new(RwLock::new(Layer::new(name, color)));
         let id = layer.read().id;
         self.layers.insert(id, layer.clone());
@@ -88,7 +88,7 @@ impl LayerContainer {
         self.layers.iter().find(|l| l.read().name == name).map(|l| l.clone())
     }
 
-    pub fn remove(&self, id: EntityId) -> Option<LayerRef> {
+    pub fn remove(&mut self, id: EntityId) -> Option<LayerRef> {
         self.order.retain(|lid| *lid != id);
         if self.active_layer == Some(id) {
             self.active_layer = self.order.first().copied();

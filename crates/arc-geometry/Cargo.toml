@@ -14,8 +14,19 @@ serde = { workspace = true }
 uuid = { workspace = true }
 nalgebra = { workspace = true }
 parking_lot = { workspace = true }
-truck = { workspace = true }
-monstertruck = { workspace = true }
+tracing = { workspace = true }
+truck-base = { workspace = true }
+truck-geometry = { workspace = true }
+truck-topology = { workspace = true }
+truck-modeling = { workspace = true }
+truck-polymesh = { workspace = true }
+truck-meshalgo = { workspace = true }
+truck-stepio = { workspace = true }
+monstertruck-fillet = { workspace = true }
+monstertruck-healing = { workspace = true }
+bytemuck = { workspace = true }
+gltf = { workspace = true }
+dxf = { workspace = true }
 
 [features]
 default = []

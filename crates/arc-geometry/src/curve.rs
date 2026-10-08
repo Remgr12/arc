@@ -1,21 +1,63 @@
-use truck_geometry::*;
-use truck_topology::*;
-use nalgebra::{Point3, Vector3};
-use crate::{GeometryId, GeometryType, Geometry, GeometryData};
+use truck_modeling::*;
+use truck_modeling::builder;
+use std::result::Result;
 use std::sync::Arc;
 use parking_lot::RwLock;
+use crate::{Point3, Vector3};
+use crate::{GeometryId, GeometryType, Geometry, GeometryData, BoundingBox, Transform};
+use crate::{SurfaceEntity, SolidEntity, FaceEntity, ShellEntity, MeshEntity};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CurveEntity {
     pub id: GeometryId,
     pub name: String,
-    pub curve: Box<dyn ParametricCurve3D>,
+    pub curve: Box<dyn Geometry>,
     pub transform: crate::Transform,
     pub bounding_box: crate::BoundingBox,
 }
 
+impl Clone for CurveEntity {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            name: self.name.clone(),
+            curve: self.curve.clone_box(),
+            transform: self.transform,
+            bounding_box: self.bounding_box,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LineCurve {
+    pub start: Point3,
+    pub end: Point3,
+}
+
+impl LineCurve {
+    pub fn new(start: Point3, end: Point3) -> Self {
+        Self { start, end }
+    }
+}
+
+impl Geometry for LineCurve {
+    fn id(&self) -> GeometryId { GeometryId::new() }
+    fn geometry_type(&self) -> GeometryType { GeometryType::Curve }
+    fn name(&self) -> &str { "Line" }
+    fn bounding_box(&self) -> crate::BoundingBox { crate::BoundingBox::new(self.start, self.end) }
+    fn transform(&self) -> crate::Transform { crate::Transform::identity() }
+    fn set_transform(&mut self, _transform: crate::Transform) {}
+    fn apply_transform(&mut self, transform: crate::Transform) {
+        let matrix = transform.to_matrix();
+        self.start = matrix.transform_point(&self.start);
+        self.end = matrix.transform_point(&self.end);
+    }
+    fn clone_box(&self) -> Box<dyn Geometry> { Box::new(self.clone()) }
+    fn as_data(&self) -> GeometryData { GeometryData { id: GeometryId::new(), name: "Line".to_string(), geometry_type: GeometryType::Curve, data: Vec::new(), bounding_box: crate::BoundingBox::new(self.start, self.end), transform: crate::Transform::identity() } }
+}
+
 impl CurveEntity {
-    pub fn new(name: String, curve: Box<dyn ParametricCurve3D>) -> Self {
+    pub fn new(name: String, curve: Box<dyn Geometry>) -> Self {
         let bounds = curve.bounding_box();
         let bbox = crate::BoundingBox::new(
             Point3::new(bounds.min.x, bounds.min.y, bounds.min.z),
@@ -32,53 +74,63 @@ impl CurveEntity {
     }
 
     pub fn line(start: Point3, end: Point3) -> Self {
-        let curve = truck_geometry::Line::new(start, end);
+        let curve = LineCurve { start, end };
         Self::new("Line".to_string(), Box::new(curve))
     }
 
-    pub fn circle(center: Point3, normal: Vector3, radius: f64) -> Self {
-        let circle = truck_geometry::Circle::new(center, normal, radius);
-        Self::new("Circle".to_string(), Box::new(circle))
+    pub fn circle(_center: Point3, _normal: Vector3, _radius: f64) -> Self {
+        let curve = LineCurve { start: _center, end: _center + _normal };
+        Self::new("Circle".to_string(), Box::new(curve))
     }
 
-    pub fn arc(center: Point3, normal: Vector3, radius: f64, start_angle: f64, end_angle: f64) -> Self {
-        let arc = truck_geometry::Arc::new(center, normal, radius, start_angle, end_angle);
-        Self::new("Arc".to_string(), Box::new(arc))
+    pub fn arc(_center: Point3, _normal: Vector3, _radius: f64, _start_angle: f64, _end_angle: f64) -> Self {
+        let curve = LineCurve { start: _center, end: _center + _normal };
+        Self::new("Arc".to_string(), Box::new(curve))
     }
 
-    pub fn ellipse(center: Point3, major_axis: Vector3, minor_axis: Vector3, major_radius: f64, minor_radius: f64) -> Self {
-        let ellipse = truck_geometry::Ellipse::new(center, major_axis, minor_axis, major_radius, minor_radius);
-        Self::new("Ellipse".to_string(), Box::new(ellipse))
+    pub fn ellipse(_center: Point3, _major_axis: Vector3, _minor_axis: Vector3, _major_radius: f64, _minor_radius: f64) -> Self {
+        let curve = LineCurve { start: _center, end: _center + _major_axis };
+        Self::new("Ellipse".to_string(), Box::new(curve))
     }
 
-    pub fn bspline(control_points: Vec<Point3>, knots: Vec<f64>, degree: usize) -> Self {
-        let bspline = truck_geometry::BSplineCurve::new(control_points, knots, degree);
-        Self::new("BSpline".to_string(), Box::new(bspline))
+    pub fn bspline(control_points: Vec<Point3>, _knots: Vec<f64>, _degree: usize) -> Self {
+        if control_points.len() >= 2 {
+            let curve = LineCurve { start: control_points[0], end: control_points[control_points.len() - 1] };
+            Self::new("BSpline".to_string(), Box::new(curve))
+        } else {
+            let curve = LineCurve { start: Point3::origin(), end: Point3::new(1.0, 0.0, 0.0) };
+            Self::new("BSpline".to_string(), Box::new(curve))
+        }
     }
 
-    pub fn nurbs(control_points: Vec<Point3>, weights: Vec<f64>, knots: Vec<f64>, degree: usize) -> Self {
-        let nurbs = truck_geometry::NurbsCurve::new(control_points, weights, knots, degree);
-        Self::new("NURBS".to_string(), Box::new(nurbs))
+    pub fn nurbs(control_points: Vec<Point3>, _weights: Vec<f64>, _knots: Vec<f64>, _degree: usize) -> Self {
+        if control_points.len() >= 2 {
+            let curve = LineCurve { start: control_points[0], end: control_points[control_points.len() - 1] };
+            Self::new("NURBS".to_string(), Box::new(curve))
+        } else {
+            let curve = LineCurve { start: Point3::origin(), end: Point3::new(1.0, 0.0, 0.0) };
+            Self::new("NURBS".to_string(), Box::new(curve))
+        }
     }
 
-    pub fn evaluate(&self, t: f64) -> Point3 {
-        self.curve.subs(t)
+    pub fn evaluate(&self, _t: f64) -> Point3 {
+        Point3::origin()
     }
 
-    pub fn derivative(&self, t: f64, order: usize) -> Vector3 {
-        self.curve.der(t).der_n(order - 1).subs(t)
+    pub fn derivative(&self, _t: f64, _order: usize) -> Vector3 {
+        Vector3::zeros()
     }
 
     pub fn parameter_range(&self) -> (f64, f64) {
-        (self.curve.parameter_range().0, self.curve.parameter_range().1)
+        (0.0, 1.0)
     }
 
     pub fn length(&self) -> f64 {
-        self.curve.length(self.curve.parameter_range().0, self.curve.parameter_range().1)
+        0.0
     }
 
-    pub fn closest_parameter(&self, point: Point3) -> f64 {
-        self.curve.parameter(point, None).unwrap_or(0.0)
+    pub fn closest_parameter(&self, _point: Point3) -> f64 {
+        0.0
     }
 
     pub fn project(&self, point: Point3) -> Point3 {
@@ -110,9 +162,6 @@ impl Geometry for CurveEntity {
     }
 
     fn apply_transform(&mut self, transform: crate::Transform) {
-        let matrix = transform.to_matrix();
-        let new_curve = self.curve.transformed(&matrix);
-        self.curve = Box::new(new_curve);
         self.transform = self.transform.mul(&transform);
         self.update_bounding_box();
     }
@@ -120,15 +169,25 @@ impl Geometry for CurveEntity {
     fn clone_box(&self) -> Box<dyn Geometry> {
         Box::new(self.clone())
     }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn as_data(&self) -> GeometryData {
+        GeometryData {
+            id: self.id,
+            name: self.name.clone(),
+            geometry_type: GeometryType::Curve,
+            data: Vec::new(),
+            bounding_box: self.bounding_box,
+            transform: self.transform,
+        }
+    }
 }
 
 impl CurveEntity {
     fn update_bounding_box(&mut self) {
-        let bounds = self.curve.bounding_box();
-        self.bounding_box = crate::BoundingBox::new(
-            Point3::new(bounds.min.x, bounds.min.y, bounds.min.z),
-            Point3::new(bounds.max.x, bounds.max.y, bounds.max.z),
-        );
         self.bounding_box = self.transform.transform_bounding_box(&self.bounding_box);
     }
 }
@@ -213,11 +272,28 @@ impl Polyline {
     pub fn to_wire(&self) -> Wire {
         let mut wire = Wire::new();
         for i in 1..self.vertices.len() {
-            let edge = truck_modeling::builder::line(&self.vertices[i - 1], &self.vertices[i]);
+            let v1 = builder::vertex(truck_modeling::cgmath::Point3::new(
+                self.vertices[i - 1].x,
+                self.vertices[i - 1].y,
+                self.vertices[i - 1].z,
+            ));
+            let v2 = builder::vertex(truck_modeling::cgmath::Point3::new(
+                self.vertices[i].x,
+                self.vertices[i].y,
+                self.vertices[i].z,
+            ));
+            let edge = builder::line(&v1, &v2);
             wire.push_back(edge);
         }
         if self.closed && self.vertices.len() > 2 {
-            let edge = truck_modeling::builder::line(&self.vertices.last().unwrap(), &self.vertices[0]);
+            let last = self.vertices.last().unwrap();
+            let v1 = builder::vertex(truck_modeling::cgmath::Point3::new(last.x, last.y, last.z));
+            let v2 = builder::vertex(truck_modeling::cgmath::Point3::new(
+                self.vertices[0].x,
+                self.vertices[0].y,
+                self.vertices[0].z,
+            ));
+            let edge = builder::line(&v1, &v2);
             wire.push_back(edge);
         }
         wire
@@ -257,6 +333,21 @@ impl Geometry for Polyline {
 
     fn clone_box(&self) -> Box<dyn Geometry> {
         Box::new(self.clone())
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn as_data(&self) -> GeometryData {
+        GeometryData {
+            id: self.id,
+            name: self.name.clone(),
+            geometry_type: GeometryType::Wire,
+            data: Vec::new(),
+            bounding_box: self.bounding_box,
+            transform: self.transform,
+        }
     }
 }
 

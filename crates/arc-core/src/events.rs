@@ -75,7 +75,7 @@ pub enum AppEvent {
     Custom { event_type: String, data: serde_json::Value },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MouseButton {
     Left,
     Right,
@@ -84,7 +84,7 @@ pub enum MouseButton {
     Forward,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Key {
     Unknown,
     Escape,
@@ -266,8 +266,14 @@ impl EventHandler for EventLogger {
     }
 }
 
-pub macro event($event_type:ident $( { $($field:ident: $value:expr),* $(,)? } )?) {
-    AppEvent::$event_type $( { $($field: $value),* } )?
+#[macro_export]
+macro_rules! event {
+    ($event_type:ident { $($field:ident),* $(,)? }) => {
+        crate::events::AppEvent::$event_type { $($field: $field),* }
+    };
+    ($event_type:ident) => {
+        crate::events::AppEvent::$event_type
+    };
 }
 
 pub fn document_created(document_id: EntityId) -> AppEvent {

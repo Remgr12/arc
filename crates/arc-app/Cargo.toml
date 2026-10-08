@@ -35,7 +35,7 @@ tauri-plugin-shell = "2.0"
 tauri-plugin-opener = "2.0"
 wgpu = { version = "23.0", features = ["wgsl"] }
 wgpu-types = "23.0"
-bytemuck = "1.14"
+bytemuck = { workspace = true }
 glam = "0.26"
 egui = "0.29"
 egui-wgpu = "0.29"

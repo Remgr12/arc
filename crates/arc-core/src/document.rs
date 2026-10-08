@@ -5,7 +5,7 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use crate::{EntityContainer, EntityId, EntityRef, Layer, LayerContainer, Selection, ViewportState, Units, SnapSettings, History, Metadata};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Document {
     pub id: EntityId,
     pub name: String,
@@ -27,7 +27,7 @@ impl Document {
     pub fn new(name: String) -> Self {
         let mut layers = LayerContainer::new();
         let default_layer = layers.create_layer("Default".to_string(), None);
-        let default_layer_id = default_layer.read().id();
+        let default_layer_id = default_layer.read().id;
 
         Self {
             id: EntityId::new(),

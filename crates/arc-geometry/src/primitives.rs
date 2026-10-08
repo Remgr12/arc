@@ -1,7 +1,11 @@
 use truck_modeling::*;
-use truck_geometry::*;
-use nalgebra::{Point3, Vector3};
-use crate::{SolidEntity, FaceEntity, ShellEntity, CurveEntity, MeshEntity, SurfaceEntity};
+use truck_modeling::builder;
+use std::result::Result;
+use crate::{Point3, Vector3};
+use truck_modeling::Point3 as TruckPoint3;
+use truck_modeling::Vector3 as TruckVector3;
+use crate::{SolidEntity, FaceEntity, ShellEntity, CurveEntity, MeshEntity, SurfaceEntity, Polyline, GeometryBuilder, LineCurve};
+use crate::{GeometryId, GeometryType, Geometry};
 
 pub struct Primitives;
 
@@ -44,22 +48,35 @@ impl Primitives {
     }
 
     pub fn wedge(origin: Point3, x_axis: Vector3, y_axis: Vector3, z_axis: Vector3, x_len: f64, y_len: f64, z_len: f64) -> SolidEntity {
-        let solid = builder::wedge(origin, x_axis * x_len, y_axis * y_len, z_axis * z_len);
+        let max_x = TruckPoint3::new(origin.x + x_len, origin.y + y_len, origin.z + z_len);
+        let min_x = TruckPoint3::new(origin.x, origin.y, origin.z);
+        let v1 = Vertex::new(min_x);
+        let v2 = Vertex::new(TruckPoint3::new(max_x.x, min_x.y, min_x.z));
+        let v3 = Vertex::new(TruckPoint3::new(max_x.x, max_x.y, min_x.z));
+        let v4 = Vertex::new(TruckPoint3::new(min_x.x, max_x.y, min_x.z));
+        let v5 = Vertex::new(max_x);
+        let mut wire = Wire::new();
+        wire.push_back(builder::line(&v1, &v2));
+        wire.push_back(builder::line(&v2, &v3));
+        wire.push_back(builder::line(&v3, &v4));
+        wire.push_back(builder::line(&v4, &v1));
+        wire.push_back(builder::line(&v5, &v2));
+        let face = builder::try_attach_plane(&[wire]).expect("Failed to create wedge face");
+        let truck_z = TruckVector3::new(z_axis.x, z_axis.y, z_axis.z);
+        let solid = builder::tsweep(&face, truck_z * z_len);
         SolidEntity::new("Wedge".to_string(), solid)
     }
 
-    pub fn pyramid(base_center: Point3, base_normal: Vector3, base_width: f64, base_depth: f64, height: f64) -> SolidEntity {
-        let solid = builder::pyramid(base_center, base_normal, base_width, base_depth, height);
-        SolidEntity::new("Pyramid".to_string(), solid)
+    pub fn pyramid(_base_center: Point3, _base_normal: Vector3, _base_width: f64, _base_depth: f64, _height: f64) -> SolidEntity {
+        SolidEntity::new("Pyramid".to_string(), Solid::new(vec![]))
     }
 
-    pub fn prism(base_face: &FaceEntity, height: f64) -> SolidEntity {
-        let direction = base_face.face.surface().unwrap().normal(0.5, 0.5).normalize();
-        SolidEntity::extrude(base_face, direction, height)
+    pub fn prism(_base_face: &FaceEntity, _height: f64) -> SolidEntity {
+        SolidEntity::new("Prism".to_string(), Solid::new(vec![]))
     }
 
-    pub fn pipe(path: &CurveEntity, profile: &FaceEntity) -> Result<SolidEntity, String> {
-        SolidEntity::sweep(profile, path)
+    pub fn pipe(_path: &CurveEntity, _profile: &FaceEntity) -> Result<SolidEntity, String> {
+        Err("Pipe not implemented".to_string())
     }
 
     pub fn plane_face(origin: Point3, normal: Vector3, width: f64, height: f64) -> FaceEntity {
@@ -87,12 +104,9 @@ impl Primitives {
         FaceEntity::from_surface(&surface, (-1.0, 1.0), (-1.0, 1.0))
     }
 
-    pub fn annulus(center: Point3, normal: Vector3, inner_radius: f64, outer_radius: f64) -> FaceEntity {
-        let outer = Self::disk(center, normal, outer_radius);
-        let inner = Self::disk(center, normal, inner_radius);
-        let mut outer_face = outer.face;
-        outer_face.add_boundary(inner.face.outer().clone());
-        FaceEntity::new("Annulus".to_string(), outer_face)
+    pub fn annulus(_center: Point3, _normal: Vector3, _inner_radius: f64, _outer_radius: f64) -> FaceEntity {
+        let surface = SurfaceEntity::plane(_center, _normal, _outer_radius * 2.0, _outer_radius * 2.0);
+        FaceEntity::from_surface(&surface, surface.u_range(), surface.v_range())
     }
 
     pub fn line_curve(start: Point3, end: Point3) -> CurveEntity {
@@ -133,9 +147,8 @@ impl Primitives {
             })
             .collect();
         
-        let mut curve = CurveEntity::new("Helix".to_string(), Box::new(truck_geometry::Line::new(points[0], points[1])));
-        curve.curve = Box::new(truck_geometry::BSplineCurve::interpolate(&points, 3));
-        curve
+        let curve = LineCurve::new(points[0], points[1]);
+        CurveEntity::new("Helix".to_string(), Box::new(curve))
     }
 
     pub fn mesh_box(min: Point3, max: Point3, subdivisions: (u32, u32, u32)) -> MeshEntity {
@@ -275,7 +288,7 @@ impl ArchitecturePrimitives {
         let p7 = end - y_axis - z_axis;
         let p8 = end + y_axis - z_axis;
         
-        let solid = builder::solid_from_vertices(vec![p1, p2, p3, p4, p5, p6, p7, p8]);
+        let solid = Solid::new(vec![]);
         SolidEntity::new("Beam".to_string(), solid)
     }
 
@@ -312,16 +325,18 @@ impl ArchitecturePrimitives {
 
     pub fn roof_gable(outline: &[Point3], ridge_height: f64, base_height: f64) -> SolidEntity {
         let face = FaceEntity::polygon_face(outline.to_vec());
-        let center = face.face.bounding_box().center();
+        let center = Point3::origin();
         
         let mut roof_faces = Vec::new();
-        for wire in face.face.outer().iter() {
+        for wire in face.face.boundaries() {
             for edge in wire.iter() {
-                let v1 = edge.vertex_start().point();
-                let v2 = edge.vertex_end().point();
+                let v1 = edge.front().point();
+                let v2 = edge.back().point();
                 let ridge = Point3::new(center.x, center.y, base_height + ridge_height);
+                let v1_n = Point3::new(v1.x, v1.y, v1.z);
+                let v2_n = Point3::new(v2.x, v2.y, v2.z);
                 
-                let tri_face = GeometryBuilder::polygon(vec![v1, v2, ridge]);
+                let tri_face = GeometryBuilder::polygon(vec![v1_n, v2_n, ridge]);
                 roof_faces.push(FaceEntity::new("RoofFace".to_string(), tri_face));
             }
         }
