@@ -1,10 +1,22 @@
 use arc_core::*;
 use arc_geometry::*;
-use nalgebra::{Point3, Vector3};
+use crate::{Point3, Vector3};
 use std::sync::Arc;
 use parking_lot::RwLock;
+use crate::door::DoorRef;
+use crate::window::WindowRef;
+use crate::level::LevelRef;
+use crate::grid::GridRef;
+use crate::stair::StairRef;
+use crate::roof::RoofRef;
+use crate::slab::SlabRef as WallSlabRef;
+use crate::column::ColumnRef;
+use crate::beam::BeamRef;
+use crate::room::RoomRef;
+use crate::space::SpaceRef;
+use crate::annotation::AnnotationRef;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Wall {
     pub id: EntityId,
     pub name: String,
@@ -25,7 +37,7 @@ pub struct Wall {
     pub properties: std::collections::HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WallType {
     Generic,
     Basic,
@@ -38,14 +50,14 @@ pub enum WallType {
     Core,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WallJustification {
     Left,
     Center,
     Right,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct WallLayer {
     pub name: String,
     pub thickness: f64,
@@ -54,7 +66,7 @@ pub struct WallLayer {
     pub wraps: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerFunction {
     Structure,
     Substrate,
@@ -65,7 +77,7 @@ pub enum LayerFunction {
     Other,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Opening {
     pub id: EntityId,
     pub opening_type: OpeningType,
@@ -77,7 +89,7 @@ pub struct Opening {
     pub window: Option<WindowRef>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpeningType {
     Door,
     Window,
@@ -142,13 +154,13 @@ impl Wall {
 
     pub fn add_opening(&mut self, opening: Opening) -> EntityId {
         let id = opening.id;
-        self.openings.push(opening);
+        self.openings.push(Arc::new(RwLock::new(opening)));
         self.update_geometry();
         id
     }
 
     pub fn remove_opening(&mut self, opening_id: EntityId) {
-        self.openings.retain(|o| o.id != opening_id);
+        self.openings.retain(|o| o.read().id != opening_id);
         self.update_geometry();
     }
 
@@ -221,7 +233,7 @@ impl Wall {
 
     pub fn contains_point(&self, point: Point3, tolerance: f64) -> bool {
         for segment in self.baseline_segments() {
-            let dist = Intersection::distance_point_line(point, segment.0, segment.1);
+            let dist = distance_point_to_line_segment(point, segment.0, segment.1);
             if dist <= self.thickness * 0.5 + tolerance {
                 let z_min = self.base_height - tolerance;
                 let z_max = self.base_height + self.height + tolerance;
@@ -232,9 +244,24 @@ impl Wall {
         }
         false
     }
+
+    fn distance_point_to_line_segment(point: Point3, line_start: Point3, line_end: Point3) -> f64 {
+        let line_vec = line_end - line_start;
+        let point_vec = point - line_start;
+        let line_len_sq = line_vec.dot(&line_vec);
+        
+        if line_len_sq < 1e-10 {
+            return (point - line_start).norm();
+        }
+        
+        let t = (point_vec.dot(&line_vec) / line_len_sq).clamp(0.0, 1.0);
+        let closest = line_start + line_vec * t;
+        (point - closest).norm()
+    }
 }
 
 pub type WallRef = Arc<RwLock<Wall>>;
+pub type OpeningRef = Arc<RwLock<Opening>>;
 
 pub struct WallBuilder {
     wall: Wall,

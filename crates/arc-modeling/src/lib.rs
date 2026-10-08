@@ -12,6 +12,7 @@ use arc_geometry::*;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use uuid::Uuid;
+use serde::{Serialize, Deserialize};
 
 pub use sketch::*;
 pub use feature::*;
@@ -22,7 +23,16 @@ pub use pattern::*;
 pub use mirror::*;
 pub use history::*;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub use crate::sketch::{Sketch, SketchConstraint, SketchRef, SketchBuilder};
+pub use crate::feature::{Feature, FeatureType, FeatureParameter, FeatureRef};
+pub use crate::part::{Part, Body, Appearance, PartRef};
+pub use crate::assembly::{Assembly, AssemblyComponent, AssemblyConstraint, AssemblyRef};
+pub use crate::parameters::{ParameterTable, Parameter, Unit};
+pub use crate::pattern::{Pattern, PatternType};
+pub use crate::mirror::Mirror;
+pub use crate::history::ModelingHistory;
+
+#[derive(Debug, Clone)]
 pub struct Model {
     pub id: EntityId,
     pub name: String,
@@ -73,12 +83,12 @@ impl Model {
 
 pub type ModelRef = Arc<RwLock<Model>>;
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct CoordinateSystem {
-    pub origin: Point3<f64>,
-    pub x_axis: Vector3<f64>,
-    pub y_axis: Vector3<f64>,
-    pub z_axis: Vector3<f64>,
+    pub origin: Point3,
+    pub x_axis: Vector3,
+    pub y_axis: Vector3,
+    pub z_axis: Vector3,
 }
 
 impl CoordinateSystem {
@@ -91,18 +101,18 @@ impl CoordinateSystem {
         }
     }
 
-    pub fn from_origin_x_y(origin: Point3<f64>, x_axis: Vector3<f64>, y_axis: Vector3<f64>) -> Self {
+    pub fn from_origin_x_y(origin: Point3, x_axis: Vector3, y_axis: Vector3) -> Self {
         let x = x_axis.normalize();
         let z = x.cross(&y_axis).normalize();
         let y = z.cross(&x).normalize();
         Self { origin, x_axis: x, y_axis: y, z_axis: z }
     }
 
-    pub fn to_world(&self, local: Point3<f64>) -> Point3<f64> {
+    pub fn to_world(&self, local: Point3) -> Point3 {
         self.origin + self.x_axis * local.x + self.y_axis * local.y + self.z_axis * local.z
     }
 
-    pub fn to_local(&self, world: Point3<f64>) -> Point3<f64> {
+    pub fn to_local(&self, world: Point3) -> Point3 {
         let diff = world - self.origin;
         Point3::new(
             diff.dot(&self.x_axis),
@@ -172,19 +182,22 @@ impl ModelingKernel {
         let mut model_guard = model.write();
         model_guard.history.clear();
         
-        for sketch_ref in &model_guard.sketches {
+        let sketch_refs: Vec<_> = model_guard.sketches.clone();
+        for sketch_ref in sketch_refs {
             let mut sketch = sketch_ref.write();
             sketch.rebuild()?;
             model_guard.history.add_sketch(sketch.id);
         }
         
-        for feature_ref in &model_guard.features {
+        let feature_refs: Vec<_> = model_guard.features.clone();
+        for feature_ref in feature_refs {
             let mut feature = feature_ref.write();
             feature.rebuild(&model_guard)?;
             model_guard.history.add_feature(feature.id);
         }
         
-        for part_ref in &model_guard.parts {
+        let part_refs: Vec<_> = model_guard.parts.clone();
+        for part_ref in part_refs {
             let mut part = part_ref.write();
             part.update()?;
         }
@@ -227,11 +240,15 @@ impl ParameterSolver {
         let mut iterations = 0;
         while changed && iterations < 100 {
             changed = false;
-            for constraint in &mut self.constraints {
+            let constraints_copy = self.constraints.clone();
+            for constraint in constraints_copy {
                 if let Some(new_value) = self.evaluate_expression(&constraint.expression, model) {
                     if (new_value - constraint.value).abs() > 1e-9 {
-                        constraint.value = new_value;
-                        changed = true;
+                        // Find and update the original constraint
+                        if let Some(orig) = self.constraints.iter_mut().find(|c| c.parameter == constraint.parameter) {
+                            orig.value = new_value;
+                            changed = true;
+                        }
                     }
                 }
             }
@@ -382,33 +399,4 @@ struct ParameterConstraint {
     parameter: String,
     expression: String,
     value: f64,
-}
-
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct ModelingHistory {
-    pub sketches: Vec<EntityId>,
-    pub features: Vec<EntityId>,
-    pub current_sketch: Option<EntityId>,
-    pub current_feature: Option<EntityId>,
-}
-
-impl ModelingHistory {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn add_sketch(&mut self, id: EntityId) {
-        self.sketches.push(id);
-        self.current_sketch = Some(id);
-    }
-
-    pub fn add_feature(&mut self, id: EntityId) {
-        self.features.push(id);
-        self.current_feature = Some(id);
-    }
-
-    pub fn clear(&mut self) {
-        self.sketches.clear();
-        self.features.clear();
-    }
 }
