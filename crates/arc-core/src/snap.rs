@@ -98,9 +98,11 @@ impl SnapResult {
     }
 }
 
+use parking_lot::Mutex;
+
 pub struct SnapEngine {
     settings: SnapSettings,
-    snap_cache: Vec<SnapPoint>,
+    snap_cache: Mutex<Vec<SnapPoint>>,
 }
 
 #[derive(Debug, Clone)]
@@ -114,7 +116,7 @@ impl SnapEngine {
     pub fn new(settings: SnapSettings) -> Self {
         Self {
             settings,
-            snap_cache: Vec::new(),
+            snap_cache: Mutex::new(Vec::new()),
         }
     }
 
@@ -126,7 +128,7 @@ impl SnapEngine {
         &self.settings
     }
 
-    pub fn find_snap(&mut self, screen_point: Point3<f64>, viewport: &crate::ViewportState, entities: &crate::EntityContainer) -> SnapResult {
+    pub fn find_snap(&self, screen_point: Point3<f64>, viewport: &crate::ViewportState, entities: &crate::EntityContainer) -> SnapResult {
         if !self.settings.enabled {
             return SnapResult::default();
         }
@@ -136,7 +138,7 @@ impl SnapEngine {
         let mut best = SnapResult::default();
         let screen_radius = self.settings.snap_radius;
 
-        for snap_point in &self.snap_cache {
+        for snap_point in self.snap_cache.lock().iter() {
             let distance = self.screen_distance(screen_point, snap_point.point, viewport);
             if distance < screen_radius && distance < best.distance {
                 best = SnapResult {
@@ -164,8 +166,8 @@ impl SnapEngine {
         best
     }
 
-    fn build_cache(&mut self, entities: &crate::EntityContainer) {
-        self.snap_cache.clear();
+    fn build_cache(&self, entities: &crate::EntityContainer) {
+        self.snap_cache.lock().clear();
         
         for entity_ref in entities.iter() {
             let entity = entity_ref.read();
@@ -177,11 +179,11 @@ impl SnapEngine {
         }
     }
 
-    fn cache_entity_snap_points(&mut self, entity: &dyn crate::Entity) {
+    fn cache_entity_snap_points(&self, entity: &dyn crate::Entity) {
         match entity.entity_type() {
             crate::EntityType::Point => {
                 if self.settings.node_snap {
-                    self.snap_cache.push(SnapPoint {
+                    self.snap_cache.lock().push(SnapPoint {
                         point: entity.bounding_box().center(),
                         entity_id: entity.id(),
                         snap_type: SnapType::Node,
@@ -191,12 +193,12 @@ impl SnapEngine {
             crate::EntityType::Line => {
                 if self.settings.endpoint_snap {
                     let bbox = entity.bounding_box();
-                    self.snap_cache.push(SnapPoint {
+                    self.snap_cache.lock().push(SnapPoint {
                         point: bbox.min,
                         entity_id: entity.id(),
                         snap_type: SnapType::Endpoint,
                     });
-                    self.snap_cache.push(SnapPoint {
+                    self.snap_cache.lock().push(SnapPoint {
                         point: bbox.max,
                         entity_id: entity.id(),
                         snap_type: SnapType::Endpoint,
@@ -209,7 +211,7 @@ impl SnapEngine {
                         (bbox.min.y + bbox.max.y) * 0.5,
                         (bbox.min.z + bbox.max.z) * 0.5,
                     );
-                    self.snap_cache.push(SnapPoint {
+                    self.snap_cache.lock().push(SnapPoint {
                         point: mid,
                         entity_id: entity.id(),
                         snap_type: SnapType::Midpoint,
@@ -219,7 +221,7 @@ impl SnapEngine {
             crate::EntityType::Circle | crate::EntityType::Arc => {
                 if self.settings.center_snap {
                     let center = entity.bounding_box().center();
-                    self.snap_cache.push(SnapPoint {
+                    self.snap_cache.lock().push(SnapPoint {
                         point: center,
                         entity_id: entity.id(),
                         snap_type: SnapType::Center,
@@ -235,7 +237,7 @@ impl SnapEngine {
                             center.y + radius * rad.sin(),
                             center.z,
                         );
-                        self.snap_cache.push(SnapPoint {
+                        self.snap_cache.lock().push(SnapPoint {
                             point,
                             entity_id: entity.id(),
                             snap_type: SnapType::Quadrant,

@@ -1,4 +1,4 @@
-use crate::{Plugin, PluginManifest, PluginError, PluginContext, PluginRef};
+use crate::{Plugin, PluginManifest, PluginError, PluginContext, PluginRef, DocumentRef, Selection, UIEvent};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use wasmtime::{Engine, Module, Store, Instance, Linker, Func, Val, ValType, ExternType};
@@ -12,6 +12,15 @@ pub struct WasmPlugin {
     store: Store<WasmPluginState>,
     instance: Instance,
     memory: Option<wasmtime::Memory>,
+}
+
+#[cfg(feature = "wasm")]
+impl std::fmt::Debug for WasmPlugin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmPlugin")
+            .field("manifest", &self.manifest)
+            .finish()
+    }
 }
 
 #[cfg(feature = "wasm")]
@@ -35,7 +44,7 @@ impl WasmPlugin {
         let instance = linker.instantiate(&mut store, &module)
             .map_err(|e| PluginError::Runtime(format!("Failed to instantiate WASM module: {}", e)))?;
         
-        let memory = instance.get_memory(&mut store, "memory").cloned();
+        let memory = instance.get_memory(&mut store, "memory");
         
         Ok(Self {
             manifest,
@@ -51,27 +60,36 @@ impl WasmPlugin {
         linker.func_wrap("env", "log", |mut caller: wasmtime::Caller<'_, WasmPluginState>, level: i32, ptr: i32, len: i32| {
             if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
                 let data = memory.data(&caller);
-                let slice = &data[ptr as usize..(ptr + len) as usize];
-                if let Ok(msg) = std::str::from_utf8(slice) {
-                    let level_str = match level {
-                        0 => "TRACE",
-                        1 => "DEBUG",
-                        2 => "INFO",
-                        3 => "WARN",
-                        4 => "ERROR",
-                        _ => "UNKNOWN",
-                    };
-                    println!("[WASM Plugin {}] {}", level_str, msg);
+                let start = ptr as usize;
+                let end = (ptr + len) as usize;
+                if end <= data.len() {
+                    let slice = &data[start..end];
+                    if let Ok(msg) = std::str::from_utf8(slice) {
+                        let level_str = match level {
+                            0 => "TRACE",
+                            1 => "DEBUG",
+                            2 => "INFO",
+                            3 => "WARN",
+                            4 => "ERROR",
+                            _ => "UNKNOWN",
+                        };
+                        println!("[WASM Plugin {}] {}", level_str, msg);
+                    }
                 }
             }
-        })?;
+            Ok(())
+        });
 
         linker.func_wrap("env", "allocate", |mut caller: wasmtime::Caller<'_, WasmPluginState>, size: i32| -> i32 {
-            0
-        })?;
+            let state = caller.data_mut();
+            let ptr = state.context_data.len();
+            state.context_data.resize(ptr + size as usize, 0);
+            ptr as i32
+        });
 
         linker.func_wrap("env", "deallocate", |_caller: wasmtime::Caller<'_, WasmPluginState>, _ptr: i32, _size: i32| {
-        })?;
+            Ok(())
+        });
 
         Ok(())
     }
@@ -95,7 +113,10 @@ impl Plugin for WasmPlugin {
     }
 
     fn initialize(&mut self, context: &PluginContext) -> Result<(), PluginError> {
-        let ctx_data = serde_json::to_vec(context)
+        let ctx_json = serde_json::json!({
+            "document": context.document.as_ref().map(|d| d.read().id.0.to_string()),
+        });
+        let ctx_data = serde_json::to_vec(&ctx_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         self.store.data_mut().context_data = ctx_data;
@@ -119,8 +140,13 @@ impl Plugin for WasmPlugin {
         Ok(())
     }
 
-    fn on_document_created(&mut self, document: &crate::DocumentRef) -> Result<(), PluginError> {
-        let doc_data = serde_json::to_vec(document)
+    fn on_document_created(&mut self, document: &DocumentRef) -> Result<(), PluginError> {
+        let doc_guard = document.read();
+        let doc_json = serde_json::json!({
+            "id": doc_guard.id.0.to_string(),
+            "name": doc_guard.name,
+        });
+        let doc_data = serde_json::to_vec(&doc_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         let ptr = self.allocate(&doc_data)?;
@@ -129,8 +155,13 @@ impl Plugin for WasmPlugin {
         Ok(())
     }
 
-    fn on_document_opened(&mut self, document: &crate::DocumentRef) -> Result<(), PluginError> {
-        let doc_data = serde_json::to_vec(document)
+    fn on_document_opened(&mut self, document: &DocumentRef) -> Result<(), PluginError> {
+        let doc_guard = document.read();
+        let doc_json = serde_json::json!({
+            "id": doc_guard.id.0.to_string(),
+            "name": doc_guard.name,
+        });
+        let doc_data = serde_json::to_vec(&doc_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         let ptr = self.allocate(&doc_data)?;
@@ -139,8 +170,13 @@ impl Plugin for WasmPlugin {
         Ok(())
     }
 
-    fn on_document_saved(&mut self, document: &crate::DocumentRef) -> Result<(), PluginError> {
-        let doc_data = serde_json::to_vec(document)
+    fn on_document_saved(&mut self, document: &DocumentRef) -> Result<(), PluginError> {
+        let doc_guard = document.read();
+        let doc_json = serde_json::json!({
+            "id": doc_guard.id.0.to_string(),
+            "name": doc_guard.name,
+        });
+        let doc_data = serde_json::to_vec(&doc_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         let ptr = self.allocate(&doc_data)?;
@@ -149,8 +185,13 @@ impl Plugin for WasmPlugin {
         Ok(())
     }
 
-    fn on_document_closed(&mut self, document: &crate::DocumentRef) -> Result<(), PluginError> {
-        let doc_data = serde_json::to_vec(document)
+    fn on_document_closed(&mut self, document: &DocumentRef) -> Result<(), PluginError> {
+        let doc_guard = document.read();
+        let doc_json = serde_json::json!({
+            "id": doc_guard.id.0.to_string(),
+            "name": doc_guard.name,
+        });
+        let doc_data = serde_json::to_vec(&doc_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         let ptr = self.allocate(&doc_data)?;
@@ -159,10 +200,16 @@ impl Plugin for WasmPlugin {
         Ok(())
     }
 
-    fn on_selection_changed(&mut self, document: &crate::DocumentRef, selection: &crate::Selection) -> Result<(), PluginError> {
+    fn on_selection_changed(&mut self, document: &DocumentRef, selection: &Selection) -> Result<(), PluginError> {
+        let doc_guard = document.read();
         let data = serde_json::json!({
-            "document": document,
-            "selection": selection,
+            "document": {
+                "id": doc_guard.id.0.to_string(),
+                "name": doc_guard.name,
+            },
+            "selection": {
+                "count": selection.count(),
+            },
         });
         let data_vec = serde_json::to_vec(&data)
             .map_err(|e| PluginError::Serialization(e))?;
@@ -195,8 +242,13 @@ impl Plugin for WasmPlugin {
         }
     }
 
-    fn on_ui_event(&mut self, event: &crate::UIEvent) -> Result<(), PluginError> {
-        let event_data = serde_json::to_vec(event)
+    fn on_ui_event(&mut self, event: &UIEvent) -> Result<(), PluginError> {
+        let event_json = serde_json::json!({
+            "type": format!("{:?}", event.event_type),
+            "component_id": event.component_id,
+            "data": event.data,
+        });
+        let event_data = serde_json::to_vec(&event_json)
             .map_err(|e| PluginError::Serialization(e))?;
         
         let ptr = self.allocate(&event_data)?;
@@ -206,7 +258,7 @@ impl Plugin for WasmPlugin {
     }
 
     fn on_timer(&mut self, interval: f64) -> Result<(), PluginError> {
-        self.call_wasm_func("on_timer", &[Val::F64(interval)])?;
+        self.call_wasm_func("on_timer", &[Val::F64(interval as u64)])?;
         Ok(())
     }
 }
@@ -214,9 +266,6 @@ impl Plugin for WasmPlugin {
 #[cfg(feature = "wasm")]
 impl WasmPlugin {
     fn allocate(&mut self, data: &[u8]) -> Result<usize, PluginError> {
-        let memory = self.memory.as_ref()
-            .ok_or_else(|| PluginError::Runtime("No memory exported".to_string()))?;
-        
         let mut data_vec = self.store.data_mut().context_data.clone();
         let ptr = data_vec.len();
         data_vec.extend_from_slice(data);
@@ -279,23 +328,23 @@ impl Plugin for WasmPlugin {
         unimplemented!()
     }
 
-    fn on_document_created(&mut self, _document: &crate::DocumentRef) -> Result<(), PluginError> {
+    fn on_document_created(&mut self, _document: &DocumentRef) -> Result<(), PluginError> {
         unimplemented!()
     }
 
-    fn on_document_opened(&mut self, _document: &crate::DocumentRef) -> Result<(), PluginError> {
+    fn on_document_opened(&mut self, _document: &DocumentRef) -> Result<(), PluginError> {
         unimplemented!()
     }
 
-    fn on_document_saved(&mut self, _document: &crate::DocumentRef) -> Result<(), PluginError> {
+    fn on_document_saved(&mut self, _document: &DocumentRef) -> Result<(), PluginError> {
         unimplemented!()
     }
 
-    fn on_document_closed(&mut self, _document: &crate::DocumentRef) -> Result<(), PluginError> {
+    fn on_document_closed(&mut self, _document: &DocumentRef) -> Result<(), PluginError> {
         unimplemented!()
     }
 
-    fn on_selection_changed(&mut self, _document: &crate::DocumentRef, _selection: &crate::Selection) -> Result<(), PluginError> {
+    fn on_selection_changed(&mut self, _document: &DocumentRef, _selection: &Selection) -> Result<(), PluginError> {
         unimplemented!()
     }
 
@@ -303,7 +352,7 @@ impl Plugin for WasmPlugin {
         unimplemented!()
     }
 
-    fn on_ui_event(&mut self, _event: &crate::UIEvent) -> Result<(), PluginError> {
+    fn on_ui_event(&mut self, _event: &UIEvent) -> Result<(), PluginError> {
         unimplemented!()
     }
 
@@ -316,14 +365,21 @@ pub struct WasmPluginFactory;
 
 impl crate::PluginFactory for WasmPluginFactory {
     fn create_plugin(&self, manifest: &PluginManifest) -> Result<PluginRef, PluginError> {
-        let wasm_path = manifest.configuration.as_ref()
-            .and_then(|c| c.get("wasm_path"))
-            .and_then(|s| s.as_str())
-            .map(std::path::Path::new)
-            .ok_or_else(|| PluginError::Configuration("Missing wasm_path in configuration".to_string()))?;
-        
-        let plugin = WasmPlugin::new(manifest.clone(), wasm_path)?;
-        Ok(Arc::new(RwLock::new(plugin)))
+        #[cfg(feature = "wasm")]
+        {
+            let wasm_path = manifest.configuration.as_ref()
+                .and_then(|c| c.get("wasm_path"))
+                .and_then(|s| s.as_str())
+                .map(std::path::Path::new)
+                .ok_or_else(|| PluginError::Configuration("Missing wasm_path in configuration".to_string()))?;
+            
+            let plugin = WasmPlugin::new(manifest.clone(), wasm_path)?;
+            Ok(Arc::new(RwLock::new(plugin)))
+        }
+        #[cfg(not(feature = "wasm"))]
+        {
+            Err(PluginError::Runtime("WASM support not enabled".to_string()))
+        }
     }
 
     fn supported_types(&self) -> Vec<String> {

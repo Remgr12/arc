@@ -21,20 +21,6 @@ use uuid::Uuid;
 
 pub use arc_geometry::{Point3, Vector3};
 
-use crate::wall::WallRef;
-use crate::door::DoorRef;
-use crate::window::WindowRef;
-use crate::level::LevelRef;
-use crate::grid::GridRef;
-use crate::stair::StairRef;
-use crate::roof::RoofRef;
-use crate::slab::SlabRef as SlabRef2;
-use crate::column::ColumnRef;
-use crate::beam::BeamRef;
-use crate::room::RoomRef;
-use crate::space::SpaceRef;
-use crate::annotation::AnnotationRef;
-
 pub use wall::*;
 pub use door::*;
 pub use window::*;
@@ -60,7 +46,7 @@ pub struct ArchitecturalModel {
     pub windows: Vec<WindowRef>,
     pub stairs: Vec<StairRef>,
     pub roofs: Vec<RoofRef>,
-    pub slabs: Vec<SlabRef2>,
+    pub slabs: Vec<SlabRef>,
     pub columns: Vec<ColumnRef>,
     pub beams: Vec<BeamRef>,
     pub rooms: Vec<RoomRef>,
@@ -258,7 +244,7 @@ pub enum ArchElement {
     Window(WindowRef),
     Stair(StairRef),
     Roof(RoofRef),
-    Slab(SlabRef2),
+    Slab(SlabRef),
     Column(ColumnRef),
     Beam(BeamRef),
     Room(RoomRef),

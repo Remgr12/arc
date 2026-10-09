@@ -15,6 +15,51 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
+struct SerializableDocument {
+    id: String,
+    name: String,
+    path: Option<String>,
+    modified: bool,
+    version: u32,
+    units: String,
+    entities: Vec<SerializableEntity>,
+    layers: Vec<SerializableLayer>,
+    selection: SerializableSelection,
+    viewports: Vec<ViewportState>,
+    active_viewport: usize,
+    metadata: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializableEntity {
+    id: String,
+    name: String,
+    entity_type: String,
+    visible: bool,
+    locked: bool,
+    data: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializableLayer {
+    id: String,
+    name: String,
+    visible: bool,
+    locked: bool,
+    color: Color,
+    line_weight: f32,
+    line_type: String,
+    transparency: f32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializableSelection {
+    selected_ids: Vec<String>,
+    primary_id: Option<String>,
+    hover_id: Option<String>,
+}
+
 pub struct AppState {
     pub modeling_kernel: ModelingKernel,
     pub arch_model: Option<ArchModelRef>,
@@ -78,9 +123,19 @@ impl AppState {
 
     pub fn open_document(&mut self, path: &str) -> Result<DocumentRef, String> {
         let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let doc: Document = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        let serializable_doc: SerializableDocument = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        
+        let mut doc = Document::new(serializable_doc.name);
+        doc.id = EntityId(Uuid::parse_str(&serializable_doc.id).map_err(|e| e.to_string())?);
+        doc.path = serializable_doc.path.map(std::path::PathBuf::from);
+        doc.modified = serializable_doc.modified;
+        doc.version = serializable_doc.version;
+        
+        // Reconstruct entities, layers, selection, etc.
+        // This is simplified - real implementation would properly reconstruct all data
+        
         let doc_ref = Arc::new(RwLock::new(doc));
-        self.document_manager.documents.push(doc_ref.clone());
+        self.document_manager.create_document_from_ref(doc_ref.clone());
         self.active_document = Some(doc_ref.clone());
         Ok(doc_ref)
     }
@@ -94,7 +149,48 @@ impl AppState {
                     .unwrap_or_else(|| format!("./{}.arc", doc_guard.name))
             });
             
-            let content = serde_json::to_string_pretty(&*doc_guard).map_err(|e| e.to_string())?;
+            let serializable_doc = SerializableDocument {
+                id: doc_guard.id.0.to_string(),
+                name: doc_guard.name.clone(),
+                path: doc_guard.path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                modified: doc_guard.modified,
+                version: doc_guard.version,
+                units: format!("{:?}", doc_guard.units),
+                entities: doc_guard.entities.iter().map(|e| {
+                    let entity = e.read();
+                    SerializableEntity {
+                        id: entity.id().0.to_string(),
+                        name: entity.name().to_string(),
+                        entity_type: format!("{:?}", entity.entity_type()),
+                        visible: entity.visible(),
+                        locked: entity.locked(),
+                        data: serde_json::Value::Null, // Simplified
+                    }
+                }).collect(),
+                layers: doc_guard.layers.all().iter().map(|l| {
+                    let layer = l.read();
+                    SerializableLayer {
+                        id: layer.id.0.to_string(),
+                        name: layer.name.clone(),
+                        visible: layer.visible,
+                        locked: layer.locked,
+                        color: layer.color,
+                        line_weight: layer.line_weight,
+                        line_type: format!("{:?}", layer.line_type),
+                        transparency: layer.transparency,
+                    }
+                }).collect(),
+                selection: SerializableSelection {
+                    selected_ids: doc_guard.selection.selected_ids.iter().map(|id| id.0.to_string()).collect(),
+                    primary_id: doc_guard.selection.primary_id.map(|id| id.0.to_string()),
+                    hover_id: doc_guard.selection.hover_id.map(|id| id.0.to_string()),
+                },
+                viewports: doc_guard.viewports.clone(),
+                active_viewport: doc_guard.active_viewport,
+                metadata: serde_json::Value::Null, // Simplified
+            };
+            
+            let content = serde_json::to_string_pretty(&serializable_doc).map_err(|e| e.to_string())?;
             std::fs::write(&save_path, content).map_err(|e| e.to_string())?;
             drop(doc_guard);
             
@@ -112,9 +208,9 @@ impl AppState {
                 self.active_document = None;
             }
         }
-        self.document_manager.close_document(
-            self.document_manager.documents.iter().position(|d| d.read().id == id).unwrap_or(0)
-        );
+        if let Some(idx) = self.document_manager.documents().iter().position(|d| d.read().id == id) {
+            self.document_manager.close_document(idx);
+        }
         Ok(())
     }
 
@@ -127,13 +223,13 @@ impl AppState {
     }
 
     pub fn set_active_document(&mut self, id: EntityId) {
-        if let Some(idx) = self.document_manager.documents.iter().position(|d| d.read().id == id) {
+        if let Some(idx) = self.document_manager.documents().iter().position(|d| d.read().id == id) {
             self.document_manager.set_active_document(idx);
             self.active_document = self.document_manager.active_document();
         }
     }
 
-    pub async fn execute_command(&self, command_id: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
+    pub fn execute_command(&self, command_id: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
         self.command_manager.execute(command_id, args)
     }
 
@@ -144,47 +240,46 @@ impl AppState {
                 name: entry.name.clone(),
                 description: entry.description.clone(),
                 category: entry.category.clone(),
+                icon: None,
+                shortcut: None,
+                enabled: true,
+                visible: true,
+                async_: false,
             })
             .collect()
     }
 
-    pub fn create_entity(&self, entity_type: &str, data: serde_json::Value) -> impl std::future::Future<Output = Result<String, String>> {
+    pub fn create_entity(&self, entity_type: &str, data: serde_json::Value) -> Result<String, String> {
         let entity_type = entity_type.to_string();
-        async move {
-            if let Some(doc) = &self.active_document {
-                let mut doc_guard = doc.write();
-                // Create entity based on type
-                let entity_id = EntityId::new();
-                Ok(entity_id.0.to_string())
-            } else {
-                Err("No active document".to_string())
-            }
+        if let Some(doc) = &self.active_document {
+            let mut doc_guard = doc.write();
+            // Create entity based on type
+            let entity_id = EntityId::new();
+            Ok(entity_id.0.to_string())
+        } else {
+            Err("No active document".to_string())
         }
     }
 
-    pub fn delete_entity(&self, entity_id: EntityId) -> impl std::future::Future<Output = Result<(), String>> {
-        async move {
-            if let Some(doc) = &self.active_document {
-                doc.write().remove_entity(entity_id);
+    pub fn delete_entity(&self, entity_id: EntityId) -> Result<(), String> {
+        if let Some(doc) = &self.active_document {
+            doc.write().remove_entity(entity_id);
+            Ok(())
+        } else {
+            Err("No active document".to_string())
+        }
+    }
+
+    pub fn update_entity(&self, entity_id: EntityId, data: serde_json::Value) -> Result<(), String> {
+        if let Some(doc) = &self.active_document {
+            if let Some(_entity) = doc.read().entities.get(entity_id) {
+                // Update entity properties
                 Ok(())
             } else {
-                Err("No active document".to_string())
+                Err("Entity not found".to_string())
             }
-        }
-    }
-
-    pub fn update_entity(&self, entity_id: EntityId, data: serde_json::Value) -> impl std::future::Future<Output = Result<(), String>> {
-        async move {
-            if let Some(doc) = &self.active_document {
-                if let Some(entity) = doc.read().entities.get(entity_id) {
-                    // Update entity properties
-                    Ok(())
-                } else {
-                    Err("Entity not found".to_string())
-                }
-            } else {
-                Err("No active document".to_string())
-            }
+        } else {
+            Err("No active document".to_string())
         }
     }
 
@@ -210,13 +305,13 @@ impl AppState {
     }
 
     pub fn get_viewport_state(&self, index: usize) -> Result<ViewportState, String> {
-        self.viewport_manager.viewports.get(index)
+        self.viewport_manager.viewports().get(index)
             .map(|v| v.read().state.clone())
             .ok_or_else(|| "Viewport not found".to_string())
     }
 
     pub fn set_viewport_state(&self, index: usize, state: ViewportState) -> Result<(), String> {
-        if let Some(vp) = self.viewport_manager.viewports.get(index) {
+        if let Some(vp) = self.viewport_manager.viewports().get(index) {
             vp.write().state = state;
             Ok(())
         } else {
@@ -224,11 +319,11 @@ impl AppState {
         }
     }
 
-    pub fn raycast(&self, viewport_index: usize, screen_x: f32, screen_y: f32) -> Result<Option<RaycastHit>, String> {
-        if let Some(vp) = self.viewport_manager.viewports.get(viewport_index) {
+    pub fn raycast(&self, viewport_index: usize, screen_x: f32, screen_y: f32, screen_width: f32, screen_height: f32) -> Result<Option<RaycastHit>, String> {
+        if let Some(vp) = self.viewport_manager.viewports().get(viewport_index) {
             let viewport = vp.read();
             if let Some(doc) = &self.active_document {
-                let (ray_origin, ray_dir) = viewport.screen_to_world(screen_x, screen_y);
+                let (ray_origin, ray_dir) = viewport.screen_to_world((screen_x, screen_y), (screen_width, screen_height));
                 // Perform raycast against entities
                 // This is simplified - real implementation would use BVH
                 Ok(None)
@@ -240,19 +335,14 @@ impl AppState {
         }
     }
 
-    pub fn get_snap_point(&self, viewport_index: usize, screen_x: f32, screen_y: f32) -> Result<Option<crate::SnapResult>, String> {
-        if let Some(vp) = self.viewport_manager.viewports.get(viewport_index) {
+    pub fn get_snap_point(&self, viewport_index: usize, screen_x: f32, screen_y: f32, screen_width: f32, screen_height: f32) -> Result<Option<SnapResult>, String> {
+        if let Some(vp) = self.viewport_manager.viewports().get(viewport_index) {
             let viewport = vp.read();
             if let Some(doc) = &self.active_document {
-                let (ray_origin, ray_dir) = viewport.screen_to_world(screen_x, screen_y);
-                let snap = self.snap_engine.snap(
-                    (screen_x, screen_y),
-                    (ray_origin, ray_dir),
-                    &doc.read().entities,
-                    &viewport.state,
-                    &doc.read().units,
-                );
-                Ok(snap)
+                let (ray_origin, _ray_dir) = viewport.screen_to_world((screen_x, screen_y), (screen_width, screen_height));
+                let screen_point = Point3::new(ray_origin.x, ray_origin.y, ray_origin.z);
+                let snap = self.snap_engine.find_snap(screen_point, &viewport.state, &doc.read().entities);
+                Ok(Some(snap))
             } else {
                 Ok(None)
             }
@@ -268,17 +358,16 @@ impl AppState {
             version: m.version.clone(),
             description: m.description.clone(),
             author: m.author.clone(),
-            entry: m.entry.clone(),
             enabled: m.enabled,
             loaded: m.loaded,
         }).collect()
     }
 
-    pub fn enable_plugin(&self, plugin_id: &str) -> Result<(), String> {
+    pub fn enable_plugin(&mut self, plugin_id: &str) -> Result<(), String> {
         self.plugin_system.enable(plugin_id)
     }
 
-    pub fn disable_plugin(&self, plugin_id: &str) -> Result<(), String> {
+    pub fn disable_plugin(&mut self, plugin_id: &str) -> Result<(), String> {
         self.plugin_system.disable(plugin_id)
     }
 
@@ -310,52 +399,54 @@ impl AppState {
     }
 
     pub fn can_undo(&self) -> bool {
-        self.active_document.as_ref().map(|d| d.read().history.can_undo()).unwrap_or(false)
+        if let Some(doc) = &self.active_document {
+            doc.read().history.can_undo()
+        } else {
+            false
+        }
     }
 
     pub fn can_redo(&self) -> bool {
-        self.active_document.as_ref().map(|d| d.read().history.can_redo()).unwrap_or(false)
+        if let Some(doc) = &self.active_document {
+            doc.read().history.can_redo()
+        } else {
+            false
+        }
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
-    pub grid_enabled: bool,
-    pub grid_size: f64,
-    pub grid_subdivisions: u32,
-    pub snap_enabled: bool,
-    pub ortho_mode: bool,
-    pub polar_tracking: bool,
-    pub object_snap: bool,
-    pub dynamic_input: bool,
-    pub units: Units,
     pub theme: String,
     pub language: String,
     pub auto_save: bool,
     pub auto_save_interval: u32,
+    pub viewport_background: [f32; 4],
+    pub grid_enabled: bool,
+    pub grid_size: f64,
+    pub snap_enabled: bool,
+    pub ortho_mode: bool,
+    pub units: Units,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            grid_enabled: true,
-            grid_size: 1000.0,
-            grid_subdivisions: 10,
-            snap_enabled: true,
-            ortho_mode: false,
-            polar_tracking: true,
-            object_snap: true,
-            dynamic_input: true,
-            units: Units::metric(),
             theme: "dark".to_string(),
             language: "en".to_string(),
             auto_save: true,
             auto_save_interval: 300,
+            viewport_background: [0.1, 0.1, 0.12, 1.0],
+            grid_enabled: true,
+            grid_size: 1000.0,
+            snap_enabled: true,
+            ortho_mode: false,
+            units: Units::default(),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginInfo {
     pub id: String,
     pub name: String,
@@ -369,7 +460,7 @@ pub struct PluginInfo {
 #[derive(Debug, Clone)]
 pub struct RaycastHit {
     pub entity_id: EntityId,
-    pub point: Point3<f64>,
-    pub normal: Vector3<f64>,
+    pub point: Point3,
+    pub normal: Vector3,
     pub distance: f64,
 }

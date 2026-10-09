@@ -1,0 +1,48 @@
+app-id: com.arc.cad
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: arc
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=xdg-run/gtk-spell3:ro
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.secrets
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
+  - --env=WEBKIT_FORCE_SANDBOX=0
+  - --env=GTK_THEME=Adwaita:dark
+  - --own-name=com.arc.cad
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /man
+  - /share/doc
+  - /share/man
+  - '*.la'
+  - '*.a'
+modules:
+  - name: arc
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 target/release/arc ${FLATPAK_DEST}/bin/arc
+      - install -Dm644 tauri.conf.json ${FLATPAK_DEST}/share/com.arc.cad/tauri.conf.json
+      - install -Dm644 flatpak/com.arc.cad.desktop ${FLATPAK_DEST}/share/applications/com.arc.cad.desktop
+      - install -Dm644 flatpak/com.arc.cad.metainfo.xml ${FLATPAK_DEST}/share/metainfo/com.arc.cad.metainfo.xml
+      - install -Dm644 flatpak/icons/128x128/com.arc.cad.png ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps/com.arc.cad.png
+      - for size in 16 32 48 64 256 512; do
+          install -Dm644 flatpak/icons/${size}x${size}/com.arc.cad.png ${FLATPAK_DEST}/share/icons/hicolor/${size}x${size}/apps/com.arc.cad.png;
+        done
+    sources:
+      - type: dir
+        path: .
+        dest-filename: arc-source
+    build-options:
+      env:
+        CARGO_HOME: /run/build/arc/cargo
+        RUSTUP_HOME: /run/build/arc/rustup
+    post-install:
+      - chmod +x ${FLATPAK_DEST}/bin/arc

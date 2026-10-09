@@ -156,8 +156,8 @@ pub fn generate_plugin_api() -> PluginAPI {
                 ],
                 methods: vec![
                     APIMethod { name: "distanceTo".to_string(), description: "Distance to another point".to_string(), parameters: vec![APIParameter { name: "other".to_string(), type_: "Point3".to_string(), description: "Other point".to_string(), required: true, default: None }], return_type: "number".to_string() },
-                    APIField { name: "add".to_string(), type_: "Point3".to_string(), description: "Add vector".to_string(), readonly: false },
-                    APIField { name: "subtract".to_string(), type_: "Point3".to_string(), description: "Subtract vector".to_string(), readonly: false },
+                    APIMethod { name: "add".to_string(), description: "Add vector".to_string(), parameters: vec![APIParameter { name: "other".to_string(), type_: "Vector3".to_string(), description: "Vector to add".to_string(), required: true, default: None }], return_type: "Point3".to_string() },
+                    APIMethod { name: "subtract".to_string(), description: "Subtract vector".to_string(), parameters: vec![APIParameter { name: "other".to_string(), type_: "Vector3".to_string(), description: "Vector to subtract".to_string(), required: true, default: None }], return_type: "Point3".to_string() },
                 ],
             },
             APIType {
