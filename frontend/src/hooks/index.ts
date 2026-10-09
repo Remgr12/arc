@@ -63,7 +63,7 @@ export const useKeyboardShortcuts = () => {
 export const useTauriAPI = () => {
   const invoke = async (command: string, args?: any) => {
     try {
-      const { invoke: tauriInvoke } = await import('@tauri-apps/api/tauri');
+      const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
       return await tauriInvoke(command, args);
     } catch (error) {
       console.error(`Failed to invoke ${command}:`, error);

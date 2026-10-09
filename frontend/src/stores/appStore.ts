@@ -37,6 +37,8 @@ interface AppState {
   activeTool: string | null;
   activeCommand: string | null;
   commandPaletteOpen: boolean;
+  preferencesOpen: boolean;
+  helpOpen: boolean;
   statusMessage: string | null;
   statusTimer: number | null;
   
@@ -98,6 +100,8 @@ interface AppState {
   setActiveTool: (toolId: string | null) => void;
   setActiveCommand: (commandId: string | null) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setPreferencesOpen: (open: boolean) => void;
+  setHelpOpen: (open: boolean) => void;
   setStatusMessage: (message: string | null, duration?: number) => void;
   
   // Actions - Viewport
@@ -113,6 +117,7 @@ interface AppState {
   registerTool: (tool: Tool) => void;
   registerCommand: (command: Command) => void;
   executeCommand: (commandId: string, args?: unknown) => Promise<unknown>;
+  createDocument: () => Promise<void>;
   
   // Actions - Input
   setMousePosition: (pos: { x: number; y: number }) => void;
@@ -172,6 +177,8 @@ const defaultSettings: AppSettings = {
   msaaSamples: 4,
   ambientOcclusion: false,
   shadows: true,
+  showSnapIndicator: true,
+  snapTolerance: 10,
 };
 
 const defaultPanels = {
@@ -202,6 +209,8 @@ export const useAppStore = create<AppState>()(
       activeTool: 'select',
       activeCommand: null,
       commandPaletteOpen: false,
+      preferencesOpen: false,
+      helpOpen: false,
       statusMessage: null,
       statusTimer: null,
       
@@ -296,6 +305,8 @@ export const useAppStore = create<AppState>()(
       setActiveTool: (toolId) => set({ activeTool: toolId }),
       setActiveCommand: (commandId) => set({ activeCommand: commandId }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      setPreferencesOpen: (open) => set({ preferencesOpen: open }),
+      setHelpOpen: (open) => set({ helpOpen: open }),
       setStatusMessage: (message, duration) => {
         const state = get();
         if (state.statusTimer) {
@@ -337,6 +348,10 @@ export const useAppStore = create<AppState>()(
           return command;
         }
         throw new Error(`Command not found: ${commandId}`);
+      },
+      createDocument: async () => {
+        // Create new document via IPC
+        await get().executeCommand('new_document');
       },
       
       setMousePosition: (pos) => set({ mousePosition: pos }),
@@ -383,7 +398,7 @@ export const useAppStore = create<AppState>()(
           plugins: state.plugins.map((p) => (p.id === pluginId ? { ...p, enabled } : p)),
         })),
       
-      setLayers: (layers) => set({ layers, activeLayerId: layers[0]?.id || null }),
+      setLayers: (layers) => set({ layers, activeLayerId: layers[0]?.id.uuid || null }),
       setActiveLayer: (id) => set({ activeLayerId: id }),
       
       undo: () => {

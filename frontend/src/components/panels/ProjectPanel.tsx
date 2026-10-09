@@ -201,9 +201,9 @@ export const ProjectPanel: React.FC = () => {
             <p className="text-sm">No open documents</p>
             <button
               className="mt-2 text-sm text-accent hover:underline"
-              onClick={() => {
-                const { useAppStore } = require('@/stores/appStore');
-                useAppStore.getState().createDocument('Untitled');
+              onClick={async () => {
+                const { useAppStore } = await import('@/stores/appStore');
+                useAppStore.getState().createDocument();
               }}
             >
               Create new document

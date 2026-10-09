@@ -197,7 +197,9 @@ export const StatusBar: React.FC = () => {
         
         {settings.showGrid && (
           <>
-            <Grid3x3 className="w-3.5 h-3.5 text-fg-muted" title="Grid visible" />
+            <span title="Grid visible">
+              <Grid3x3 className="w-3.5 h-3.5 text-fg-muted" />
+            </span>
           </>
         )}
         

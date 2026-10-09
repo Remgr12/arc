@@ -9,6 +9,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+N',
     icon: 'FileText',
+  action: 'new-document',
   },
   {
     id: 'open-document',
@@ -17,6 +18,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+O',
     icon: 'FolderOpen',
+  action: 'open-document',
   },
   {
     id: 'save-document',
@@ -25,6 +27,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+S',
     icon: 'Save',
+  action: 'save-document',
   },
   {
     id: 'save-as',
@@ -33,6 +36,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+Shift+S',
     icon: 'Save',
+  action: 'save-as',
   },
   {
     id: 'import',
@@ -41,6 +45,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+I',
     icon: 'Upload',
+  action: 'import',
   },
   {
     id: 'export',
@@ -49,6 +54,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+E',
     icon: 'Download',
+  action: 'export',
   },
   {
     id: 'print',
@@ -57,6 +63,7 @@ export const commands: Command[] = [
     category: 'File',
     shortcut: 'Ctrl+P',
     icon: 'Printer',
+  action: 'print',
   },
   
   // Edit
@@ -66,6 +73,7 @@ export const commands: Command[] = [
     description: 'Undo the last operation',
     category: 'Edit',
     shortcut: 'Ctrl+Z',
+  action: 'undo',
   },
   {
     id: 'redo',
@@ -73,6 +81,7 @@ export const commands: Command[] = [
     description: 'Redo the last undone operation',
     category: 'Edit',
     shortcut: 'Ctrl+Y',
+  action: 'redo',
   },
   {
     id: 'cut',
@@ -80,6 +89,7 @@ export const commands: Command[] = [
     description: 'Cut the selected items',
     category: 'Edit',
     shortcut: 'Ctrl+X',
+  action: 'cut',
   },
   {
     id: 'copy',
@@ -87,6 +97,7 @@ export const commands: Command[] = [
     description: 'Copy the selected items',
     category: 'Edit',
     shortcut: 'Ctrl+C',
+  action: 'copy',
   },
   {
     id: 'paste',
@@ -94,6 +105,7 @@ export const commands: Command[] = [
     description: 'Paste from clipboard',
     category: 'Edit',
     shortcut: 'Ctrl+V',
+  action: 'paste',
   },
   {
     id: 'delete',
@@ -101,6 +113,7 @@ export const commands: Command[] = [
     description: 'Delete the selected items',
     category: 'Edit',
     shortcut: 'Delete',
+  action: 'delete',
   },
   {
     id: 'duplicate',
@@ -108,6 +121,7 @@ export const commands: Command[] = [
     description: 'Duplicate the selected items',
     category: 'Edit',
     shortcut: 'Ctrl+D',
+  action: 'duplicate',
   },
   {
     id: 'select-all',
@@ -115,6 +129,7 @@ export const commands: Command[] = [
     description: 'Select all entities',
     category: 'Edit',
     shortcut: 'Ctrl+A',
+  action: 'select-all',
   },
   {
     id: 'group',
@@ -122,6 +137,7 @@ export const commands: Command[] = [
     description: 'Group selected entities',
     category: 'Edit',
     shortcut: 'Ctrl+G',
+  action: 'group',
   },
   {
     id: 'ungroup',
@@ -129,6 +145,7 @@ export const commands: Command[] = [
     description: 'Ungroup selected entities',
     category: 'Edit',
     shortcut: 'Ctrl+Shift+G',
+  action: 'ungroup',
   },
   
   // View
@@ -138,6 +155,7 @@ export const commands: Command[] = [
     description: 'Zoom to show everything',
     category: 'View',
     shortcut: 'F',
+  action: 'zoom-extents',
   },
   {
     id: 'zoom-window',
@@ -145,6 +163,7 @@ export const commands: Command[] = [
     description: 'Zoom to a window area',
     category: 'View',
     shortcut: 'Ctrl+Z',
+  action: 'zoom-window',
   },
   {
     id: 'zoom-prev',
@@ -152,6 +171,7 @@ export const commands: Command[] = [
     description: 'Zoom to previous view',
     category: 'View',
     shortcut: 'Ctrl+Shift+B',
+  action: 'zoom-prev',
   },
   {
     id: 'view-top',
@@ -159,6 +179,7 @@ export const commands: Command[] = [
     description: 'Switch to top view',
     category: 'View',
     shortcut: 'Ctrl+1',
+  action: 'view-top',
   },
   {
     id: 'view-front',
@@ -166,6 +187,7 @@ export const commands: Command[] = [
     description: 'Switch to front view',
     category: 'View',
     shortcut: 'Ctrl+2',
+  action: 'view-front',
   },
   {
     id: 'view-right',
@@ -173,6 +195,7 @@ export const commands: Command[] = [
     description: 'Switch to right view',
     category: 'View',
     shortcut: 'Ctrl+3',
+  action: 'view-right',
   },
   {
     id: 'view-iso',
@@ -180,6 +203,7 @@ export const commands: Command[] = [
     description: 'Switch to isometric view',
     category: 'View',
     shortcut: 'Ctrl+4',
+  action: 'view-iso',
   },
   {
     id: 'view-perspective',
@@ -187,6 +211,7 @@ export const commands: Command[] = [
     description: 'Toggle perspective mode',
     category: 'View',
     shortcut: 'Ctrl+5',
+  action: 'view-perspective',
   },
   {
     id: 'toggle-grid',
@@ -194,6 +219,7 @@ export const commands: Command[] = [
     description: 'Show/hide the grid',
     category: 'View',
     shortcut: 'G',
+  action: 'toggle-grid',
   },
   {
     id: 'toggle-snap',
@@ -201,6 +227,7 @@ export const commands: Command[] = [
     description: 'Enable/disable snapping',
     category: 'View',
     shortcut: 'S',
+  action: 'toggle-snap',
   },
   {
     id: 'toggle-ortho',
@@ -208,6 +235,7 @@ export const commands: Command[] = [
     description: 'Enable/disable ortho mode',
     category: 'View',
     shortcut: 'O',
+  action: 'toggle-ortho',
   },
   
   // Sketch
@@ -217,6 +245,7 @@ export const commands: Command[] = [
     description: 'Draw a line',
     category: 'Sketch',
     shortcut: 'L',
+  action: 'sketch-line',
   },
   {
     id: 'sketch-circle',
@@ -224,6 +253,7 @@ export const commands: Command[] = [
     description: 'Draw a circle',
     category: 'Sketch',
     shortcut: 'C',
+  action: 'sketch-circle',
   },
   {
     id: 'sketch-arc',
@@ -231,6 +261,7 @@ export const commands: Command[] = [
     description: 'Draw an arc',
     category: 'Sketch',
     shortcut: 'A',
+  action: 'sketch-arc',
   },
   {
     id: 'sketch-rectangle',
@@ -238,6 +269,7 @@ export const commands: Command[] = [
     description: 'Draw a rectangle',
     category: 'Sketch',
     shortcut: 'R',
+  action: 'sketch-rectangle',
   },
   {
     id: 'sketch-polyline',
@@ -245,6 +277,7 @@ export const commands: Command[] = [
     description: 'Draw a polyline',
     category: 'Sketch',
     shortcut: 'P',
+  action: 'sketch-polyline',
   },
   {
     id: 'sketch-spline',
@@ -252,6 +285,7 @@ export const commands: Command[] = [
     description: 'Draw a spline',
     category: 'Sketch',
     shortcut: 'S',
+  action: 'sketch-spline',
   },
   
   // Model
@@ -261,6 +295,7 @@ export const commands: Command[] = [
     description: 'Extrude a profile',
     category: 'Model',
     shortcut: 'E',
+  action: 'model-extrude',
   },
   {
     id: 'model-revolve',
@@ -268,6 +303,7 @@ export const commands: Command[] = [
     description: 'Revolve a profile',
     category: 'Model',
     shortcut: 'V',
+  action: 'model-revolve',
   },
   {
     id: 'model-fillet',
@@ -275,6 +311,7 @@ export const commands: Command[] = [
     description: 'Apply a fillet',
     category: 'Model',
     shortcut: 'F',
+  action: 'model-fillet',
   },
   {
     id: 'model-chamfer',
@@ -282,6 +319,7 @@ export const commands: Command[] = [
     description: 'Apply a chamfer',
     category: 'Model',
     shortcut: 'H',
+  action: 'model-chamfer',
   },
   {
     id: 'model-loft',
@@ -289,6 +327,7 @@ export const commands: Command[] = [
     description: 'Create a loft',
     category: 'Model',
     shortcut: 'Ctrl+L',
+  action: 'model-loft',
   },
   {
     id: 'model-sweep',
@@ -296,6 +335,7 @@ export const commands: Command[] = [
     description: 'Create a sweep',
     category: 'Model',
     shortcut: 'Ctrl+S',
+  action: 'model-sweep',
   },
   {
     id: 'model-union',
@@ -303,6 +343,7 @@ export const commands: Command[] = [
     description: 'Boolean union',
     category: 'Model',
     shortcut: 'Ctrl+U',
+  action: 'model-union',
   },
   {
     id: 'model-difference',
@@ -310,6 +351,7 @@ export const commands: Command[] = [
     description: 'Boolean subtraction',
     category: 'Model',
     shortcut: 'Ctrl+D',
+  action: 'model-difference',
   },
   {
     id: 'model-intersect',
@@ -317,6 +359,7 @@ export const commands: Command[] = [
     description: 'Boolean intersection',
     category: 'Model',
     shortcut: 'Ctrl+I',
+  action: 'model-intersect',
   },
   
   // Architecture
@@ -326,6 +369,7 @@ export const commands: Command[] = [
     description: 'Draw a wall',
     category: 'Architecture',
     shortcut: 'W',
+  action: 'arch-wall',
   },
   {
     id: 'arch-door',
@@ -333,6 +377,7 @@ export const commands: Command[] = [
     description: 'Place a door',
     category: 'Architecture',
     shortcut: 'D',
+  action: 'arch-door',
   },
   {
     id: 'arch-window',
@@ -340,6 +385,7 @@ export const commands: Command[] = [
     description: 'Place a window',
     category: 'Architecture',
     shortcut: 'N',
+  action: 'arch-window',
   },
   {
     id: 'arch-stair',
@@ -347,6 +393,7 @@ export const commands: Command[] = [
     description: 'Create stairs',
     category: 'Architecture',
     shortcut: 'R',
+  action: 'arch-stair',
   },
   {
     id: 'arch-roof',
@@ -354,6 +401,7 @@ export const commands: Command[] = [
     description: 'Create a roof',
     category: 'Architecture',
     shortcut: 'F',
+  action: 'arch-roof',
   },
   {
     id: 'arch-slab',
@@ -361,6 +409,7 @@ export const commands: Command[] = [
     description: 'Create a slab',
     category: 'Architecture',
     shortcut: 'B',
+  action: 'arch-slab',
   },
   {
     id: 'arch-column',
@@ -368,6 +417,7 @@ export const commands: Command[] = [
     description: 'Place a column',
     category: 'Architecture',
     shortcut: 'C',
+  action: 'arch-column',
   },
   {
     id: 'arch-beam',
@@ -375,12 +425,14 @@ export const commands: Command[] = [
     description: 'Place a beam',
     category: 'Architecture',
     shortcut: 'V',
+  action: 'arch-beam',
   },
   {
     id: 'arch-room',
     name: 'Room',
     description: 'Define a room',
     category: 'Architecture',
+  action: 'arch-room',
   },
   {
     id: 'arch-dimension',
@@ -388,6 +440,7 @@ export const commands: Command[] = [
     description: 'Add a dimension',
     category: 'Architecture',
     shortcut: 'D',
+  action: 'arch-dimension',
   },
   
   // Modify
@@ -397,12 +450,14 @@ export const commands: Command[] = [
     description: 'Move entities',
     category: 'Modify',
     shortcut: 'M',
+  action: 'modify-move',
   },
   {
     id: 'modify-rotate',
     name: 'Rotate',
     description: 'Rotate entities',
     category: 'Modify',
+  action: 'modify-rotate',
   },
   {
     id: 'modify-scale',
@@ -410,6 +465,7 @@ export const commands: Command[] = [
     description: 'Scale entities',
     category: 'Modify',
     shortcut: 'S',
+  action: 'modify-scale',
   },
   {
     id: 'modify-mirror',
@@ -417,6 +473,7 @@ export const commands: Command[] = [
     description: 'Mirror entities',
     category: 'Modify',
     shortcut: 'Ctrl+M',
+  action: 'modify-mirror',
   },
   {
     id: 'modify-offset',
@@ -424,6 +481,7 @@ export const commands: Command[] = [
     description: 'Offset entities',
     category: 'Modify',
     shortcut: 'O',
+  action: 'modify-offset',
   },
   {
     id: 'modify-pattern',
@@ -431,12 +489,14 @@ export const commands: Command[] = [
     description: 'Create a pattern',
     category: 'Modify',
     shortcut: 'Ctrl+P',
+  action: 'modify-pattern',
   },
   {
     id: 'modify-trim',
     name: 'Trim',
     description: 'Trim entities',
     category: 'Modify',
+  action: 'modify-trim',
   },
   
   // Annotate
@@ -446,6 +506,7 @@ export const commands: Command[] = [
     description: 'Add text',
     category: 'Annotate',
     shortcut: 'T',
+  action: 'annotate-text',
   },
   {
     id: 'annotate-dimension',
@@ -453,6 +514,7 @@ export const commands: Command[] = [
     description: 'Add a dimension',
     category: 'Annotate',
     shortcut: 'D',
+  action: 'annotate-dimension',
   },
   {
     id: 'annotate-leader',
@@ -460,12 +522,14 @@ export const commands: Command[] = [
     description: 'Add a leader',
     category: 'Annotate',
     shortcut: 'L',
+  action: 'annotate-leader',
   },
   {
     id: 'annotate-tag',
     name: 'Tag',
     description: 'Add a tag',
     category: 'Annotate',
+  action: 'annotate-tag',
   },
   
   // Measure
@@ -475,6 +539,7 @@ export const commands: Command[] = [
     description: 'Measure distance',
     category: 'Measure',
     shortcut: 'Shift+D',
+  action: 'measure-distance',
   },
   {
     id: 'measure-angle',
@@ -482,6 +547,7 @@ export const commands: Command[] = [
     description: 'Measure angle',
     category: 'Measure',
     shortcut: 'Shift+A',
+  action: 'measure-angle',
   },
   {
     id: 'measure-area',
@@ -489,6 +555,7 @@ export const commands: Command[] = [
     description: 'Measure area',
     category: 'Measure',
     shortcut: 'Shift+R',
+  action: 'measure-area',
   },
   
   // Settings
@@ -498,12 +565,14 @@ export const commands: Command[] = [
     description: 'Open settings',
     category: 'Settings',
     shortcut: 'Ctrl+,',
+  action: 'settings',
   },
   {
     id: 'preferences',
     name: 'Preferences',
     description: 'Open preferences',
     category: 'Settings',
+  action: 'preferences',
   },
   
   // Help
@@ -513,6 +582,7 @@ export const commands: Command[] = [
     description: 'Open documentation',
     category: 'Help',
     shortcut: 'F1',
+  action: 'help-documentation',
   },
   {
     id: 'help-shortcuts',
@@ -520,18 +590,21 @@ export const commands: Command[] = [
     description: 'Show keyboard shortcuts',
     category: 'Help',
     shortcut: 'F1',
+  action: 'help-shortcuts',
   },
   {
     id: 'help-feedback',
     name: 'Send Feedback',
     description: 'Send feedback to the team',
     category: 'Help',
+  action: 'help-feedback',
   },
   {
     id: 'help-about',
     name: 'About',
     description: 'About ARC CAD',
     category: 'Help',
+  action: 'help-about',
   },
 ];
 
