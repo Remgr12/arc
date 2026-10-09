@@ -1,16 +1,16 @@
-# ARC -- Advanced CAD Application
+# ARC - Advanced CAD Application
 
 ARC is a modern, multi-platform CAD (Computer-Aided Design) application built with the [Truck](https://github.com/gkokkonen/truck) geometric kernel. It features a Shapr3D-like intuitive interface suitable for general design, architecture, and interior design workflows.
 
 ## Features
 
-- **Parametric Modeling** -- Sketch-based 3D modeling with extrude, revolve, sweep, loft, and boolean operations
-- **Architecture Tools** -- Walls, doors, windows, stairs, roofs, slabs, columns, beams, rooms, and grids
-- **Shapr3D-inspired UI** -- Gesture-based navigation, floating toolbars, and contextual panels
-- **Plugin System** -- Extend functionality with Lua or WebAssembly plugins
-- **Multi-theme** -- 8 built-in themes (Dark, Light, High Contrast, Shapr3D, AutoCAD, Blender, Monokai Pro, Solarized)
-- **Keybind Presets** -- Pre-configured keyboard shortcuts for Shapr3D, AutoCAD, and Blender workflows
-- **Cross-platform** -- Native desktop apps for Windows, macOS, and Linux
+- **Parametric Modeling** - Sketch-based 3D modeling with extrude, revolve, sweep, loft, and boolean operations
+- **Architecture Tools** - Walls, doors, windows, stairs, roofs, slabs, columns, beams, rooms, and grids
+- **Shapr3D-inspired UI** - Gesture-based navigation, floating toolbars, and contextual panels
+- **Plugin System** - Extend functionality with Lua or WebAssembly plugins
+- **Multi-theme** - 8 built-in themes (Dark, Light, High Contrast, Shapr3D, AutoCAD, Blender, Monokai Pro, Solarized)
+- **Keybind Presets** - Pre-configured keyboard shortcuts for Shapr3D, AutoCAD, and Blender workflows
+- **Cross-platform** - Native desktop apps for Windows, macOS, and Linux
 
 ## Technology Stack
 
@@ -115,7 +115,7 @@ Arc supports two plugin types:
 ### Lua Plugins
 
 ```lua
--- plugins/hello.lua
+- plugins/hello.lua
 function on_init()
     arc.log("Hello from Lua plugin!")
 end
