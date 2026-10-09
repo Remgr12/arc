@@ -1,15 +1,8 @@
-pub mod commands;
-pub mod manager;
-pub mod history;
-
 use arc_core::*;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use uuid::Uuid;
-
-pub use commands::*;
-pub use manager::*;
-pub use history::*;
+use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
 pub struct Command {
@@ -72,7 +65,7 @@ pub trait CommandHandler: Send + Sync {
     fn name(&self) -> &str;
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error, Serialize, Deserialize)]
 pub enum CommandError {
     #[error("Command not found: {0}")]
     NotFound(String),
@@ -83,9 +76,9 @@ pub enum CommandError {
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
     #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+    IO(String),
     #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    Serialization(String),
     #[error("Unknown error: {0}")]
     Unknown(String),
 }
@@ -94,7 +87,7 @@ pub struct CommandManager {
     commands: dashmap::DashMap<String, Arc<dyn CommandHandler>>,
     command_info: dashmap::DashMap<String, Command>,
     shortcut_map: dashmap::DashMap<String, String>,
-    history: CommandHistory,
+    history: parking_lot::RwLock<CommandHistory>,
 }
 
 impl CommandManager {
@@ -103,7 +96,7 @@ impl CommandManager {
             commands: dashmap::DashMap::new(),
             command_info: dashmap::DashMap::new(),
             shortcut_map: dashmap::DashMap::new(),
-            history: CommandHistory::new(),
+            history: parking_lot::RwLock::new(CommandHistory::new()),
         }
     }
 
@@ -143,6 +136,7 @@ impl CommandManager {
             return Err(CommandError::Failed("Command is disabled".to_string()));
         }
         
+        let args_clone = args.clone();
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 handler.execute(args).await
@@ -150,16 +144,17 @@ impl CommandManager {
         });
         
         if result.is_ok() {
-            self.history.push(id, args.clone());
+            self.history.write().push(id, args_clone);
         }
         
         result
     }
 
-    pub fn execute_async(&self, id: &str, args: serde_json::Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, CommandError>> + Send>> {
-        let handler = self.commands.get(id).map(|h| h.clone());
+    pub fn execute_async(&self, id: &str, args: serde_json::Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, CommandError>> + Send + '_>> {
+        let id = id.to_string();
+        let handler = self.commands.get(&id).map(|h| h.clone());
         Box::pin(async move {
-            let handler = handler.ok_or(CommandError::NotFound(id.to_string()))?;
+            let handler = handler.ok_or(CommandError::NotFound(id.clone()))?;
             handler.execute(args).await
         })
     }
@@ -169,19 +164,21 @@ impl CommandManager {
     }
 
     pub fn can_undo(&self) -> bool {
-        self.history.can_undo()
+        self.history.read().can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        self.history.can_redo()
+        self.history.read().can_redo()
     }
 
     pub fn undo(&self) -> Result<(), CommandError> {
-        self.history.undo()
+        self.history.write().undo().map_err(|e| CommandError::Failed(e))?;
+        Ok(())
     }
 
     pub fn redo(&self) -> Result<(), CommandError> {
-        self.history.redo()
+        self.history.write().redo().map_err(|e| CommandError::Failed(e))?;
+        Ok(())
     }
 
     pub fn register_core_commands(&self) {
@@ -293,7 +290,7 @@ struct NoopCommandHandler;
 
 #[async_trait]
 impl CommandHandler for NoopCommandHandler {
-    async fn execute(&self, _args: serde_json::Value) -> Result<serde_json::Value, CommandError> {
+    async fn execute(&self, _args: serde_json::Value) -> Result<serde_json::Value, crate::CommandError> {
         Ok(serde_json::Value::Null)
     }
 
@@ -303,5 +300,105 @@ impl CommandHandler for NoopCommandHandler {
 
     fn name(&self) -> &str {
         "noop"
+    }
+}
+
+use std::collections::VecDeque;
+use chrono::{DateTime, Utc};
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandHistoryEntry {
+    pub command_id: String,
+    pub args: serde_json::Value,
+    pub timestamp: DateTime<Utc>,
+    pub result: Result<serde_json::Value, CommandError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandHistory {
+    entries: VecDeque<CommandHistoryEntry>,
+    max_entries: usize,
+    undo_stack: VecDeque<CommandHistoryEntry>,
+    redo_stack: VecDeque<CommandHistoryEntry>,
+}
+
+impl CommandHistory {
+    pub fn new() -> Self {
+        Self::with_capacity(1000)
+    }
+
+    pub fn with_capacity(max_entries: usize) -> Self {
+        Self {
+            entries: VecDeque::with_capacity(max_entries),
+            max_entries: 1000,
+            undo_stack: VecDeque::new(),
+            redo_stack: VecDeque::new(),
+        }
+    }
+
+    pub fn push(&mut self, command_id: &str, args: serde_json::Value) {
+        if self.entries.len() >= self.max_entries {
+            self.entries.pop_front();
+        }
+        
+        self.entries.push_back(CommandHistoryEntry {
+            command_id: command_id.to_string(),
+            args,
+            timestamp: chrono::Utc::now(),
+            result: Ok(serde_json::Value::Null),
+        });
+        
+        self.redo_stack.clear();
+    }
+
+    pub fn complete(&mut self, result: Result<serde_json::Value, CommandError>) {
+        if let Some(entry) = self.entries.back_mut() {
+            entry.result = result;
+            if entry.result.is_ok() {
+                self.undo_stack.push_back(entry.clone());
+                if self.undo_stack.len() > 100 {
+                    self.undo_stack.pop_front();
+                }
+            }
+        }
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
+    pub fn undo(&mut self) -> Result<Option<String>, String> {
+        if let Some(entry) = self.undo_stack.pop_back() {
+            self.redo_stack.push_back(entry.clone());
+            Ok(Some(entry.command_id))
+        } else {
+            Err("Nothing to undo".to_string())
+        }
+    }
+
+    pub fn redo(&mut self) -> Result<Option<String>, String> {
+        if let Some(entry) = self.redo_stack.pop_back() {
+            self.undo_stack.push_back(entry.clone());
+            Ok(Some(entry.command_id))
+        } else {
+            Err("Nothing to redo".to_string())
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+    }
+}
+
+impl Default for CommandHistory {
+    fn default() -> Self {
+        Self::new()
     }
 }

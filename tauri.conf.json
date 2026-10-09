@@ -17,6 +17,11 @@
       "identifier": "com.arc.cad",
       "publisher": "ARC Contributors",
       "license": "MIT OR Apache-2.0",
+      "icon": [
+        "frontend/src/assets/icons/icon.png",
+        "frontend/src/assets/icons/icon.icns",
+        "frontend/src/assets/icons/icon.ico"
+      ],
       "targets": {
         "darwin": {
           "category": "public.app-category.graphics-design",

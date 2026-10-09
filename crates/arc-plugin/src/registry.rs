@@ -1,4 +1,4 @@
-use crate::{PluginManifest, PluginError, PluginRef, PluginCategory, PluginPermission};
+use crate::{PluginManifest, PluginError, PluginRef, PluginCategory, PluginPermission, Selection};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,12 +13,12 @@ pub struct PluginRegistry {
 }
 
 #[derive(Debug, Clone)]
-struct PluginEntry {
-    manifest: PluginManifest,
-    plugin: Option<PluginRef>,
-    loaded: bool,
-    enabled: bool,
-    error: Option<String>,
+pub struct PluginEntry {
+    pub manifest: PluginManifest,
+    pub plugin: Option<PluginRef>,
+    pub loaded: bool,
+    pub enabled: bool,
+    pub error: Option<String>,
 }
 
 impl PluginRegistry {
@@ -38,8 +38,9 @@ impl PluginRegistry {
 
     pub fn discover_plugins(&mut self) -> Result<Vec<PluginManifest>, PluginError> {
         let mut discovered = Vec::new();
+        let dirs: Vec<PathBuf> = self.plugin_dirs.clone();
         
-        for dir in &self.plugin_dirs {
+        for dir in dirs {
             if dir.exists() {
                 for entry in std::fs::read_dir(dir)? {
                     let entry = entry?;
@@ -134,19 +135,22 @@ impl PluginRegistry {
     }
 
     pub fn load_plugin(&mut self, id: &str, plugin: PluginRef) -> Result<(), PluginError> {
-        if let Some(entry) = self.plugins.get_mut(id) {
+        let manifest = {
+            let entry = self.plugins.get(id).ok_or(PluginError::Runtime("Plugin not found".to_string()))?;
             if entry.loaded {
                 return Err(PluginError::Runtime("Plugin already loaded".to_string()));
             }
-            
             if !entry.enabled {
                 return Err(PluginError::Runtime("Plugin is disabled".to_string()));
             }
-            
-            let context = self.create_context(&entry.manifest)?;
-            plugin.write().initialize(&context)?;
-            plugin.write().on_load()?;
-            
+            entry.manifest.clone()
+        };
+        
+        let context = self.create_context(&manifest)?;
+        plugin.write().initialize(&context)?;
+        plugin.write().on_load()?;
+        
+        if let Some(entry) = self.plugins.get_mut(id) {
             entry.plugin = Some(plugin);
             entry.loaded = true;
             entry.error = None;
@@ -204,8 +208,9 @@ impl PluginRegistry {
     }
 
     pub fn unload_all(&mut self) -> Result<(), PluginError> {
-        for id in self.load_order.iter().rev() {
-            self.unload_plugin(id)?;
+        let ids: Vec<String> = self.load_order.iter().rev().cloned().collect();
+        for id in ids {
+            self.unload_plugin(&id)?;
         }
         Ok(())
     }
@@ -226,6 +231,10 @@ impl PluginRegistry {
             .filter(|e| e.manifest.categories.contains(&category))
             .map(|e| &e.manifest)
             .collect()
+    }
+
+    pub fn iter_plugins(&self) -> impl Iterator<Item = (&String, &PluginEntry)> {
+        self.plugins.iter()
     }
 
     fn update_load_order(&mut self) {
@@ -278,80 +287,81 @@ impl PluginRegistry {
         Ok(crate::PluginContext {
             app: crate::AppAPI {
                 documents: crate::DocumentAPI {
-                    create_document: Box::new(|_| unimplemented!()),
-                    open_document: Box::new(|_| unimplemented!()),
-                    save_document: Box::new(|_| unimplemented!()),
-                    close_document: Box::new(|_| unimplemented!()),
-                    active_document: Box::new(|| unimplemented!()),
+                    create_document: Arc::new(|_| unimplemented!()),
+                    open_document: Arc::new(|_| unimplemented!()),
+                    save_document: Arc::new(|_| unimplemented!()),
+                    close_document: Arc::new(|_| unimplemented!()),
+                    active_document: Arc::new(|| unimplemented!()),
                 },
                 geometry: crate::GeometryAPI {
-                    create_point: Box::new(|_| unimplemented!()),
-                    create_line: Box::new(|_, _| unimplemented!()),
-                    create_circle: Box::new(|_, _, _| unimplemented!()),
-                    create_arc: Box::new(|_, _, _, _, _| unimplemented!()),
-                    create_polyline: Box::new(|_, _| unimplemented!()),
-                    create_box: Box::new(|_, _| unimplemented!()),
-                    create_cylinder: Box::new(|_, _, _, _| unimplemented!()),
-                    create_sphere: Box::new(|_, _| unimplemented!()),
-                    boolean_union: Box::new(|_, _| unimplemented!()),
-                    boolean_difference: Box::new(|_, _| unimplemented!()),
-                    boolean_intersection: Box::new(|_, _| unimplemented!()),
+                    create_point: Arc::new(|_| unimplemented!()),
+                    create_line: Arc::new(|_, _| unimplemented!()),
+                    create_circle: Arc::new(|_, _, _| unimplemented!()),
+                    create_arc: Arc::new(|_, _, _, _, _| unimplemented!()),
+                    create_polyline: Arc::new(|_, _| unimplemented!()),
+                    create_box: Arc::new(|_, _| unimplemented!()),
+                    create_cylinder: Arc::new(|_, _, _, _| unimplemented!()),
+                    create_sphere: Arc::new(|_, _| unimplemented!()),
+                    boolean_union: Arc::new(|_, _| unimplemented!()),
+                    boolean_difference: Arc::new(|_, _| unimplemented!()),
+                    boolean_intersection: Arc::new(|_, _| unimplemented!()),
                 },
                 modeling: crate::ModelingAPI {
-                    create_sketch: Box::new(|_| unimplemented!()),
-                    create_extrusion: Box::new(|_, _, _| unimplemented!()),
-                    create_revolution: Box::new(|_, _, _, _| unimplemented!()),
-                    create_loft: Box::new(|_| unimplemented!()),
-                    create_sweep: Box::new(|_, _| unimplemented!()),
-                    create_fillet: Box::new(|_, _, _| unimplemented!()),
-                    create_chamfer: Box::new(|_, _, _| unimplemented!()),
+                    create_sketch: Arc::new(|_| unimplemented!()),
+                    create_extrusion: Arc::new(|_, _, _| unimplemented!()),
+                    create_revolution: Arc::new(|_, _, _, _| unimplemented!()),
+                    create_loft: Arc::new(|_| unimplemented!()),
+                    create_sweep: Arc::new(|_, _| unimplemented!()),
+                    create_fillet: Arc::new(|_, _, _| unimplemented!()),
+                    create_chamfer: Arc::new(|_, _, _| unimplemented!()),
                 },
                 architecture: crate::ArchitectureAPI {
-                    create_wall: Box::new(|_, _, _| unimplemented!()),
-                    create_door: Box::new(|_, _, _, _| unimplemented!()),
-                    create_window: Box::new(|_, _, _, _| unimplemented!()),
-                    create_stair: Box::new(|_, _, _, _, _| unimplemented!()),
-                    create_roof: Box::new(|_, _| unimplemented!()),
-                    create_slab: Box::new(|_, _, _| unimplemented!()),
-                    create_column: Box::new(|_, _, _| unimplemented!()),
-                    create_beam: Box::new(|_, _, _, _| unimplemented!()),
-                    create_room: Box::new(|_, _| unimplemented!()),
-                    create_grid: Box::new(|_, _, _, _, _, _, _| unimplemented!()),
-                    create_level: Box::new(|_, _, _| unimplemented!()),
+                    create_wall: Arc::new(|_, _, _| unimplemented!()),
+                    create_door: Arc::new(|_, _, _, _| unimplemented!()),
+                    create_window: Arc::new(|_, _, _, _| unimplemented!()),
+                    create_stair: Arc::new(|_, _, _, _, _| unimplemented!()),
+                    create_roof: Arc::new(|_, _| unimplemented!()),
+                    create_slab: Arc::new(|_, _, _| unimplemented!()),
+                    create_column: Arc::new(|_, _, _| unimplemented!()),
+                    create_beam: Arc::new(|_, _, _, _| unimplemented!()),
+                    create_room: Arc::new(|_, _| unimplemented!()),
+                    create_grid: Arc::new(|_, _, _, _, _, _, _| unimplemented!()),
+                    create_level: Arc::new(|_, _, _| unimplemented!()),
                 },
                 ui: crate::UIAPI {
-                    add_panel: Box::new(|_, _, _| unimplemented!()),
-                    remove_panel: Box::new(|_| unimplemented!()),
-                    add_toolbar_button: Box::new(|_, _, _, _| unimplemented!()),
-                    remove_toolbar_button: Box::new(|_| unimplemented!()),
-                    show_message: Box::new(|_, _| unimplemented!()),
-                    show_dialog: Box::new(|_, _| unimplemented!()),
-                    set_status_bar: Box::new(|_| unimplemented!()),
+                    add_panel: Arc::new(|_, _, _| unimplemented!()),
+                    remove_panel: Arc::new(|_| unimplemented!()),
+                    add_toolbar_button: Arc::new(|_, _, _, _| unimplemented!()),
+                    remove_toolbar_button: Arc::new(|_| unimplemented!()),
+                    show_message: Arc::new(|_, _| unimplemented!()),
+                    show_dialog: Arc::new(|_, _| unimplemented!()),
+                    set_status_bar: Arc::new(|_| unimplemented!()),
                 },
                 commands: crate::CommandAPI {
-                    register_command: Box::new(|_, _, _| unimplemented!()),
-                    unregister_command: Box::new(|_| unimplemented!()),
-                    execute_command: Box::new(|_, _| unimplemented!()),
+                    register_command: Arc::new(|_, _, _| unimplemented!()),
+                    unregister_command: Arc::new(|_| unimplemented!()),
+                    execute_command: Arc::new(|_, _| unimplemented!()),
                 },
                 settings: crate::SettingsAPI {
-                    get: Box::new(|_| unimplemented!()),
-                    set: Box::new(|_, _| unimplemented!()),
-                    register: Box::new(|_, _, _| unimplemented!()),
+                    get: Arc::new(|_| unimplemented!()),
+                    set: Arc::new(|_, _| unimplemented!()),
+                    register: Arc::new(|_, _, _| unimplemented!()),
                 },
                 files: crate::FileAPI {
-                    read_file: Box::new(|_| unimplemented!()),
-                    write_file: Box::new(|_, _| unimplemented!()),
-                    list_directory: Box::new(|_| unimplemented!()),
-                    file_dialog: Box::new(|_| unimplemented!()),
+                    read_file: Arc::new(|_| unimplemented!()),
+                    write_file: Arc::new(|_, _| unimplemented!()),
+                    list_directory: Arc::new(|_| unimplemented!()),
+                    file_dialog: Arc::new(|_| unimplemented!()),
                 },
             },
             document: None,
+            selection: Selection::new(),
             settings: crate::PluginSettings {
                 config: manifest.configuration.clone().unwrap_or(serde_json::Value::Null),
                 data_path: PathBuf::new(),
             },
             logger: crate::PluginLogger {
-                log: Box::new(|_, _| {}),
+                log: Arc::new(|_, _| {}),
             },
         })
     }

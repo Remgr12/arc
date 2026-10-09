@@ -1,12 +1,12 @@
-use crate::{PluginRegistry, PluginFactory, PluginRef, PluginManifest, PluginError, Plugin, PluginContext, PluginCategory};
-use arc_core::{DocumentRef, Selection, UIEvent};
+use crate::{PluginRegistry, PluginFactory, PluginRef, PluginManifest, PluginError, Plugin, PluginContext, PluginCategory, UIEvent, PluginEntry};
+use arc_core::{DocumentRef, Selection};
 use std::sync::Arc;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
 pub struct PluginManager {
     registry: PluginRegistry,
-    factories: HashMap<String, Box<dyn PluginFactory>>,
+    factories: HashMap<String, Arc<dyn PluginFactory>>,
     app_context: PluginContext,
     command_handlers: HashMap<String, Box<dyn Fn(&serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync>>,
     ui_panels: HashMap<String, UIPanel>,
@@ -57,8 +57,10 @@ impl PluginManager {
     }
 
     pub fn register_factory(&mut self, factory: Box<dyn PluginFactory>) {
-        for typ in factory.supported_types() {
-            self.factories.insert(typ, factory);
+        let arc_factory: Arc<dyn PluginFactory> = Arc::from(factory);
+        let types = arc_factory.supported_types();
+        for typ in types {
+            self.factories.insert(typ, arc_factory.clone());
         }
     }
 
@@ -72,17 +74,21 @@ impl PluginManager {
 
     pub fn load_all_plugins(&mut self) -> Result<Vec<String>, PluginError> {
         let mut loaded = Vec::new();
+        let plugin_ids: Vec<String> = self.registry.iter_plugins()
+            .filter(|(_, entry)| entry.enabled && !entry.loaded)
+            .map(|(id, _)| id.clone())
+            .collect();
         
-        for (id, manifest) in self.registry.plugins.iter() {
-            if manifest.enabled && !manifest.loaded {
+        for id in plugin_ids {
+            if let Some(manifest) = self.registry.get_manifest(&id).cloned() {
                 if let Some(factory) = self.factories.get(&manifest.entry_point) {
-                    match factory.create_plugin(manifest) {
+                    match factory.create_plugin(&manifest) {
                         Ok(plugin) => {
-                            if let Err(e) = self.registry.load_plugin(id, plugin) {
+                            if let Err(e) = self.registry.load_plugin(&id, plugin) {
                                 eprintln!("Failed to load plugin {}: {}", id, e);
                             } else {
                                 loaded.push(id.clone());
-                                self.initialize_plugin_apis(id)?;
+                                self.initialize_plugin_apis(&id)?;
                             }
                         }
                         Err(e) => {
@@ -122,6 +128,7 @@ impl PluginManager {
         Ok(PluginContext {
             app: self.app_context.app.clone(),
             document: self.app_context.document.clone(),
+            selection: self.app_context.selection.clone(),
             settings: crate::PluginSettings {
                 config: manifest.configuration.clone().unwrap_or(serde_json::Value::Null),
                 data_path: std::path::PathBuf::from(format!("./plugins_data/{}", plugin_id)),
@@ -315,19 +322,5 @@ impl PluginManager {
 
     pub fn get_toolbar_buttons(&self) -> Vec<&ToolbarButton> {
         self.toolbar_buttons.values().collect()
-    }
-}
-
-impl Clone for PluginManager {
-    fn clone(&self) -> Self {
-        Self {
-            registry: self.registry.clone(),
-            factories: HashMap::new(),
-            app_context: self.app_context.clone(),
-            command_handlers: HashMap::new(),
-            ui_panels: self.ui_panels.clone(),
-            toolbar_buttons: self.toolbar_buttons.clone(),
-            timers: self.timers.clone(),
-        }
     }
 }

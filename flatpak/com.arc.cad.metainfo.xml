@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.arc.cad</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>ARC CAD</name>
+  <summary>Professional 3D CAD software for parametric modeling</summary>
+  <description>
+    <p>ARC CAD is a modern, open-source 3D CAD application built with Rust and Tauri.</p>
+    <p>Features:</p>
+    <ul>
+      <li>Parametric 3D modeling</li>
+      <li>STEP/IGES import/export</li>
+      <li>Assembly constraints</li>
+      <li>Technical drawing generation</li>
+      <li>Plugin system (Lua/WASM)</li>
+      <li>Modern WebGPU-based renderer</li>
+    </ul>
+  </description>
+  <developer_name>ARC Contributors</developer_name>
+  <project_group>Graphics</project_group>
+  <url type="homepage">https://github.com/yourusername/arc</url>
+  <url type="bugtracker">https://github.com/yourusername/arc/issues</url>
+  <url type="help">https://github.com/yourusername/arc/wiki</url>
+  <url type="donate">https://github.com/sponsors/yourusername</url>
+  <icon type="cached" height="128" width="128">com.arc.cad.png</icon>
+  <launchable type="desktop-id">com.arc.cad.desktop</launchable>
+  <provides>
+    <binary>arc</binary>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2024-01-15">
+      <description>Initial release</description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="sexual-content">none</content_attribute>
+    <content_attribute id="sexual-violence">none</content_attribute>
+    <content_attribute id="nudity">none</content_attribute>
+    <content_attribute id="profanity">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="gambling">none</content_attribute>
+  </content_rating>
+</component>

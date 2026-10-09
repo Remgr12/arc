@@ -150,6 +150,12 @@ impl DocumentManager {
         doc
     }
 
+    pub fn create_document_from_ref(&mut self, doc: DocumentRef) -> DocumentRef {
+        self.documents.push(doc.clone());
+        self.active_index = Some(self.documents.len() - 1);
+        doc
+    }
+
     pub fn close_document(&mut self, index: usize) -> Option<DocumentRef> {
         if index < self.documents.len() {
             let doc = self.documents.remove(index);

@@ -11,17 +11,20 @@ arc-core = { path = "../arc-core" }
 arc-geometry = { path = "../arc-geometry" }
 arc-modeling = { path = "../arc-modeling" }
 arc-architecture = { path = "../arc-architecture" }
+arc-commands = { path = "../arc-commands" }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 uuid = { workspace = true }
 parking_lot = { workspace = true }
 dashmap = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-mlua = { version = "0.9", features = ["send", "async", "lua54"] }
+mlua = { version = "0.9", features = ["send", "async", "lua54", "serialize"] }
 wasmtime = { version = "24.0", features = ["component-model"] }
+pulldown-cmark = { workspace = true }
 
 [features]
 default = ["lua", "wasm"]

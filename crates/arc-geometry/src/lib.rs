@@ -24,6 +24,8 @@ pub use conversion::*;
 
 pub use arc_core::{BoundingBox, Transform, Color, EntityId, EntityType, EntityCategory};
 pub use truck_polymesh::PolygonMesh;
+pub use truck_geometry::specifieds::Plane;
+pub use truck_modeling::Edge;
 
 pub use nalgebra::UnitQuaternion;
 

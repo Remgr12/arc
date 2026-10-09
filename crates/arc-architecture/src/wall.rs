@@ -233,7 +233,7 @@ impl Wall {
 
     pub fn contains_point(&self, point: Point3, tolerance: f64) -> bool {
         for segment in self.baseline_segments() {
-            let dist = distance_point_to_line_segment(point, segment.0, segment.1);
+            let dist = Self::distance_point_to_line_segment(point, segment.0, segment.1);
             if dist <= self.thickness * 0.5 + tolerance {
                 let z_min = self.base_height - tolerance;
                 let z_max = self.base_height + self.height + tolerance;
