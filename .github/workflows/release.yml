@@ -267,14 +267,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
 
-      - name: Publish Flatpak to Flathub (optional)
-        if: ${{ secrets.FLATHUB_TOKEN != '' }}
-        run: |
-          cd dist/flatpak-repo
-          flatpak remote-add --user flathub https://flathub.org/repo/flathub.flatpakrepo || true
-          flatpak build-bundle repo arc.flatpak com.arc.cad
-          # This would require Flathub submission process
-
   flatpak-repo-update:
     name: Update Flatpak Repository
     needs: [build-linux]
