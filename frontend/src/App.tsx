@@ -1,43 +1,31 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '@/stores/appStore';
-import Viewport from '@/components/Viewport';
-import Toolbar from '@/components/Toolbar';
-import StatusBar from '@/components/StatusBar';
-import ToolPalette from '@/components/ToolPalette';
-import QuickAccessToolbar from '@/components/QuickAccessToolbar';
-import PropertyPanel from '@/components/PropertyPanel';
-import LayerPanel from '@/components/LayerPanel';
-import ProjectPanel from '@/components/ProjectPanel';
-import CommandPalette from '@/components/CommandPalette';
-import NavigationCube from '@/components/NavigationCube';
-import SnapIndicator from '@/components/SnapIndicator';
-import FloatingActionBar from '@/components/FloatingActionBar';
+import { Viewport } from '@/components/Viewport';
+import { Toolbar } from '@/components/Toolbar';
+import { StatusBar } from '@/components/StatusBar';
+import { ToolPalette } from '@/components/ToolPalette';
+import { QuickAccessToolbar } from '@/components/QuickAccessToolbar';
+import { PropertyPanel } from '@/components/panels/PropertyPanel';
+import { LayerPanel } from '@/components/panels/LayerPanel';
+import { ProjectPanel } from '@/components/panels/ProjectPanel';
+import { CommandPalette } from '@/components/CommandPalette';
+import { NavigationCube } from '@/components/NavigationCube';
+import { SnapIndicator } from '@/components/SnapIndicator';
+import { FloatingActionBar } from '@/components/FloatingActionBar';
 import { registerTools } from '@/data';
 import { useKeyboardShortcuts, useTheme } from '@/hooks';
-import { invoke } from '@tauri-apps/api/tauri';
-import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import './App.css';
 
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   
   const { 
-    settings, 
-    documents, 
-    activeDocumentId,
-    statusMessage,
     commandPaletteOpen,
-    preferencesOpen,
-    helpOpen,
+    statusMessage,
   } = useAppStore((state) => ({
-    settings: state.settings,
-    documents: state.documents,
-    activeDocumentId: state.activeDocumentId,
-    statusMessage: state.statusMessage,
     commandPaletteOpen: state.commandPaletteOpen,
-    preferencesOpen: state.preferencesOpen,
-    helpOpen: state.helpOpen,
+    statusMessage: state.statusMessage,
   }));
   
   useKeyboardShortcuts();
@@ -72,14 +60,6 @@ export function App() {
     );
   }
   
-  if (error) {
-    return (
-      <div className="error-screen">
-        <h2>Error: {error}</h2>
-      </div>
-    );
-  }
-  
   return (
     <div className={`app ${theme}`} data-theme={theme}>
       <QuickAccessToolbar />
@@ -109,8 +89,8 @@ export function App() {
       
       <div className="status-toast">
         {statusMessage && (
-          <div className={`status-message ${statusMessage.severity || 'info'}`}>
-            {statusMessage.text}
+          <div className="status-message info">
+            {statusMessage}
           </div>
         )}
       </div>

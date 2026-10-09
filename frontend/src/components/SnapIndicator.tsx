@@ -9,9 +9,7 @@ import {
   Layout,
   Divide,
   ExternalLink,
-  TrendingUp,
   Square,
-  Box,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -25,7 +23,7 @@ export const SnapIndicator: React.FC = () => {
   
   const [visible, setVisible] = useState(false);
   const [snapMode, setSnapMode] = useState<string | null>(null);
-  const [fadeTimeout, setFadeTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [fadeTimeout, setFadeTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   
   useEffect(() => {
     if (snapEnabled) {

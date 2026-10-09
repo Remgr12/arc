@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { ViewportCamera, RaycastHit } from '@/types';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { useKeybinds } from '@/keybinds';
 
 export const Viewport: React.FC = () => {
@@ -105,10 +105,10 @@ export const Viewport: React.FC = () => {
       
       for (let i = -gridSize; i <= gridSize; i += step) {
         gl.beginPath();
-        gl.moveTo(i + camera.target.x, -gridSize, 0);
-        gl.lineTo(i + camera.target.x, gridSize, 0);
-        gl.moveTo(-gridSize, i + camera.target.y, 0);
-        gl.lineTo(gridSize, i + camera.target.y, 0);
+        gl.moveTo(i + camera.target.x, -gridSize);
+        gl.lineTo(i + camera.target.x, gridSize);
+        gl.moveTo(-gridSize, i + camera.target.y);
+        gl.lineTo(gridSize, i + camera.target.y);
         gl.stroke();
       }
     }
@@ -163,9 +163,9 @@ export const Viewport: React.FC = () => {
         });
         
         if (result?.entityId) {
-          const entityId = { uuid: result.entityId };
+          const entityId = result.entityId;
           if (addToSelection) {
-            const newIds = selection.selectedIds.includes(entityId) 
+            const newIds = selection.selectedIds.some((id) => id.uuid === entityId.uuid)
               ? selection.selectedIds.filter((id) => id.uuid !== entityId.uuid)
               : [...selection.selectedIds, entityId];
             setSelection({ ...selection, selectedIds: newIds, primaryId: entityId });

@@ -12,7 +12,7 @@ export const NavigationCube: React.FC = () => {
   
   const setView = useCallback((view: string) => {
     // Send view change command to backend
-    const camera = useAppStore.getState().cameras[activeViewport];
+    const camera = useAppStore.getState().viewportCameras[activeViewport];
     if (camera) {
       const newCamera = { ...camera };
       switch (view) {

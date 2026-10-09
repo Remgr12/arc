@@ -53,7 +53,7 @@ export const QuickAccessToolbar: React.FC = () => {
   const handleUndo = () => useAppStore.getState().undo();
   const handleRedo = () => useAppStore.getState().redo();
   const handleNew = () => {
-    useAppStore.getState().createDocument('Untitled');
+    useAppStore.getState().createDocument();
     setActiveTool('select');
   };
   const handleSave = () => {

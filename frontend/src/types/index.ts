@@ -178,10 +178,14 @@ export interface AppSettings {
   msaaSamples: number;
   ambientOcclusion: boolean;
   shadows: boolean;
+  showSnapIndicator: boolean;
+  snapTolerance: number;
 }
 
 export type RenderMode =
   | 'Wireframe' | 'HiddenLine' | 'Shaded' | 'ShadedWithEdges' | 'Realistic' | 'Conceptual' | 'XRay';
+
+export type Settings = AppSettings;
 
 export interface Tool {
   id: string;
@@ -214,6 +218,7 @@ export interface Command {
   category: string;
   shortcut?: string;
   icon?: string;
+  action: string;
 }
 
 export interface Plugin {
@@ -249,7 +254,7 @@ export interface ToolbarButton {
 export interface KeyboardShortcut {
   id: string;
   key: string;
-  modifiers: ('shift' | 'ctrl' | 'alt' | 'meta')[];
+  modifiers?: ('shift' | 'ctrl' | 'alt' | 'meta')[];
   action: string;
   context?: string;
   description: string;

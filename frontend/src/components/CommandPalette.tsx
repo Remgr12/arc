@@ -109,7 +109,7 @@ export const CommandPalette: React.FC = () => {
     setCommandPaletteOpen(false);
     
     try {
-      await cmd.action();
+      await useAppStore.getState().executeCommand(cmd.action || cmdId);
       setRecentCommands((prev) => {
         const filtered = prev.filter((id) => id !== cmdId);
         return [cmdId, ...filtered].slice(0, 10);

@@ -215,9 +215,9 @@ export const SHAPR3D_KEYBINDS: KeyboardShortcut[] = [
 
 export const AUTOCAD_KEYBINDS: KeyboardShortcut[] = [
   // AutoCAD-style navigation
-  { id: 'nav-orbit', key: 'Shift', modifiers: ['mid'], action: 'orbit', description: 'Orbit View (Shift + MiddleMouse)' },
-  { id: 'nav-pan', key: 'Middle', action: 'pan', description: 'Pan View (MiddleMouse)' },
-  { id: 'nav-zoom', key: 'Ctrl', modifiers: ['middle'], action: 'zoom', description: 'Zoom View (Ctrl + MiddleMouse)' },
+  { id: 'nav-orbit', key: 'Shift', modifiers: ['ctrl'], action: 'orbit', description: 'Orbit View' },
+  { id: 'nav-pan', key: 'Middle', action: 'pan', description: 'Pan View' },
+  { id: 'nav-zoom', key: 'Ctrl', modifiers: ['ctrl'], action: 'zoom', description: 'Zoom View' },
   
   // Selection
   { id: 'select', key: 'Q', action: 'select', description: 'Select Tool' },
@@ -296,9 +296,9 @@ export const AUTOCAD_KEYBINDS: KeyboardShortcut[] = [
 
 export const BLENDER_KEYBINDS: KeyboardShortcut[] = [
   // Blender-style navigation (Emulate Numpad)
-  { id: 'nav-orbit', key: 'Middle', action: 'orbit', description: 'Orbit View' },
-  { id: 'nav-pan', key: 'Shift', modifiers: ['middle'], action: 'pan', description: 'Pan View' },
-  { id: 'nav-zoom', key: 'Ctrl', modifiers: ['middle'], action: 'zoom', description: 'Zoom View' },
+  { id: 'nav-orbit', key: 'Middle', modifiers: ['ctrl'], action: 'orbit', description: 'Orbit View' },
+  { id: 'nav-pan', key: 'Shift', modifiers: ['ctrl', 'shift'], action: 'pan', description: 'Pan View' },
+  { id: 'nav-zoom', key: 'Ctrl', modifiers: ['ctrl', 'shift'], action: 'zoom', description: 'Zoom View' },
   
   // View
   { id: 'view-top', key: '7', action: 'view-top', description: 'Top View' },
@@ -313,40 +313,40 @@ export const BLENDER_KEYBINDS: KeyboardShortcut[] = [
   { id: 'select-all', key: 'A', action: 'select-all', description: 'Select All' },
   { id: 'select-box', key: 'B', action: 'box-select', description: 'Box Select' },
   { id: 'select-circle', key: 'C', action: 'circle-select', description: 'Circle Select' },
-  { id: 'select-lasso', key: 'Ctrl', modifiers: ['left'], action: 'lasso-select', description: 'Lasso Select' },
+  { id: 'select-lasso', key: 'Ctrl', modifiers: ['ctrl'], action: 'lasso-select', description: 'Lasso Select' },
   
   // Mesh/Edit
   { id: 'edit-mode', key: 'Tab', action: 'toggle-edit', description: 'Toggle Edit Mode' },
-  { id: 'select-mode', key: 'Ctrl', modifiers: ['tab'], action: 'select-mode', description: 'Select Mode' },
+  { id: 'select-mode', key: 'Tab', modifiers: ['ctrl'], action: 'select-mode', description: 'Select Mode' },
   
   // Modeling
-  { id: 'model-add', key: 'Shift', modifiers: ['a'], action: 'add', description: 'Add Menu' },
+  { id: 'model-add', key: 'A', modifiers: ['shift'], action: 'add', description: 'Add Menu' },
   { id: 'model-extrude', key: 'E', action: 'extrude', description: 'Extrude' },
   { id: 'model-inset', key: 'I', action: 'inset', description: 'Inset' },
-  { id: 'model-bevel', key: 'Ctrl', modifiers: ['shift', 'alt'], action: 'bevel', description: 'Bevel' },
-  { id: 'model-loop-cut', key: 'Ctrl', modifiers: ['r'], action: 'loop-cut', description: 'Loop Cut' },
-  { id: 'model-subdivide', key: 'Ctrl', modifiers: ['2'], action: 'subdivide', description: 'Subdivide' },
-  { id: 'model-merge', key: 'Alt', modifiers: ['m'], action: 'merge', description: 'Merge' },
+  { id: 'model-bevel', key: 'B', modifiers: ['ctrl', 'shift'], action: 'bevel', description: 'Bevel' },
+  { id: 'model-loop-cut', key: 'R', modifiers: ['ctrl'], action: 'loop-cut', description: 'Loop Cut' },
+  { id: 'model-subdivide', key: '2', modifiers: ['ctrl'], action: 'subdivide', description: 'Subdivide' },
+  { id: 'model-merge', key: 'M', modifiers: ['alt'], action: 'merge', description: 'Merge' },
   
   // Modify
   { id: 'modify-move', key: 'G', action: 'grab', description: 'Grab/Move' },
   { id: 'modify-rotate', key: 'R', action: 'rotate', description: 'Rotate' },
   { id: 'modify-scale', key: 'S', action: 'scale', description: 'Scale' },
-  { id: 'modify-duplicate', key: 'Shift', modifiers: ['d'], action: 'duplicate', description: 'Duplicate' },
+  { id: 'modify-duplicate', key: 'D', modifiers: ['shift'], action: 'duplicate', description: 'Duplicate' },
   { id: 'modify-delete', key: 'X', action: 'delete', description: 'Delete' },
   
   // Architecture
-  { id: 'arch-wall', key: 'Shift', modifiers: ['a', 'w'], action: 'wall', description: 'Wall Tool' },
-  { id: 'arch-door', key: 'Shift', modifiers: ['a', 'd'], action: 'door', description: 'Door Tool' },
-  { id: 'arch-window', key: 'Shift', modifiers: ['a', 'n'], action: 'window', description: 'Window Tool' },
+  { id: 'arch-wall', key: 'W', modifiers: ['shift', 'ctrl'], action: 'wall', description: 'Wall Tool' },
+  { id: 'arch-door', key: 'D', modifiers: ['shift', 'ctrl'], action: 'door', description: 'Door Tool' },
+  { id: 'arch-window', key: 'N', modifiers: ['shift', 'ctrl'], action: 'window', description: 'Window Tool' },
   
   // File
   { id: 'file-save', key: 'S', modifiers: ['ctrl'], action: 'save', description: 'Save' },
-  { id: 'file-save-as', key: 'Shift', modifiers: ['s'], action: 'save-as', description: 'Save As' },
+  { id: 'file-save-as', key: 'S', modifiers: ['ctrl', 'shift'], action: 'save-as', description: 'Save As' },
   
   // Edit
   { id: 'edit-undo', key: 'Z', action: 'undo', description: 'Undo' },
-  { id: 'edit-redo', key: 'Shift', modifiers: ['z'], action: 'redo', description: 'Redo' },
+  { id: 'edit-redo', key: 'Z', modifiers: ['shift'], action: 'redo', description: 'Redo' },
   { id: 'edit-copy', key: 'C', modifiers: ['ctrl'], action: 'copy', description: 'Copy' },
   { id: 'edit-paste', key: 'V', modifiers: ['ctrl'], action: 'paste', description: 'Paste' },
 ];
@@ -395,10 +395,10 @@ export const useKeybinds = () => {
     if (!shortcut) return '';
     
     const parts: string[] = [];
-    if (shortcut.modifiers.includes('ctrl')) parts.push('Ctrl');
-    if (shortcut.modifiers.includes('shift')) parts.push('Shift');
-    if (shortcut.modifiers.includes('alt')) parts.push('Alt');
-    if (shortcut.modifiers.includes('meta')) parts.push('Cmd');
+    if (shortcut.modifiers?.includes('ctrl')) parts.push('Ctrl');
+    if (shortcut.modifiers?.includes('shift')) parts.push('Shift');
+    if (shortcut.modifiers?.includes('alt')) parts.push('Alt');
+    if (shortcut.modifiers?.includes('meta')) parts.push('Cmd');
     parts.push(shortcut.key);
     
     return parts.join(' + ');
@@ -419,10 +419,10 @@ export const useKeybinds = () => {
     const meta = event.metaKey;
     
     return (
-      shortcut.modifiers.includes('ctrl') === ctrl &&
-      shortcut.modifiers.includes('shift') === shift &&
-      shortcut.modifiers.includes('alt') === alt &&
-      shortcut.modifiers.includes('meta') === meta
+      shortcut.modifiers?.includes('ctrl') === ctrl &&
+      shortcut.modifiers?.includes('shift') === shift &&
+      shortcut.modifiers?.includes('alt') === alt &&
+      shortcut.modifiers?.includes('meta') === meta
     );
   };
   
@@ -435,6 +435,4 @@ export const useKeybinds = () => {
     getShortcutLabel,
     matchesShortcut,
   };
-};
-
-import { useAppStore } from '@/stores/appStore';
+}
