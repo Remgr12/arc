@@ -5,7 +5,7 @@
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
-  "productName": "ARC",
+  "productName": "arc",
   "version": "0.1.0",
   "identifier": "com.arc.cad"
 }

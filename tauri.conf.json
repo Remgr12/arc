@@ -5,7 +5,7 @@
     "devPath": "http://localhost:1420",
     "distDir": "frontend/dist"
   },
-  "productName": "ARC",
+  "productName": "arc",
   "version": "0.1.0",
   "package": {
     "name": "arc",
@@ -15,7 +15,7 @@
     "identifier": "com.arc.cad",
     "bundle": {
       "identifier": "com.arc.cad",
-      "publisher": "ARC Contributors",
+      "publisher": "arc Contributors",
       "license": "MIT OR Apache-2.0",
       "icon": [
         "frontend/src/assets/icons/icon.png",
@@ -62,7 +62,7 @@
         "fullscreen": false,
         "decorations": false,
         "transparent": false,
-        "title": "ARC",
+        "title": "arc",
         "windowClass": "arc-main",
         "label": "main",
         "alwaysOnTop": false,

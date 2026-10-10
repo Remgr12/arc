@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ARC Local Build Script
+# arc Local Build Script
 # Builds the application for the current platform and creates distributable packages
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,7 +23,7 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Builds ARC CAD for distribution.
+Builds arc CAD for distribution.
 
 Options:
   --target TARGET     Target triple (default: host)

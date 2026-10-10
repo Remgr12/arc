@@ -200,7 +200,7 @@ impl APIDocumentation {
     pub fn generate(api: &PluginAPI) -> Self {
         let mut md = String::new();
         
-        md.push_str(&format!("# ARC Plugin API v{}\n\n", api.version));
+        md.push_str(&format!("# arc Plugin API v{}\n\n", api.version));
         
         md.push_str("## Functions\n\n");
         for func in &api.functions {
@@ -267,7 +267,7 @@ impl APIDocumentation {
     pub fn to_html(&self) -> String {
         let mut html = String::new();
         html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
-        html.push_str("<title>ARC Plugin API</title>\n");
+        html.push_str("<title>arc Plugin API</title>\n");
         html.push_str("<style>\n");
         html.push_str("body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }\n");
         html.push_str("code { background: #f4f4f4; padding: 2px 4px; border-radius: 3px; }\n");
