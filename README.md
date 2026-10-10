@@ -1,6 +1,6 @@
-# ARC - Advanced CAD Application
+# arc - Advanced CAD Application
 
-ARC is a modern, multi-platform CAD (Computer-Aided Design) application built with the [Truck](https://github.com/gkokkonen/truck) geometric kernel. It features a Shapr3D-like intuitive interface suitable for general design, architecture, and interior design workflows.
+arc is a modern, multi-platform CAD (Computer-Aided Design) application built with the [Truck](https://github.com/gkokkonen/truck) geometric kernel. It features a Shapr3D-like intuitive interface suitable for general design, architecture, and interior design workflows.
 
 ## Features
 

@@ -602,7 +602,7 @@ export const commands: Command[] = [
   {
     id: 'help-about',
     name: 'About',
-    description: 'About ARC CAD',
+    description: 'About arc CAD',
     category: 'Help',
   action: 'help-about',
   },

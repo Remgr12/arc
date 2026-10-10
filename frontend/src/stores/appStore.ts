@@ -194,7 +194,7 @@ const defaultPanels = {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      appName: 'ARC CAD',
+      appName: 'arc CAD',
       version: '0.1.0',
       initialized: false,
       

@@ -3,10 +3,10 @@
   <id>com.arc.cad</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>ARC CAD</name>
+  <name>arc CAD</name>
   <summary>Professional 3D CAD software for parametric modeling</summary>
   <description>
-    <p>ARC CAD is a modern, open-source 3D CAD application built with Rust and Tauri.</p>
+    <p>arc CAD is a modern, open-source 3D CAD application built with Rust and Tauri.</p>
     <p>Features:</p>
     <ul>
       <li>Parametric 3D modeling</li>
@@ -17,7 +17,7 @@
       <li>Modern WebGPU-based renderer</li>
     </ul>
   </description>
-  <developer_name>ARC Contributors</developer_name>
+  <developer_name>arc Contributors</developer_name>
   <project_group>Graphics</project_group>
   <url type="homepage">https://github.com/yourusername/arc</url>
   <url type="bugtracker">https://github.com/yourusername/arc/issues</url>

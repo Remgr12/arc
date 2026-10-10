@@ -51,7 +51,8 @@ jobs:
       - name: Install dependencies
         run: |
           choco install nsis -y
-          choco install wixtoolset -y
+          dotnet tool install -g wix
+          echo "$HOME/.dotnet/tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build frontend
         working-directory: frontend
@@ -59,33 +60,22 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build Tauri app (MSI)
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri app (MSI + NSIS)
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'ARC ${{ github.ref_name }}'
+          releaseName: 'arc ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
-          args: --target x86_64-pc-windows-msvc --bundle msi
-
-      - name: Build Tauri app (Portable/NSIS)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'ARC ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version.'
-          releaseDraft: true
-          prerelease: false
-          args: --target x86_64-pc-windows-msvc --bundle nsis
+          projectPath: .
+          args: --target x86_64-pc-windows-msvc --bundle msi,nsis
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'tauri-artifacts'
 
   build-linux:
     name: Build Linux (AppImage + DEB + RPM + Flatpak)
@@ -135,16 +125,19 @@ jobs:
           npm run build
 
       - name: Build Tauri app (AppImage + DEB + RPM)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'ARC ${{ github.ref_name }}'
+          releaseName: 'arc ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
+          projectPath: .
           args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'tauri-artifacts'
 
       - name: Build Flatpak
         run: |
@@ -161,7 +154,7 @@ jobs:
       - name: Create Flatpak repository
         run: |
           cd flatpak
-          flatpak build-update-repo --title="ARC CAD" --generate-static-deltas --prune-depth=20 repo
+          flatpak build-update-repo --title="arc CAD" --generate-static-deltas --prune-depth=20 repo
 
       - name: Upload Flatpak repo
         uses: actions/upload-artifact@v4
@@ -199,18 +192,21 @@ jobs:
           npm run build
 
       - name: Build Tauri app (Universal DMG)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'ARC ${{ github.ref_name }}'
+          releaseName: 'arc ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
+          projectPath: .
           args: --target universal-apple-darwin --bundle dmg,app
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: 'tauri-artifacts'
 
   release:
     name: Create Release

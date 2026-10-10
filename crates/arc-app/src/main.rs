@@ -266,7 +266,7 @@ fn main() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    info!("Starting ARC CAD Application");
+    info!("Starting arc CAD Application");
 
     let app_state = Arc::new(RwLock::new(AppState::new()));
 
@@ -314,9 +314,9 @@ fn main() {
                 state.initialize(app_handle.clone());
             }
             
-            info!("ARC CAD Application initialized");
+            info!("arc CAD Application initialized");
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("Error running ARC application");
+        .expect("Error running arc application");
 }
