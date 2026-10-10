@@ -73,7 +73,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: .
-          args: --target x86_64-pc-windows-msvc --bundle msi,nsis
+          args: --target x86_64-pc-windows-msvc --bundle msi,nsis --config tauri.conf.json
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
@@ -134,7 +134,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: .
-          args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm
+          args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm --config tauri.conf.json
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
@@ -203,7 +203,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: .
-          args: --target universal-apple-darwin --bundle dmg,app
+          args: --target universal-apple-darwin --bundle dmg,app --config tauri.conf.json
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
