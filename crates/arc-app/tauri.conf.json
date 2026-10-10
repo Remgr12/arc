@@ -1,9 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "arc",
-  "mainBinaryName": "arc",
-  "version": "0.1.0",
   "identifier": "com.arc.cad",
+  "productName": "arc",
+  "version": "0.1.0",
   "build": {
     "beforeBuildCommand": "cd ../frontend && npm run build",
     "beforeDevCommand": "cd ../frontend && npm run dev",
@@ -12,7 +11,7 @@
   },
   "app": {
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws:://localhost:*"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws://localhost:*"
     },
     "trayIcon": {
       "iconPath": "../../frontend/src/assets/icons/tray.svg"
@@ -37,13 +36,15 @@
     ]
   },
   "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../../frontend/src/assets/icons/icon.png",
+      "../../frontend/src/assets/icons/icon.icns",
+      "../../frontend/src/assets/icons/icon.ico"
+    ],
     "publisher": "arc Contributors",
     "license": "MIT OR Apache-2.0",
-    "icon": [
-    "../../frontend/src/assets/icons/icon.png",
-    "../../frontend/src/assets/icons/icon.icns",
-    "../../frontend/src/assets/icons/icon.ico"
-    ],
     "macOS": {
       "minimumSystemVersion": "11.0",
       "entitlements": null,
