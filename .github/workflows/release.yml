@@ -28,6 +28,9 @@ jobs:
   build-windows:
     name: Build Windows (MSI + Portable)
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: crates/arc-app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,7 +58,7 @@ jobs:
           echo "$HOME/.dotnet/tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build frontend
-        working-directory: frontend
+        working-directory: ../../frontend
         run: |
           npm ci
           npm run build
@@ -73,13 +76,16 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: crates/arc-app
-          args: --target x86_64-pc-windows-msvc --bundle msi,nsis --config tauri.conf.json
+          args: --target x86_64-pc-windows-msvc --bundle msi,nsis
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
   build-linux:
     name: Build Linux (AppImage + DEB + RPM + Flatpak)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/arc-app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -118,7 +124,7 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
 
       - name: Build frontend
-        working-directory: frontend
+        working-directory: ../../frontend
         run: |
           npm ci
           npm run build
@@ -134,13 +140,13 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: crates/arc-app
-          args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm --config tauri.conf.json
+          args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
       - name: Build Flatpak
         run: |
-          cd flatpak
+          cd ../../flatpak
           flatpak-builder --force-clean --repo=repo build-dir com.arc.cad.yml
           flatpak build-bundle repo arc-${{ github.ref_name }}.flatpak com.arc.cad
 
@@ -148,22 +154,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatpak
-          path: flatpak/arc-${{ github.ref_name }}.flatpak
+          path: ../../flatpak/arc-${{ github.ref_name }}.flatpak
 
       - name: Create Flatpak repository
         run: |
-          cd flatpak
+          cd ../../flatpak
           flatpak build-update-repo --title="arc CAD" --generate-static-deltas --prune-depth=20 repo
 
       - name: Upload Flatpak repo
         uses: actions/upload-artifact@v4
         with:
           name: flatpak-repo
-          path: flatpak/repo
+          path: ../../flatpak/repo
 
   build-macos:
     name: Build macOS (DMG + App)
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: crates/arc-app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -185,7 +194,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Build frontend
-        working-directory: frontend
+        working-directory: ../../frontend
         run: |
           npm ci
           npm run build
@@ -203,7 +212,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: crates/arc-app
-          args: --target universal-apple-darwin --bundle dmg,app --config tauri.conf.json
+          args: --target universal-apple-darwin --bundle dmg,app
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri-artifacts'
 
