@@ -78,7 +78,7 @@ jobs:
           projectPath: crates/arc-app
           args: --target x86_64-pc-windows-msvc --bundle msi,nsis
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: 'tauri-artifacts'
+          workflowArtifactNamePattern: 'tauri_[platform]-[arch]-[bundle]'
 
   build-linux:
     name: Build Linux (AppImage + DEB + RPM + Flatpak)
@@ -142,7 +142,7 @@ jobs:
           projectPath: crates/arc-app
           args: --target x86_64-unknown-linux-gnu --bundle appimage,deb,rpm
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: 'tauri-artifacts'
+          workflowArtifactNamePattern: 'tauri_[platform]-[arch]-[bundle]'
 
       - name: Build Flatpak
         run: |
@@ -214,7 +214,7 @@ jobs:
           projectPath: crates/arc-app
           args: --target universal-apple-darwin --bundle dmg,app
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: 'tauri-artifacts'
+          workflowArtifactNamePattern: 'tauri_[platform]-[arch]-[bundle]'
 
   release:
     name: Create Release
@@ -222,23 +222,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Download Windows artifacts
+      - name: Download tauri artifacts
         uses: actions/download-artifact@v4
         with:
-          name: tauri-artifacts
-          path: dist/windows
-
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: tauri-artifacts
-          path: dist/linux
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: tauri-artifacts
-          path: dist/macos
+          pattern: 'tauri_*'
+          merge-multiple: true
+          path: dist
 
       - name: Download Flatpak
         uses: actions/download-artifact@v4
@@ -256,13 +245,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/windows/*.msi
-            dist/windows/*.exe
-            dist/linux/*.AppImage
-            dist/linux/*.deb
-            dist/linux/*.rpm
-            dist/macos/*.dmg
-            dist/macos/*.app.tar.gz
+            dist/*.msi
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.dmg
+            dist/*.app.tar.gz
             dist/flatpak/*.flatpak
           draft: false
           prerelease: false
