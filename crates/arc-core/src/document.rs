@@ -1,92 +1,56 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-use parking_lot::RwLock;
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use crate::{EntityContainer, EntityId, EntityRef, Layer, LayerContainer, Selection, ViewportState, Units, SnapSettings, History, Metadata};
+//! The document model: entities, layers, selection, history, scene snapshots,
+//! raycasting and persistence.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+
+use crate::entity::{Entity, EntityData, Geometry};
+use crate::history::{History, Snapshot};
+use crate::mesh::{ray_point_segment_distance, ray_triangle, MeshBuffer};
+use crate::RayHit;
+use crate::meshgen;
+use crate::units::Units;
+use crate::{Color, EntityId, Layer, Transform};
+
+/// Serializable document (without derived mesh buffers).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentData {
+    pub version: u32,
+    pub name: String,
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub units: Units,
+    pub layers: Vec<Layer>,
+    #[serde(default)]
+    pub active_layer: EntityId,
+    pub entities: Vec<Entity>,
+    #[serde(default)]
+    pub selection: Vec<EntityId>,
+    #[serde(default)]
+    pub primary: Option<EntityId>,
+}
+
+/// Domain document.
 #[derive(Debug)]
 pub struct Document {
     pub id: EntityId,
     pub name: String,
-    pub path: Option<PathBuf>,
-    pub modified: bool,
-    pub version: u32,
+    pub path: Option<String>,
     pub units: Units,
-    pub snap_settings: SnapSettings,
-    pub entities: EntityContainer,
-    pub layers: LayerContainer,
-    pub selection: Selection,
-    pub viewports: Vec<ViewportState>,
-    pub active_viewport: usize,
+    pub modified: bool,
+    pub data_version: u32,
+    pub layers: Vec<Layer>,
+    pub active_layer: EntityId,
+    pub entities: BTreeMap<EntityId, Entity>,
+    pub selection: Vec<EntityId>,
+    pub primary: Option<EntityId>,
     pub history: History,
-    pub metadata: Metadata,
-}
-
-impl Document {
-    pub fn new(name: String) -> Self {
-        let mut layers = LayerContainer::new();
-        let default_layer = layers.create_layer("Default".to_string(), None);
-        let default_layer_id = default_layer.read().id;
-
-        Self {
-            id: EntityId::new(),
-            name,
-            path: None,
-            modified: false,
-            version: 1,
-            units: Units::default(),
-            snap_settings: SnapSettings::default(),
-            entities: EntityContainer::new(),
-            layers,
-            selection: Selection::new(),
-            viewports: vec![ViewportState::default(); 4],
-            active_viewport: 0,
-            history: History::new(),
-            metadata: Metadata::default(),
-        }
-    }
-
-    pub fn active_viewport(&self) -> &ViewportState {
-        &self.viewports[self.active_viewport]
-    }
-
-    pub fn active_viewport_mut(&mut self) -> &mut ViewportState {
-        &mut self.viewports[self.active_viewport]
-    }
-
-    pub fn set_active_viewport(&mut self, index: usize) {
-        if index < self.viewports.len() {
-            self.active_viewport = index;
-        }
-    }
-
-    pub fn add_entity(&mut self, entity: EntityRef) -> EntityId {
-        let id = entity.read().id();
-        self.entities.add(entity);
-        self.mark_modified();
-        id
-    }
-
-    pub fn remove_entity(&mut self, id: EntityId) -> Option<EntityRef> {
-        self.selection.deselect(id);
-        let entity = self.entities.remove(id);
-        self.mark_modified();
-        entity
-    }
-
-    pub fn get_entity(&self, id: EntityId) -> Option<EntityRef> {
-        self.entities.get(id)
-    }
-
-    pub fn mark_modified(&mut self) {
-        self.modified = true;
-        self.version += 1;
-    }
-
-    pub fn mark_saved(&mut self) {
-        self.modified = false;
-    }
+    mesh_cache: BTreeMap<EntityId, Arc<MeshBuffer>>,
+    scene_version: u64,
+    next_tag: u32,
 }
 
 impl Default for Document {
@@ -95,98 +59,679 @@ impl Default for Document {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocumentSettings {
-    pub grid_enabled: bool,
-    pub grid_size: f64,
-    pub grid_subdivisions: u32,
-    pub grid_color: crate::Color,
-    pub snap_enabled: bool,
-    pub ortho_mode: bool,
-    pub polar_tracking: bool,
-    pub object_snap: bool,
-    pub dynamic_input: bool,
-    pub line_weight_display: bool,
-    pub transparency_display: bool,
-    pub selection_preview: bool,
-}
-
-impl Default for DocumentSettings {
-    fn default() -> Self {
+impl Document {
+    pub fn new(name: String) -> Self {
+        let mut layers = Vec::new();
+        let default_layer = Layer::new("Default".to_string(), Some(Color::GRAY));
+        let active_layer = default_layer.id;
+        layers.push(default_layer);
         Self {
-            grid_enabled: true,
-            grid_size: 1000.0,
-            grid_subdivisions: 10,
-            grid_color: crate::Color::LIGHT_GRAY,
-            snap_enabled: true,
-            ortho_mode: false,
-            polar_tracking: true,
-            object_snap: true,
-            dynamic_input: true,
-            line_weight_display: false,
-            transparency_display: true,
-            selection_preview: true,
+            id: EntityId::new(),
+            name,
+            path: None,
+            units: Units::default(),
+            modified: false,
+            data_version: 1,
+            layers,
+            active_layer,
+            entities: BTreeMap::new(),
+            selection: Vec::new(),
+            primary: None,
+            history: History::new(128),
+            mesh_cache: BTreeMap::new(),
+            scene_version: 1,
+            next_tag: 1,
         }
     }
-}
 
-pub type DocumentRef = Arc<RwLock<Document>>;
-
-#[derive(Debug, Default)]
-pub struct DocumentManager {
-    documents: Vec<DocumentRef>,
-    active_index: Option<usize>,
-}
-
-impl DocumentManager {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn scene_version(&self) -> u64 {
+        self.scene_version
     }
 
-    pub fn create_document(&mut self, name: String) -> DocumentRef {
-        let doc = Arc::new(RwLock::new(Document::new(name)));
-        self.documents.push(doc.clone());
-        self.active_index = Some(self.documents.len() - 1);
-        doc
+    pub fn touch(&mut self) {
+        self.modified = true;
+        self.scene_version += 1;
     }
 
-    pub fn create_document_from_ref(&mut self, doc: DocumentRef) -> DocumentRef {
-        self.documents.push(doc.clone());
-        self.active_index = Some(self.documents.len() - 1);
-        doc
+    // ------------------------------------------------------------- entities
+
+    /// Give a fresh, unique display name like "Box 3" for a kind.
+    fn allocate_name(&mut self, kind: &Geometry) -> String {
+        let label = Self::kind_label(kind);
+        let mut n;
+        loop {
+            n = self.next_tag;
+            self.next_tag += 1;
+            let candidate = format!("{} {}", label, n);
+            let taken = self
+                .entities
+                .values()
+                .any(|e| e.name.eq_ignore_ascii_case(&candidate));
+            if !taken {
+                break;
+            }
+        }
+        format!("{} {}", label, n)
     }
 
-    pub fn close_document(&mut self, index: usize) -> Option<DocumentRef> {
-        if index < self.documents.len() {
-            let doc = self.documents.remove(index);
-            if let Some(active) = self.active_index {
-                if active >= index && active > 0 {
-                    self.active_index = Some(active - 1);
-                } else if self.documents.is_empty() {
-                    self.active_index = None;
+    pub fn kind_label(kind: &Geometry) -> &'static str {
+        match kind {
+            Geometry::Box { .. } => "Box",
+            Geometry::Sphere { .. } => "Sphere",
+            Geometry::Cylinder { .. } => "Cylinder",
+            Geometry::Cone { .. } => "Cone",
+            Geometry::Torus { .. } => "Torus",
+            Geometry::Plane { .. } => "Plane",
+            Geometry::LineCurve { .. } => "Line",
+            Geometry::PolylineCurve { .. } => "Polyline",
+            Geometry::CircleCurve { .. } => "Circle",
+            Geometry::ArcCurve { .. } => "Arc",
+            Geometry::RectangleCurve { .. } => "Rectangle",
+            Geometry::PolygonCurve { .. } => "Polygon",
+            Geometry::Extrude { .. } => "Extrude",
+            Geometry::Revolve { .. } => "Revolve",
+            Geometry::Sweep { .. } => "Sweep",
+            Geometry::Loft { .. } => "Loft",
+            Geometry::Wall { .. } => "Wall",
+            Geometry::Stair { .. } => "Stair",
+            Geometry::Slab { .. } => "Slab",
+            Geometry::Roof { .. } => "Roof",
+            Geometry::Column { .. } => "Column",
+            Geometry::Beam { .. } => "Beam",
+            Geometry::Door { .. } => "Door",
+            Geometry::Window { .. } => "Window",
+            Geometry::Dimension { .. } => "Dimension",
+        }
+    }
+
+    /// Add an entity (also generates mesh). Returns (id, error).
+    pub fn add_entity(&mut self, mut entity: Entity) -> (EntityId, Result<(), String>) {
+        let err = entity.kind.validate().and_then(|_| {
+            // generate immediately to surface mesh errors
+            meshgen::generate(&entity.kind).map(|_| ())
+        });
+        let id = entity.id;
+        if let Err(e) = &err {
+            return (id, Err(e.clone()));
+        }
+        if entity.name.is_empty() {
+            entity.name = self.allocate_name(&entity.kind);
+        }
+        self.entities.insert(id, entity);
+        self.mesh_cache.remove(&id);
+        self.touch();
+        (id, Ok(()))
+    }
+
+    pub fn get(&self, id: &EntityId) -> Option<&Entity> {
+        self.entities.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: &EntityId) -> Option<&mut Entity> {
+        if self.entities.contains_key(id) {
+            self.touch();
+        }
+        self.entities.get_mut(id)
+    }
+
+    pub fn remove_entity(&mut self, id: &EntityId) -> Option<Entity> {
+        let removed = self.entities.remove(id)?;
+        self.selection.retain(|s| s != id);
+        if self.primary == Some(*id) {
+            self.primary = None;
+        }
+        self.mesh_cache.remove(id);
+        self.touch();
+        Some(removed)
+    }
+
+    /// Update geometry payload; mesh regenerates.
+    pub fn set_kind(&mut self, id: &EntityId, kind: Geometry) -> Result<(), String> {
+        kind.validate()?;
+        meshgen::generate(&kind)?; // surface mesh errors early
+        if let Some(e) = self.entities.get_mut(id) {
+            e.kind = kind;
+            self.mesh_cache.remove(id);
+            self.touch();
+        }
+        Ok(())
+    }
+
+    pub fn set_transform(&mut self, id: &EntityId, transform: Transform) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.transform = transform;
+            self.touch();
+        }
+    }
+
+    pub fn set_color(&mut self, id: &EntityId, color: Option<Color>) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.color = color;
+            self.touch();
+        }
+    }
+
+    pub fn set_name(&mut self, id: &EntityId, name: String) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.name = name;
+            self.touch();
+        }
+    }
+
+    pub fn set_visible(&mut self, id: &EntityId, visible: bool) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.visible = visible;
+            self.touch();
+        }
+    }
+
+    pub fn set_locked(&mut self, id: &EntityId, locked: bool) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.locked = locked;
+            self.touch();
+        }
+    }
+
+    pub fn set_layer(&mut self, ids: &[EntityId], layer: EntityId) {
+        if !self.layers.iter().any(|l| l.id == layer) {
+            return;
+        }
+        for id in ids {
+            if let Some(e) = self.entities.get_mut(id) {
+                e.layer = layer;
+            }
+        }
+        self.touch();
+    }
+
+    pub fn duplicate(&mut self, id: &EntityId) -> Option<EntityId> {
+        let mut clone = self.entities.get(id)?.clone();
+        clone.id = EntityId::new();
+        clone.name = String::new();
+        // offset slightly for visibility
+        clone.transform.position[0] += 10.0;
+        clone.transform.position[2] += 10.0;
+        let (new_id, res) = self.add_entity(clone);
+        res.ok()?;
+        Some(new_id)
+    }
+
+    // -------------------------------------------------------------- meshes
+
+    pub fn mesh(&mut self, id: &EntityId) -> Option<Arc<MeshBuffer>> {
+        if let Some(cached) = self.mesh_cache.get(id) {
+            return Some(cached.clone());
+        }
+        let entity = self.entities.get(id)?;
+        if !entity.kind.has_triangles() && !entity.kind.has_lines() {
+            return None;
+        }
+        let buffer = meshgen::generate(&entity.kind).ok()?;
+        let arc = Arc::new(buffer);
+        self.mesh_cache.insert(*id, arc.clone());
+        Some(arc)
+    }
+
+    // ----------------------------------------------------------- selection
+
+    pub fn select(&mut self, ids: Vec<EntityId>, primary: Option<EntityId>) {
+        self.selection = ids;
+        if let Some(p) = &primary
+            && !self.selection.contains(p)
+        {
+            self.selection.push(*p);
+        }
+        self.primary = primary.or_else(|| self.selection.first().copied());
+        self.touch();
+    }
+
+    pub fn clear_selection(&mut self) {
+        if !self.selection.is_empty() || self.primary.is_some() {
+            self.selection.clear();
+            self.primary = None;
+            self.touch();
+        }
+    }
+
+    // -------------------------------------------------------------- layers
+
+    pub fn add_layer(&mut self, name: String, color: Option<Color>) -> EntityId {
+        let mut layer = Layer::new(name, color);
+        // ensure unique name
+        let mut n = 1;
+        while self.layers.iter().any(|l| l.name == layer.name) {
+            n += 1;
+            layer.name = format!("Layer {n}");
+            layer.name = layer.name.replace("Layer 1", &format!("Layer {n}"));
+        }
+        let id = layer.id;
+        self.layers.push(layer);
+        self.touch();
+        id
+    }
+
+    pub fn remove_layer(&mut self, id: &EntityId) -> Result<(), String> {
+        if self.layers.len() <= 1 {
+            return Err("Cannot remove the last layer".into());
+        }
+        let layer = self.layers.iter().find(|l| &l.id == id).cloned();
+        let layer = match layer {
+            Some(l) => l,
+            None => return Err("Layer not found".into()),
+        };
+        // entities on the layer are removed too
+        let doomed: Vec<EntityId> = self
+            .entities
+            .values()
+            .filter(|e| e.layer == *id)
+            .map(|e| e.id)
+            .collect();
+        for id in doomed {
+            self.remove_entity(&id);
+        }
+        self.layers.retain(|l| l.id != *id);
+        if self.active_layer == *id {
+            self.active_layer = self.layers[0].id;
+        }
+        let _ = layer;
+        self.touch();
+        Ok(())
+    }
+
+    pub fn set_active_layer(&mut self, id: &EntityId) {
+        if self.layers.iter().any(|l| l.id == *id) {
+            self.active_layer = *id;
+            self.touch();
+        }
+    }
+
+    pub fn layer_visible(&self, entity: &Entity) -> bool {
+        self.layers
+            .iter()
+            .find(|l| l.id == entity.layer)
+            .map(|l| l.visible)
+            .unwrap_or(true)
+    }
+
+    pub fn rename_layer(&mut self, id: &EntityId, name: String) {
+        if let Some(l) = self.layers.iter_mut().find(|l| l.id == *id) {
+            l.name = name;
+            self.touch();
+        }
+    }
+
+    pub fn set_layer_visible(&mut self, id: &EntityId, visible: bool) {
+        if let Some(l) = self.layers.iter_mut().find(|l| l.id == *id) {
+            l.visible = visible;
+            self.touch();
+        }
+    }
+
+    pub fn set_layer_locked(&mut self, id: &EntityId, locked: bool) {
+        if let Some(l) = self.layers.iter_mut().find(|l| l.id == *id) {
+            l.locked = locked;
+            self.touch();
+        }
+    }
+
+    pub fn set_layer_color(&mut self, id: &EntityId, color: Color) {
+        if let Some(l) = self.layers.iter_mut().find(|l| l.id == *id) {
+            l.color = color;
+            self.touch();
+        }
+    }
+
+    // ------------------------------------------------------------- history
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            entities: self.entities.clone(),
+            layers: self.layers.clone(),
+            active_layer: self.active_layer,
+            selection: self.selection.clone(),
+            primary: self.primary,
+        }
+    }
+
+    fn apply_snapshot(&mut self, snap: Snapshot) {
+        self.mesh_cache.clear();
+        self.entities = snap.entities;
+        self.layers = snap.layers;
+        self.active_layer = snap.active_layer;
+        self.selection = snap.selection;
+        self.primary = snap.primary;
+        self.touch();
+    }
+
+    /// Perform a mutating action and record it for undo.
+    pub fn apply<F: FnOnce(&mut Document)>(&mut self, label: &str, f: F) {
+        let before = self.snapshot();
+        f(self);
+        let after = self.snapshot();
+        self.history.push(label.to_string(), before, after);
+        self.touch();
+    }
+
+    pub fn undo(&mut self) -> Option<String> {
+        let label = self.history.undo_label()?.to_string();
+        let snap = self.history.undo()?;
+        self.apply_snapshot(snap);
+        Some(label)
+    }
+
+    pub fn redo(&mut self) -> Option<String> {
+        let label = self.history.redo_label()?.to_string();
+        let snap = self.history.redo()?;
+        self.apply_snapshot(snap);
+        Some(label)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.history.can_undo()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.history.can_redo()
+    }
+
+    // ------------------------------------------------------------ raycast
+
+    /// Raycast entities. Solid meshes hit by triangle intersection; curve
+    /// entities via segment distance with a world-space tolerance.
+    pub fn raycast(&self, origin: [f64; 3], dir: [f64; 3], tolerance: f64) -> Option<RayHit> {
+        let mut best: Option<RayHit> = None;
+        for entity in self.entities.values() {
+            if !entity.visible || entity.locked || !self.layer_visible(entity) {
+                continue;
+            }
+            let tri_ok = entity.kind.has_triangles();
+            let line_ok = entity.kind.has_lines();
+            if !tri_ok && !line_ok {
+                continue;
+            }
+            let (local_origin, local_dir) = entity.transform.ray_to_local(origin, dir);
+            let mut entity_hit: Option<(f64, [f64; 3], [f64; 3])> = None;
+
+            if tri_ok {
+                if let Some(buffer) = self.mesh_cache.get(&entity.id) {
+                    let positions = &buffer.positions;
+                    for tri in positions.chunks(9) {
+                        let a = [tri[0] as f64, tri[1] as f64, tri[2] as f64];
+                        let b = [tri[3] as f64, tri[4] as f64, tri[5] as f64];
+                        let c = [tri[6] as f64, tri[7] as f64, tri[8] as f64];
+                        if let Some(dist) = ray_triangle(local_origin, local_dir, a, b, c)
+                            && entity_hit.map(|(d, _, _)| dist < d).unwrap_or(true)
+                        {
+                            let normal = crate::mesh::tri_normal(a, b, c);
+                            // world normal via rotation+scale inverse transpose ≈ transform dir
+                            let world_normal = entity.transform.transform_dir(normal);
+                            let point = [
+                                origin[0] + dir[0] * dist,
+                                origin[1] + dir[1] * dist,
+                                origin[2] + dir[2] * dist,
+                            ];
+                            entity_hit = Some((dist, point, world_normal));
+                        }
+                    }
+                }
+            } else if line_ok {
+                // segment picking in world space
+                let mut best_line: Option<(f64, [f64; 3])> = None;
+                if let Some(buffer) = self.mesh_cache.get(&entity.id) {
+                    for seg in buffer.lines.chunks(6) {
+                        let a = entity.transform.transform_point([
+                            seg[0] as f64,
+                            seg[1] as f64,
+                            seg[2] as f64,
+                        ]);
+                        let b = entity.transform.transform_point([
+                            seg[3] as f64,
+                            seg[4] as f64,
+                            seg[5] as f64,
+                        ]);
+                        let (dist, ray_t) =
+                            ray_point_segment_distance(origin, dir, a, b);
+                        if dist <= tolerance
+                            && best_line.map(|(d, _)| dist < d).unwrap_or(true)
+                        {
+                            let point = [
+                                origin[0] + dir[0] * ray_t,
+                                origin[1] + dir[1] * ray_t,
+                                origin[2] + dir[2] * ray_t,
+                            ];
+                            best_line = Some((dist, point));
+                        }
+                    }
+                }
+                if let Some((dist, point)) = best_line {
+                    entity_hit = Some((dist, point, [0.0, 1.0, 0.0]));
                 }
             }
-            Some(doc)
+
+            if let Some((dist, point, normal)) = entity_hit {
+                let replace = best.as_ref().map(|b| dist_mut(b) > dist).unwrap_or(true);
+                if replace {
+                    best = Some(RayHit {
+                        entity_id: entity.id,
+                        point,
+                        normal,
+                        distance: dist,
+                    });
+                }
+            }
+        }
+        best
+    }
+
+    // --------------------------------------------------------- persistence
+
+    pub fn to_data(&self) -> DocumentData {
+        DocumentData {
+            version: 1,
+            name: self.name.clone(),
+            path: self.path.clone(),
+            units: self.units.clone(),
+            layers: self.layers.clone(),
+            active_layer: self.active_layer,
+            entities: self.entities.values().cloned().collect(),
+            selection: self.selection.clone(),
+            primary: self.primary,
+        }
+    }
+
+    pub fn from_data(data: DocumentData) -> Self {
+        let mut doc = Document::new(data.name.clone());
+        doc.name = data.name;
+        doc.path = data.path;
+        doc.units = data.units;
+        doc.layers = data.layers;
+        doc.active_layer = data.active_layer;
+        for entity in data.entities {
+            doc.entities.insert(entity.id, entity);
+        }
+        doc.selection = data.selection;
+        doc.primary = data.primary;
+        doc.modified = false;
+        doc
+    }
+
+    /// Bounding box of all visible entities ([min, max] per component).
+    pub fn bounds(&self) -> Option<[[f64; 3]; 2]> {
+        let mut min = [f64::INFINITY; 3];
+        let mut max = [f64::NEG_INFINITY; 3];
+        let mut any = false;
+        for entity in self.entities.values() {
+            if !entity.visible || !self.layer_visible(entity) {
+                continue;
+            }
+            if let Some(buffer) = self.mesh_cache.get(&entity.id) {
+                for chunk in buffer.positions.chunks(9) {
+                    for v in [0, 3, 6] {
+                        let p = entity.transform.transform_point([
+                            chunk[v] as f64,
+                            chunk[v + 1] as f64,
+                            chunk[v + 2] as f64,
+                        ]);
+                        for k in 0..3 {
+                            min[k] = min[k].min(p[k]);
+                            max[k] = max[k].max(p[k]);
+                        }
+                    }
+                    any = true;
+                }
+                for l in buffer.lines.chunks(3) {
+                    let p = entity
+                        .transform
+                        .transform_point([l[0] as f64, l[1] as f64, l[2] as f64]);
+                    for k in 0..3 {
+                        min[k] = min[k].min(p[k]);
+                        max[k] = max[k].max(p[k]);
+                    }
+                    any = true;
+                }
+            }
+        }
+        if any {
+            Some([min, max])
         } else {
             None
         }
     }
+}
 
-    pub fn active_document(&self) -> Option<DocumentRef> {
-        self.active_index.and_then(|i| self.documents.get(i).cloned())
+/// Raycast: entities' meshes must already be materialized for raycasting.
+pub fn materialize_meshes(doc: &mut Document) {
+    let ids: Vec<EntityId> = doc.entities.keys().copied().collect();
+    for id in ids {
+        let _ = doc.mesh(&id);
     }
+}
 
-    pub fn set_active_document(&mut self, index: usize) {
-        if index < self.documents.len() {
-            self.active_index = Some(index);
+/// Small helper for comparing hit distances.
+fn dist_mut(hit: &RayHit) -> f64 {
+    hit.distance
+}
+
+/// Entity snapshot for the frontend (with mesh arrays).
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneEntity {
+    #[serde(flatten)]
+    pub data: EntityData,
+    pub tri_positions: Option<Vec<f32>>,
+    pub tri_normals: Option<Vec<f32>>,
+    pub lines: Option<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LayerData {
+    pub id: String,
+    pub name: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub color: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneData {
+    pub version: u64,
+    pub name: String,
+    pub modified: bool,
+    pub path: Option<String>,
+    pub units: Units,
+    pub active_layer: String,
+    pub entities: Vec<SceneEntity>,
+    pub layers: Vec<LayerData>,
+    pub selection: Vec<String>,
+    pub primary: Option<String>,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_label: Option<String>,
+    pub redo_label: Option<String>,
+    pub history_len: usize,
+    pub history_pos: usize,
+}
+
+impl Document {
+    /// Build a full snapshot for the frontend.
+    pub fn scene_data(&self) -> SceneData {
+        let mut entities = Vec::with_capacity(self.entities.len());
+        for entity in self.entities.values() {
+            let buffer = self.mesh_cache.get(&entity.id);
+            let (tri_positions, tri_normals, lines) = match buffer {
+                Some(b) => (
+                    if entity.kind.has_triangles() {
+                        Some(b.positions.clone())
+                    } else {
+                        None
+                    },
+                    if entity.kind.has_triangles() {
+                        Some(b.normals.clone())
+                    } else {
+                        None
+                    },
+                    if entity.kind.has_lines() {
+                        Some(b.lines.clone())
+                    } else {
+                        None
+                    },
+                ),
+                None => (None, None, None),
+            };
+            entities.push(SceneEntity {
+                data: EntityData {
+                    id: entity.id.as_string(),
+                    name: entity.name.clone(),
+                    kind: entity.kind.type_name().to_string(),
+                    category: entity.kind.category(),
+                    layer: entity.layer.as_string(),
+                    visible: entity.visible,
+                    locked: entity.locked,
+                    color: entity.color.map(|c| [c.r, c.g, c.b, c.a]),
+                    transform: entity.transform,
+                    geometry: entity.kind.clone(),
+                },
+                tri_positions,
+                tri_normals,
+                lines,
+            });
+        }
+        let layers = self
+            .layers
+            .iter()
+            .map(|l| LayerData {
+                id: l.id.as_string(),
+                name: l.name.clone(),
+                visible: l.visible,
+                locked: l.locked,
+                color: [l.color.r, l.color.g, l.color.b, l.color.a],
+            })
+            .collect();
+        SceneData {
+            version: self.scene_version,
+            name: self.name.clone(),
+            modified: self.modified,
+            path: self.path.clone(),
+            units: self.units.clone(),
+            active_layer: self.active_layer.as_string(),
+            entities,
+            layers,
+            selection: self.selection.iter().map(|i| i.as_string()).collect(),
+            primary: self.primary.map(|i| i.as_string()),
+            can_undo: self.can_undo(),
+            can_redo: self.can_redo(),
+            undo_label: self.history.undo_label().map(|s| s.to_string()),
+            redo_label: self.history.redo_label().map(|s| s.to_string()),
+            history_len: self.history.len(),
+            history_pos: self.history.position(),
         }
     }
 
-    pub fn document_count(&self) -> usize {
-        self.documents.len()
+    pub fn save_string(&self) -> Result<String, String> {
+        serde_json::to_string(&self.to_data()).map_err(|e| e.to_string())
     }
 
-    pub fn documents(&self) -> &[DocumentRef] {
-        &self.documents
+    pub fn from_json(json: &str) -> Result<Self, String> {
+        let data: DocumentData = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        Ok(Self::from_data(data))
     }
 }

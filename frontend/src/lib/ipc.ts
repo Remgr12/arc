@@ -1,0 +1,109 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  AppOverview,
+  DocumentInfo,
+  Geometry,
+  LayerData,
+  PluginInfo,
+  RayHit,
+  SceneData,
+  Settings,
+  Transform,
+} from "./types";
+
+export const ipc = {
+  // app / documents
+  getState: (): Promise<AppOverview> => invoke("get_state"),
+  getPlugins: (): Promise<PluginInfo[]> => invoke("get_plugins"),
+  getSettings: (): Promise<Settings> => invoke("get_settings"),
+  setSettings: (settings: Settings): Promise<Settings> => invoke("set_settings", { settings }),
+
+  newDocument: (name?: string): Promise<DocumentInfo> =>
+    invoke("new_document", { name: name ?? null }),
+  openDocument: (path: string): Promise<DocumentInfo> => invoke("open_document", { path }),
+  saveDocument: (documentId: string, path?: string): Promise<DocumentInfo> =>
+    invoke("save_document", { documentId, path: path ?? null }),
+  closeDocument: (id: string): Promise<void> => invoke("close_document", { id }),
+  setActiveDocument: (id: string): Promise<void> => invoke("set_active_document", { id }),
+
+  // scene
+  getScene: (documentId: string): Promise<SceneData> => invoke("get_scene", { documentId }),
+
+  // entities
+  createEntity: (documentId: string, geometry: Geometry, name?: string) =>
+    invoke<{ id: string; name: string }>("create_entity", {
+      documentId,
+      geometry,
+      name: name ?? null,
+    }),
+  updateGeometry: (documentId: string, entityId: string, geometry: Geometry): Promise<void> =>
+    invoke("update_geometry", { documentId, entityId, geometry }),
+  deleteEntities: (documentId: string, entityIds: string[]): Promise<void> =>
+    invoke("delete_entities", { documentId, entityIds }),
+  duplicateEntities: (documentId: string, entityIds: string[]): Promise<string[]> =>
+    invoke("duplicate_entities", { documentId, entityIds }),
+  explodeEntities: (
+    documentId: string,
+    entityIds: string[],
+    distance: number,
+  ): Promise<string[]> => invoke("explode_entities", { documentId, entityIds, distance }),
+  setTransform: (
+    documentId: string,
+    updates: { id: string; transform: Transform }[],
+    record = true,
+  ): Promise<void> => invoke("set_transform", { documentId, updates, record }),
+  setEntityProps: (
+    documentId: string,
+    entityId: string,
+    props: {
+      name?: string;
+      visible?: boolean;
+      locked?: boolean;
+      color?: [number, number, number, number] | null;
+      layerId?: string;
+    },
+  ): Promise<void> => invoke("set_entity_props", { documentId, entityId, props }),
+  setSelection: (
+    documentId: string,
+    ids: string[],
+    primary: string | null,
+  ): Promise<void> => invoke("set_selection", { documentId, ids, primary: primary ?? null }),
+
+  // picking
+  raycast: (
+    documentId: string,
+    origin: [number, number, number],
+    dir: [number, number, number],
+  ): Promise<RayHit | null> => invoke("raycast", { documentId, origin, dir, tolerance: 1.0 }),
+
+  // history
+  undo: (documentId: string): Promise<string | null> => invoke("undo", { documentId }),
+  redo: (documentId: string): Promise<string | null> => invoke("redo", { documentId }),
+
+  // layers
+  addLayer: (documentId: string, name?: string): Promise<string> =>
+    invoke("add_layer", { documentId, name: name ?? null }),
+  deleteLayer: (documentId: string, layerId: string): Promise<void> =>
+    invoke("delete_layer", { documentId, layerId }),
+  renameLayer: (documentId: string, layerId: string, name: string): Promise<void> =>
+    invoke("rename_layer", { documentId, layerId, name }),
+  setLayerVisible: (documentId: string, layerId: string, visible: boolean): Promise<void> =>
+    invoke("set_layer_visible", { documentId, layerId, visible }),
+  setLayerLocked: (documentId: string, layerId: string, locked: boolean): Promise<void> =>
+    invoke("set_layer_locked", { documentId, layerId, locked }),
+  setLayerColor: (documentId: string, layerId: string, color: [number, number, number, number]) =>
+    invoke("set_layer_color", { documentId, layerId, color }),
+  setActiveLayer: (documentId: string, layerId: string): Promise<void> =>
+    invoke("set_active_layer", { documentId, layerId }),
+
+  // plugins
+  reloadPlugins: (): Promise<PluginInfo[]> => invoke("reload_plugins"),
+  setPluginEnabled: (name: string, enabled: boolean): Promise<void> =>
+    invoke("set_plugin_enabled", { name, enabled }),
+
+  // export
+  exportScene: (documentId: string, path: string, format: string): Promise<string> =>
+    invoke("export_scene", { documentId, path, format }),
+};
+
+export type { LayerData };

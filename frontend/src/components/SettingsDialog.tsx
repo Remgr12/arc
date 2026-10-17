@@ -1,156 +1,121 @@
-import React, { useCallback } from 'react';
-import { useAppStore } from '@/stores/appStore';
-import { Settings } from '@/types';
+import { RefreshCw } from "lucide-react";
+import { actions } from "../lib/actions";
+import { ipc } from "../lib/ipc";
+import { useArcStore } from "../lib/store";
+import { Button, Checkbox, Modal, Row, SelectField, TextField } from "./ui";
+import type { Settings } from "../lib/types";
 
-export const SettingsDialog: React.FC = () => {
-  const { settings, setSettings, closePreferences } = useAppStore((state) => ({
-    settings: state.settings,
-    setSettings: state.setSettings,
-    closePreferences: state.setPreferencesOpen,
-  }));
-  
-  const handleThemeChange = useCallback((theme: Settings['theme']) => {
-    setSettings({ ...settings, theme });
-  }, [settings, setSettings]);
-  
-  const handleToggle = useCallback((key: keyof Settings) => {
-    setSettings({ ...settings, [key]: !settings[key] });
-  }, [settings, setSettings]);
-  
+export function SettingsDialog() {
+  const open = useArcStore((s) => s.settingsOpen);
+  const settings = useArcStore((s) => s.settings);
+  const plugins = useArcStore((s) => s.pluginsList);
+
+  if (!open) return null;
+
+  const patch = (updates: Partial<Settings>) => {
+    if (!settings) return;
+    void ipc
+      .setSettings({ ...settings, ...updates })
+      .then((next) => useArcStore.getState().updateSettings(next))
+      .catch(() => undefined);
+  };
+
   return (
-    <div className="settings-dialog-overlay" onClick={() => closePreferences(false)}>
-      <div className="settings-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>Settings</h2>
-        </div>
-        
-        <div className="settings-content">
-          <div className="settings-section">
-            <h3>Appearance</h3>
-            
-            <div className="setting-group">
-              <label>Theme</label>
-              <select 
-                value={settings.theme} 
-                onChange={(e) => handleThemeChange(e.target.value as Settings['theme'])}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="high-contrast">High Contrast</option>
-                <option value="shapr3d">Shapr3D</option>
-                <option value="autocad">AutoCAD</option>
-                <option value="blender-dark">Blender Dark</option>
-                <option value="monokai-pro">Monokai Pro</option>
-                <option value="solarized">Solarized</option>
-              </select>
-            </div>
-            
-            <div className="setting-row">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={settings.showGrid} 
-                  onChange={() => handleToggle('showGrid')} 
-                />
-                Show Grid
-              </label>
-            </div>
-            
-            <div className="setting-row">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={settings.showAxes} 
-                  onChange={() => handleToggle('showAxes')} 
-                />
-                Show Axes
-              </label>
-            </div>
-            
-            <div className="setting-row">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={settings.showSnapIndicator} 
-                  onChange={() => handleToggle('showSnapIndicator')} 
-                />
-                Show Snap Indicator
-              </label>
-            </div>
-            
-            <div className="setting-row">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={settings.orthoMode} 
-                  onChange={() => handleToggle('orthoMode')} 
-                />
-                Orthographic View
-              </label>
-            </div>
-          </div>
-          
-          <div className="settings-section">
-            <h3>Viewport</h3>
-            
-            <div className="setting-group">
-              <label>Navigation Mode</label>
-              <select>
-                <option>Standard</option>
-                <option>Shapr3D</option>
-                <option>Blender</option>
-                <option>AutoCAD</option>
-              </select>
-            </div>
-            
-            <div className="setting-group">
-              <label>Background Color</label>
-              <input 
-                type="color" 
-                value={settings.viewportBackground.replace(' ', '')} 
-                onChange={(e) => setSettings({ ...settings, viewportBackground: e.target.value })}
+    <Modal
+      open={open}
+      onClose={() => useArcStore.getState().setSettingsOpen(false)}
+      title="Settings"
+    >
+      <div className="flex flex-col gap-1">
+        {!settings ? (
+          <div className="text-[12px] text-base-500">Loading…</div>
+        ) : (
+          <>
+            <Row label="Units">
+              <SelectField
+                value={settings.units}
+                options={[
+                  { value: "metric", label: "Metric (cm)" },
+                  { value: "imperial", label: "Imperial (in)" },
+                ]}
+                onChange={(units) => patch({ units })}
               />
-            </div>
-          </div>
-          
-          <div className="settings-section">
-            <h3>Modeling</h3>
-            
-            <div className="setting-row">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={settings.snapEnabled} 
-                  onChange={() => handleToggle('snapEnabled')} 
-                />
-                Enable Snapping
-              </label>
-            </div>
-            
-            <div className="setting-group">
-              <label>Snaplines</label>
-              <input 
-                type="range" 
-                min="0" 
-                max="50" 
-                value={settings.snapTolerance ?? 5} 
-                onChange={(e) => setSettings({ ...settings, snapTolerance: parseInt(e.target.value) })}
+            </Row>
+            <Row label="Grid size">
+              <TextField
+                mono
+                value={String(settings.grid_size)}
+                onCommit={(text) => {
+                  const value = parseFloat(text);
+                  if (Number.isFinite(value) && value > 0) patch({ grid_size: value });
+                }}
               />
-            </div>
-          </div>
-        </div>
-        
-        <div className="settings-footer">
-          <button className="btn btn-secondary" onClick={() => closePreferences(false)}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={() => closePreferences(false)}>
-            Apply
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+            </Row>
+            <Row label="Snapping">
+              <Checkbox
+                checked={settings.snap_enabled}
+                onChange={(snap_enabled) => patch({ snap_enabled })}
+                label="Snap to grid"
+              />
+            </Row>
+            <Row label="Grid">
+              <Checkbox
+                checked={settings.show_grid}
+                onChange={(show_grid) => patch({ show_grid })}
+                label="Show grid"
+              />
+            </Row>
+            <Row label="Axes">
+              <Checkbox
+                checked={settings.show_axes}
+                onChange={(show_axes) => patch({ show_axes })}
+                label="Show axes"
+              />
+            </Row>
 
-export default SettingsDialog;
+            <div className="mt-3 mb-1 flex items-center justify-between border-t border-base-300 pt-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-base-500">
+                Plugins
+              </span>
+              <Button variant="ghost" onClick={() => void actions.reloadPlugins()}>
+                <RefreshCw size={12} /> Reload
+              </Button>
+            </div>
+            {plugins.length === 0 ? (
+              <div className="text-[12px] text-base-500">
+                No plugins found in the plugin directories.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {plugins.map((plugin) => (
+                  <div
+                    key={plugin.name}
+                    className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] text-base-700 hover:bg-base-200"
+                    title={plugin.error ?? plugin.path}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={plugin.enabled}
+                      onChange={(e) =>
+                        void ipc
+                          .setPluginEnabled(plugin.name, e.target.checked)
+                          .catch(() => undefined)
+                      }
+                      className="h-3.5 w-3.5 cursor-pointer appearance-none rounded-sm border border-base-500 checked:border-accent-600 checked:bg-accent-600"
+                    />
+                    <span className="flex-1 truncate">{plugin.name}</span>
+                    <span
+                      className={`text-[10px] ${plugin.ok ? "text-emerald-500" : "text-red-400"}`}
+                    >
+                      {plugin.ok ? "ok" : "error"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}

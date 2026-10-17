@@ -1,393 +1,71 @@
-import { Tool } from '@/types';
 import {
-  MousePointerClick,
-  PenLine,
-  LineChart,
-  Circle,
-  Activity,
-  Square,
-  Spline,
-  Type,
   Box,
-  Rotate3D,
-  GitMerge,
+  BrickWall,
+  Circle,
+  Cone,
+  Database,
+  Globe,
+  LifeBuoy,
+  Minus,
+  MousePointer2,
   Move,
-  RefreshCw,
-  Sliders,
-  Scissors,
-  Copy,
-  Trash2,
-  Shield,
-  Home,
-  DoorOpen,
-  Wind,
-  Mountain,
-  BarChart3,
+  PanelBottom,
+  RectangleHorizontal,
   Ruler,
-  Grid3x3,
-  Layout,
-  Maximize2,
-  BarChart,
-} from 'lucide-react';
+  Waypoints,
+} from "lucide-react";
+import type { Geometry, ToolId } from "../lib/types";
+import type { LucideIcon } from "lucide-react";
 
-export const tools: Tool[] = [
-  // Selection
-  {
-    id: 'select',
-    name: 'Select',
-    icon: '🖱️',
-    category: 'Select',
-    shortcut: 'Q',
-  },
-  {
-    id: 'select-window',
-    name: 'Window',
-    icon: '🔲',
-    category: 'Select',
-  },
-  {
-    id: 'select-lasso',
-    name: 'Lasso',
-    icon: '🔵',
-    category: 'Select',
-  },
-  {
-    id: 'select-crossing',
-    name: 'Crossing',
-    icon: '✕',
-    category: 'Select',
-  },
-  
-  // Sketch
-  {
-    id: 'sketch-line',
-    name: 'Line',
-    icon: '📏',
-    category: 'Sketch',
-    shortcut: 'L',
-  },
-  {
-    id: 'sketch-polyline',
-    name: 'Polyline',
-    icon: '🔗',
-    category: 'Sketch',
-  },
-  {
-    id: 'sketch-circle',
-    name: 'Circle',
-    icon: '⭕',
-    category: 'Sketch',
-    shortcut: 'C',
-  },
-  {
-    id: 'sketch-arc',
-    name: 'Arc',
-    icon: '⌶',
-    category: 'Sketch',
-    shortcut: 'A',
-  },
-  {
-    id: 'sketch-rectangle',
-    name: 'Rectangle',
-    icon: '▢',
-    category: 'Sketch',
-    shortcut: 'R',
-  },
-  {
-    id: 'sketch-polygon',
-    name: 'Polygon',
-    icon: '⬡',
-    category: 'Sketch',
-  },
-  {
-    id: 'sketch-spline',
-    name: 'Spline',
-    icon: '~',
-    category: 'Sketch',
-    shortcut: 'S',
-  },
-  {
-    id: 'sketch-text',
-    name: 'Text',
-    icon: 'T',
-    category: 'Sketch',
-  },
-  {
-    id: 'sketch-dimension',
-    name: 'Dimension',
-    icon: '📐',
-    category: 'Sketch',
-  },
-  
-  // Model
-  {
-    id: 'model-extrude',
-    name: 'Extrude',
-    icon: '⬆️',
-    category: 'Model',
-    shortcut: 'E',
-  },
-  {
-    id: 'model-revolve',
-    name: 'Revolve',
-    icon: '🔄',
-    category: 'Model',
-  },
-  {
-    id: 'model-loft',
-    name: 'Loft',
-    icon: '🌊',
-    category: 'Model',
-  },
-  {
-    id: 'model-sweep',
-    name: 'Sweep',
-    icon: '🧹',
-    category: 'Model',
-  },
-  {
-    id: 'model-fillet',
-    name: 'Fillet',
-    icon: '⏚',
-    category: 'Model',
-    shortcut: 'F',
-  },
-  {
-    id: 'model-chamfer',
-    name: 'Chamfer',
-    icon: '🔪',
-    category: 'Model',
-  },
-  {
-    id: 'model-shell',
-    name: 'Shell',
-    icon: '🐚',
-    category: 'Model',
-  },
-  {
-    id: 'model-boolean-union',
-    name: 'Union',
-    icon: '🔘',
-    category: 'Model',
-  },
-  {
-    id: 'model-boolean-difference',
-    name: 'Subtract',
-    icon: '➖',
-    category: 'Model',
-  },
-  {
-    id: 'model-boolean-intersect',
-    name: 'Intersect',
-    icon: '✳️',
-    category: 'Model',
-  },
-  
-  // Architecture
-  {
-    id: 'arch-wall',
-    name: 'Wall',
-    icon: '🧱',
-    category: 'Architecture',
-    shortcut: 'W',
-  },
-  {
-    id: 'arch-door',
-    name: 'Door',
-    icon: '🚪',
-    category: 'Architecture',
-    shortcut: 'D',
-  },
-  {
-    id: 'arch-window',
-    name: 'Window',
-    icon: '🪟',
-    category: 'Architecture',
-    shortcut: 'N',
-  },
-  {
-    id: 'arch-stair',
-    name: 'Stair',
-    icon: '🪜',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-roof',
-    name: 'Roof',
-    icon: '🏠',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-slab',
-    name: 'Slab',
-    icon: '📋',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-column',
-    name: 'Column',
-    icon: '🧍',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-beam',
-    name: 'Beam',
-    icon: '🏗️',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-room',
-    name: 'Room',
-    icon: '🟦',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-grid',
-    name: 'Grid',
-    icon: '🌐',
-    category: 'Architecture',
-  },
-  {
-    id: 'arch-dimension',
-    name: 'Dimension',
-    icon: '📐',
-    category: 'Architecture',
-  },
-  
-  // Modify
-  {
-    id: 'modify-move',
-    name: 'Move',
-    icon: '➡️',
-    category: 'Modify',
-    shortcut: 'M',
-  },
-  {
-    id: 'modify-rotate',
-    name: 'Rotate',
-    icon: '↻',
-    category: 'Modify',
-  },
-  {
-    id: 'modify-scale',
-    name: 'Scale',
-    icon: '📏',
-    category: 'Modify',
-    shortcut: 'S',
-  },
-  {
-    id: 'modify-mirror',
-    name: 'Mirror',
-    icon: '🔀',
-    category: 'Modify',
-  },
-  {
-    id: 'modify-offset',
-    name: 'Offset',
-    icon: '⏭️',
-    category: 'Modify',
-  },
-  {
-    id: 'modify-pattern',
-    name: 'Pattern',
-    icon: '✂️',
-    category: 'Modify',
-  },
-  {
-    id: 'modify-trim',
-    name: 'Trim',
-    icon: '✂️',
-    category: 'Modify',
-  },
-  
-  // Annotate
-  {
-    id: 'annotate-text',
-    name: 'Text',
-    icon: '📝',
-    category: 'Annotate',
-  },
-  {
-    id: 'annotate-dimension',
-    name: 'Dimension',
-    icon: '📏',
-    category: 'Annotate',
-  },
-  {
-    id: 'annotate-leader',
-    name: 'Leader',
-    icon: '➡️',
-    category: 'Annotate',
-  },
-  {
-    id: 'annotate-tag',
-    name: 'Tag',
-    icon: '🏷️',
-    category: 'Annotate',
-  },
-  
-  // View
-  {
-    id: 'view-zoom-extents',
-    name: 'Zoom Extents',
-    icon: '🔍',
-    category: 'View',
-    shortcut: 'F',
-  },
-  {
-    id: 'view-zoom-window',
-    name: 'Zoom Window',
-    icon: '🗔',
-    category: 'View',
-  },
-  {
-    id: 'view-zoom-prev',
-    name: 'Zoom Previous',
-    icon: '⏪',
-    category: 'View',
-  },
-  {
-    id: 'view-top',
-    name: 'Top View',
-    icon: '⬆️',
-    category: 'View',
-  },
-  {
-    id: 'view-front',
-    name: 'Front View',
-    icon: '⬆️',
-    category: 'View',
-  },
-  {
-    id: 'view-right',
-    name: 'Right View',
-    icon: '➡️',
-    category: 'View',
-  },
-  {
-    id: 'view-iso',
-    name: 'Isometric',
-    icon: '🔲',
-    category: 'View',
-  },
-  
-  // Measure
-  {
-    id: 'measure-distance',
-    name: 'Distance',
-    icon: '📏',
-    category: 'Measure',
-  },
-  {
-    id: 'measure-angle',
-    name: 'Angle',
-    icon: '∠',
-    category: 'Measure',
-  },
-  {
-    id: 'measure-area',
-    name: 'Area',
-    icon: '📐',
-    category: 'Measure',
-  },
+export interface ToolDef {
+  id: ToolId;
+  label: string;
+  tip: string;
+  icon: LucideIcon;
+  group: "selectors" | "primitives" | "sketch";
+}
+
+export const TOOLS: ToolDef[] = [
+  { id: "select", label: "Select", tip: "Select and inspect entities", icon: MousePointer2, group: "selectors" },
+  { id: "move", label: "Move", tip: "Drag entities along the ground plane", icon: Move, group: "selectors" },
+  { id: "box", label: "Box", tip: "Place a box", icon: Box, group: "primitives" },
+  { id: "sphere", label: "Sphere", tip: "Place a sphere", icon: Globe, group: "primitives" },
+  { id: "cylinder", label: "Cylinder", tip: "Place a cylinder", icon: Database, group: "primitives" },
+  { id: "cone", label: "Cone", tip: "Place a cone", icon: Cone, group: "primitives" },
+  { id: "torus", label: "Torus", tip: "Place a torus", icon: LifeBuoy, group: "primitives" },
+  { id: "plane", label: "Plane", tip: "Place a ground plane", icon: PanelBottom, group: "primitives" },
+  { id: "circle", label: "Circle", tip: "Draw a circle outline", icon: Circle, group: "sketch" },
+  { id: "line", label: "Line", tip: "Draw a line between two points", icon: Minus, group: "sketch" },
+  { id: "polyline", label: "Polyline", tip: "Draw a polyline (click to add points, double click to finish)", icon: Waypoints, group: "sketch" },
+  { id: "rectangle", label: "Rectangle", tip: "Draw a rectangle outline", icon: RectangleHorizontal, group: "sketch" },
+  { id: "dimension", label: "Dimension", tip: "Annotate distance between two points", icon: Ruler, group: "sketch" },
+  { id: "wall", label: "Wall", tip: "Draw a wall along a path (double click to finish)", icon: BrickWall, group: "sketch" },
 ];
+
+export const TOOL_BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
+
+/** Default payloads for creation tools (snake_case, mirroring serde tags). */
+export const DEFAULT_GEOMETRY: Record<ToolId, Geometry | null> = {
+  select: null,
+  move: null,
+  box: { type: "box", width: 60, depth: 60, height: 20, corner_radius: 0 },
+  sphere: { type: "sphere", radius: 30, segments: 32 },
+  cylinder: { type: "cylinder", radius: 20, height: 40, segments: 32 },
+  cone: { type: "cone", radius: 20, height: 40, segments: 32 },
+  torus: { type: "torus", radius: 30, tube: 8, segments: 32, tubular_segments: 16 },
+  plane: { type: "plane", width: 200, depth: 200 },
+  circle: { type: "circle", radius: 40, segments: 48 },
+  line: { type: "line", end: [60, 0, 0] },
+  polyline: { type: "polyline", points: [] },
+  rectangle: { type: "rectangle", width: 80, depth: 50 },
+  dimension: { type: "dimension", start: [0, 0, 0], end: [80, 0, 0] },
+  wall: { type: "wall", path: [], width: 10, height: 80 },
+};
+
+/** Two-point sketch tools collect points before sending geometry. */
+export const MULTI_POINT_TOOLS: ReadonlySet<ToolId> = new Set([
+  "line",
+  "polyline",
+  "dimension",
+  "wall",
+]);

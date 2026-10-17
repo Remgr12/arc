@@ -1,0 +1,36 @@
+[package]
+name = "arc-app"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+
+[dependencies]
+arc-core = { path = "../crates/arc-core" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-fs = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+
+mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"], optional = true }
+
+[[bin]]
+name = "arc"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[features]
+default = ["lua"]
+lua = ["dep:mlua"]

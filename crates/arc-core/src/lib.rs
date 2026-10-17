@@ -1,41 +1,42 @@
+//! arc-core — the domain kernel of the arc CAD application.
+//!
+//! Contains the entity model, parametric geometry payload definitions,
+//! mesh generation, document model with layers/selection/history,
+//! raycasting and persistence-friendly serialization types.
+
 pub mod entity;
-pub mod selection;
 pub mod document;
-pub mod layer;
-pub mod units;
-pub mod snap;
-pub mod constraint;
 pub mod history;
-pub mod viewport;
-pub mod events;
+pub mod mesh;
+pub mod meshgen;
+pub mod units;
 
-use std::sync::Arc;
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use nalgebra::{Point3, Vector3, UnitQuaternion, Matrix4};
-use glam::{Vec3, Quat, Mat4};
-
-pub use entity::*;
-pub use selection::*;
 pub use document::*;
-pub use layer::*;
-pub use units::*;
-pub use snap::*;
-pub use constraint::*;
+pub use entity::*;
 pub use history::*;
-pub use viewport::*;
-pub use events::*;
+pub use mesh::*;
+pub use units::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Unique identifier of an entity or layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct EntityId(pub Uuid);
 
 impl EntityId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
-
     pub fn nil() -> Self {
         Self(Uuid::nil())
+    }
+    pub fn as_string(&self) -> String {
+        self.0.to_string()
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Uuid::parse_str(s).ok().map(Self)
     }
 }
 
@@ -45,6 +46,20 @@ impl Default for EntityId {
     }
 }
 
+impl std::fmt::Display for EntityId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl EntityId {
+    /// Short human-friendly prefix (first 8 chars) used for auto names.
+    pub fn short(&self) -> String {
+        self.0.to_string()[..8].to_string()
+    }
+}
+
+/// RGBA color, components in 0..=1.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct Color {
     pub r: f32,
@@ -54,308 +69,179 @@ pub struct Color {
 }
 
 impl Color {
-    pub const WHITE: Self = Self { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
-    pub const BLACK: Self = Self { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-    pub const RED: Self = Self { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
-    pub const GREEN: Self = Self { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
-    pub const BLUE: Self = Self { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
-    pub const YELLOW: Self = Self { r: 1.0, g: 1.0, b: 0.0, a: 1.0 };
-    pub const MAGENTA: Self = Self { r: 1.0, g: 0.0, b: 1.0, a: 1.0 };
-    pub const CYAN: Self = Self { r: 0.0, g: 1.0, b: 1.0, a: 1.0 };
-    pub const ORANGE: Self = Self { r: 1.0, g: 0.5, b: 0.0, a: 1.0 };
-    pub const GRAY: Self = Self { r: 0.5, g: 0.5, b: 0.5, a: 1.0 };
-    pub const LIGHT_GRAY: Self = Self { r: 0.8, g: 0.8, b: 0.8, a: 1.0 };
-    pub const TRANSPARENT: Self = Self { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
-
-    pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self { r, g, b, a }
-    }
-
-    pub fn rgb(r: f32, g: f32, b: f32) -> Self {
+    pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
+    pub const WHITE: Color = Color::rgb(1.0, 1.0, 1.0);
+    pub const GRAY: Color = Color::rgb(0.62, 0.62, 0.65);
+    pub const ORANGE: Color = Color::rgb(0.95, 0.61, 0.22);
+    pub const BLUE: Color = Color::rgb(0.36, 0.55, 0.98);
+    pub const GREEN: Color = Color::rgb(0.42, 0.73, 0.38);
 
-    pub fn from_hex(hex: u32) -> Self {
-        Self {
-            r: ((hex >> 16) & 0xFF) as f32 / 255.0,
-            g: ((hex >> 8) & 0xFF) as f32 / 255.0,
-            b: (hex & 0xFF) as f32 / 255.0,
-            a: 1.0,
+    pub fn to_css(&self) -> String {
+        if self.a >= 1.0 {
+            format!("rgb({:.0} {:.0} {:.0})", self.r * 255.0, self.g * 255.0, self.b * 255.0)
+        } else {
+            format!(
+                "rgba({:.0} {:.0} {:.0} {:.2})",
+                self.r * 255.0,
+                self.g * 255.0,
+                self.b * 255.0,
+                self.a
+            )
         }
     }
-
-    pub fn to_array(&self) -> [f32; 4] {
-        [self.r, self.g, self.b, self.a]
-    }
 }
 
-impl From<Color> for [f32; 4] {
-    fn from(c: Color) -> Self {
-        c.to_array()
-    }
-}
-
+/// Troubleshooting-free linear transform: position + quaternion rotation + scale.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct BoundingBox {
-    pub min: Point3<f64>,
-    pub max: Point3<f64>,
+pub struct Transform {
+    pub position: [f64; 3],
+    pub rotation: [f64; 4], // quaternion (x, y, z, w), normalized
+    pub scale: [f64; 3],
 }
 
-impl BoundingBox {
-    pub fn new(min: Point3<f64>, max: Point3<f64>) -> Self {
-        Self { min, max }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            min: Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY),
-            max: Point3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY),
-        }
-    }
-
-    pub fn center(&self) -> Point3<f64> {
-        Point3::new(
-            (self.min.x + self.max.x) * 0.5,
-            (self.min.y + self.max.y) * 0.5,
-            (self.min.z + self.max.z) * 0.5,
-        )
-    }
-
-    pub fn size(&self) -> Vector3<f64> {
-        self.max - self.min
-    }
-
-    pub fn contains(&self, point: Point3<f64>) -> bool {
-        point.x >= self.min.x && point.x <= self.max.x &&
-        point.y >= self.min.y && point.y <= self.max.y &&
-        point.z >= self.min.z && point.z <= self.max.z
-    }
-
-    pub fn expand(&mut self, other: &BoundingBox) {
-        self.min.x = self.min.x.min(other.min.x);
-        self.min.y = self.min.y.min(other.min.y);
-        self.min.z = self.min.z.min(other.min.z);
-        self.max.x = self.max.x.max(other.max.x);
-        self.max.y = self.max.y.max(other.max.y);
-        self.max.z = self.max.z.max(other.max.z);
-    }
-
-    pub fn expand_point(&mut self, point: Point3<f64>) {
-        self.min.x = self.min.x.min(point.x);
-        self.min.y = self.min.y.min(point.y);
-        self.min.z = self.min.z.min(point.z);
-        self.max.x = self.max.x.max(point.x);
-        self.max.y = self.max.y.max(point.y);
-        self.max.z = self.max.z.max(point.z);
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum EntityType {
-    // Sketch entities
-    Point,
-    Line,
-    Arc,
-    Circle,
-    Ellipse,
-    Spline,
-    Rectangle,
-    Polygon,
-    Text,
-
-    // 3D entities
-    Extrusion,
-    Revolution,
-    Loft,
-    Sweep,
-    Fillet,
-    Chamfer,
-    Shell,
-    Boolean,
-
-    // Architecture entities
-    Wall,
-    Door,
-    Window,
-    Stair,
-    Roof,
-    Slab,
-    Column,
-    Beam,
-    Room,
-    Grid,
-    Level,
-
-    // Reference/construction
-    Plane,
-    Axis,
-    Point3D,
-    CoordinateSystem,
-
-    // Annotation
-    Dimension,
-    Leader,
-    Tag,
-    Symbol,
-
-    // Group/Assembly
-    Group,
-    Block,
-    ExternalReference,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RenderMode {
-    Solid,
-    Wireframe,
-    Edges,
-    Points,
-    Shaded,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum EntityCategory {
-    Sketch,
-    Solid,
-    Surface,
-    Mesh,
-    Architecture,
-    Annotation,
-    Reference,
-    Group,
-}
-
-impl EntityType {
-    pub fn category(&self) -> EntityCategory {
-        match self {
-            EntityType::Point | EntityType::Line | EntityType::Arc | EntityType::Circle
-            | EntityType::Ellipse | EntityType::Spline | EntityType::Rectangle
-            | EntityType::Polygon | EntityType::Text => EntityCategory::Sketch,
-
-            EntityType::Extrusion | EntityType::Revolution | EntityType::Loft
-            | EntityType::Sweep | EntityType::Fillet | EntityType::Chamfer
-            | EntityType::Shell | EntityType::Boolean => EntityCategory::Solid,
-
-            EntityType::Wall | EntityType::Door | EntityType::Window
-            | EntityType::Stair | EntityType::Roof | EntityType::Slab
-            | EntityType::Column | EntityType::Beam | EntityType::Room
-            | EntityType::Grid | EntityType::Level => EntityCategory::Architecture,
-
-            EntityType::Dimension | EntityType::Leader | EntityType::Tag | EntityType::Symbol => EntityCategory::Annotation,
-
-            EntityType::Plane | EntityType::Axis | EntityType::Point3D | EntityType::CoordinateSystem => EntityCategory::Reference,
-
-            EntityType::Group | EntityType::Block | EntityType::ExternalReference => EntityCategory::Group,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ViewType {
-    Perspective,
-    Orthographic,
-    Top,
-    Bottom,
-    Front,
-    Back,
-    Left,
-    Right,
-    Isometric,
-    Dimetric,
-    Trimetric,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ViewportState {
-    pub view_type: ViewType,
-    pub camera_position: Point3<f64>,
-    pub camera_target: Point3<f64>,
-    pub camera_up: Vector3<f64>,
-    pub fov: f64,
-    pub near: f64,
-    pub far: f64,
-    pub aspect_ratio: f32,
-}
-
-impl Default for ViewportState {
+impl Default for Transform {
     fn default() -> Self {
         Self {
-            view_type: ViewType::Perspective,
-            camera_position: Point3::new(10.0, 10.0, 10.0),
-            camera_target: Point3::origin(),
-            camera_up: Vector3::new(0.0, 0.0, 1.0),
-            fov: 45.0_f64.to_radians(),
-            near: 0.1,
-            far: 10000.0,
-            aspect_ratio: 16.0 / 9.0,
+            position: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0; 3],
         }
     }
 }
 
-impl ViewportState {
-    pub fn view_matrix(&self) -> Matrix4<f64> {
-        Matrix4::look_at_rh(
-            &self.camera_position,
-            &self.camera_target,
-            &self.camera_up,
-        )
+impl Transform {
+    pub fn identity() -> Self {
+        Self::default()
     }
 
-    pub fn projection_matrix(&self) -> Matrix4<f64> {
-        match self.view_type {
-            ViewType::Perspective => {
-                Matrix4::new_perspective(self.aspect_ratio as f64, self.fov, self.near, self.far)
-            }
-            _ => {
-                let size = 50.0;
-                Matrix4::new_orthographic(
-                    -size * self.aspect_ratio as f64,
-                    size * self.aspect_ratio as f64,
-                    -size,
-                    size,
-                    self.near,
-                    self.far,
-                )
-            }
+    pub fn at(x: f64, y: f64, z: f64) -> Self {
+        Self {
+            position: [x, y, z],
+            ..Self::default()
         }
     }
 
-    pub fn view_projection_matrix(&self) -> Matrix4<f64> {
-        self.projection_matrix() * self.view_matrix()
+    /// Rotation quaternion from axis + angle in radians.
+    pub fn from_axis_angle(axis: [f64; 3], angle: f64) -> Self {
+        let n = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+        if n == 0.0 {
+            return Self::default();
+        }
+        let (ax, ay, az) = (axis[0] / n, axis[1] / n, axis[2] / n);
+        let s = (angle / 2.0).sin();
+        Self {
+            rotation: [ax * s, ay * s, az * s, (angle / 2.0).cos()],
+            ..Self::default()
+        }
+    }
+
+    /// 4x4 world matrix (column-major list suitable for three.js).
+    pub fn to_world_matrix(&self) -> Vec<f64> {
+        let q = nalgebra::UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(
+            self.rotation[3],
+            self.rotation[0],
+            self.rotation[1],
+            self.rotation[2],
+        ));
+        let m = nalgebra::Matrix4::new_translation(&nalgebra::Vector3::new(
+            self.position[0],
+            self.position[1],
+            self.position[2],
+        )) * q.to_homogeneous()
+            * nalgebra::Matrix4::new_nonuniform_scaling(&nalgebra::Vector3::new(
+                self.scale[0],
+                self.scale[1],
+                self.scale[2],
+            ));
+        let mut out = [0.0f64; 16];
+        for (i, col) in m.column_iter().enumerate() {
+            out[i * 4] = col.x;
+            out[i * 4 + 1] = col.y;
+            out[i * 4 + 2] = col.z;
+            out[i * 4 + 3] = col.w;
+        }
+        out.to_vec()
+    }
+
+    /// Inverse matrix as list (column-major).
+    pub fn to_inverse_matrix(&self) -> [f64; 16] {
+        let q = nalgebra::UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(
+            self.rotation[3],
+            self.rotation[0],
+            self.rotation[1],
+            self.rotation[2],
+        ));
+        let m = nalgebra::Matrix4::new_translation(&nalgebra::Vector3::new(
+            self.position[0],
+            self.position[1],
+            self.position[2],
+        )) * q.to_homogeneous()
+            * nalgebra::Matrix4::new_nonuniform_scaling(&nalgebra::Vector3::new(
+                self.scale[0],
+                self.scale[1],
+                self.scale[2],
+            ));
+        let inv = m.try_inverse().unwrap_or(nalgebra::Matrix4::identity());
+        let mut out = [0.0f64; 16];
+        for (i, col) in inv.column_iter().enumerate() {
+            out[i * 4] = col.x;
+            out[i * 4 + 1] = col.y;
+            out[i * 4 + 2] = col.z;
+            out[i * 4 + 3] = col.w;
+        }
+        out
+    }
+
+    /// Transform world ray into local space.
+    pub fn ray_to_local(&self, origin: [f64; 3], dir: [f64; 3]) -> ([f64; 3], [f64; 3]) {
+        let inv = self.to_inverse_matrix();
+        let apply = |p: [f64; 3], w: f64| -> [f64; 3] {
+            [
+                inv[0] * p[0] + inv[4] * p[1] + inv[8] * p[2] + inv[12] * w,
+                inv[1] * p[0] + inv[5] * p[1] + inv[9] * p[2] + inv[13] * w,
+                inv[2] * p[0] + inv[6] * p[1] + inv[10] * p[2] + inv[14] * w,
+            ]
+        };
+        let o = apply(origin, 1.0);
+        let d = apply(dir, 0.0);
+        (o, d)
+    }
+
+    pub fn transform_point(&self, p: [f64; 3]) -> [f64; 3] {
+        let m = self.to_world_matrix();
+        let (x, y, z) = (p[0], p[1], p[2]);
+        [
+            m[0] * x + m[4] * y + m[8] * z + m[12],
+            m[1] * x + m[5] * y + m[9] * z + m[13],
+            m[2] * x + m[6] * y + m[10] * z + m[14],
+        ]
+    }
+
+    /// Transform direction (ignores translation, normalizes).
+    pub fn transform_dir(&self, d: [f64; 3]) -> [f64; 3] {
+        let m = self.to_world_matrix();
+        let (x, y, z) = (d[0], d[1], d[2]);
+        let v = [
+            m[0] * x + m[4] * y + m[8] * z,
+            m[1] * x + m[5] * y + m[9] * z,
+            m[2] * x + m[6] * y + m[10] * z,
+        ];
+        let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        if len == 0.0 {
+            v
+        } else {
+            [v[0] / len, v[1] / len, v[2] / len]
+        }
     }
 }
 
-pub fn nalgebra_to_glam_point3(p: Point3<f64>) -> Vec3 {
-    Vec3::new(p.x as f32, p.y as f32, p.z as f32)
-}
-
-pub fn nalgebra_to_glam_vector3(v: Vector3<f64>) -> Vec3 {
-    Vec3::new(v.x as f32, v.y as f32, v.z as f32)
-}
-
-pub fn glam_to_nalgebra_point3(v: Vec3) -> Point3<f64> {
-    Point3::new(v.x as f64, v.y as f64, v.z as f64)
-}
-
-pub fn glam_to_nalgebra_vector3(v: Vec3) -> Vector3<f64> {
-    Vector3::new(v.x as f64, v.y as f64, v.z as f64)
-}
-
-pub fn nalgebra_to_glam_mat4(m: &Matrix4<f64>) -> Mat4 {
-    Mat4::from_cols_array_2d(&[
-        [m.m11 as f32, m.m12 as f32, m.m13 as f32, m.m14 as f32],
-        [m.m21 as f32, m.m22 as f32, m.m23 as f32, m.m24 as f32],
-        [m.m31 as f32, m.m32 as f32, m.m33 as f32, m.m34 as f32],
-        [m.m41 as f32, m.m42 as f32, m.m43 as f32, m.m44 as f32],
-    ])
-}
-
-pub fn glam_to_nalgebra_mat4(m: Mat4) -> Matrix4<f64> {
-    let cols = m.to_cols_array_2d();
-    Matrix4::new(
-        cols[0][0] as f64, cols[1][0] as f64, cols[2][0] as f64, cols[3][0] as f64,
-        cols[0][1] as f64, cols[1][1] as f64, cols[2][1] as f64, cols[3][1] as f64,
-        cols[0][2] as f64, cols[1][2] as f64, cols[2][2] as f64, cols[3][2] as f64,
-        cols[0][3] as f64, cols[1][3] as f64, cols[2][3] as f64, cols[3][3] as f64,
-    )
+/// World-space ray cast result.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RayHit {
+    pub entity_id: EntityId,
+    pub point: [f64; 3],
+    pub normal: [f64; 3],
+    pub distance: f64,
 }

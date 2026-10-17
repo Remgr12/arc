@@ -1,0 +1,207 @@
+import { ipc } from "./ipc";
+import { useArcStore } from "./store";
+import { DEFAULT_GEOMETRY } from "../data/tools";
+import type { ToolId } from "./types";
+
+function guard<A extends unknown[]>(
+  action: (...args: A) => Promise<unknown>,
+): (...args: A) => void {
+  return (...args: A) => {
+    void Promise.resolve(action(...args)).catch((e) => {
+      useArcStore.getState().setStatusMessage(`Error: ${String(e)}`);
+    });
+  };
+}
+
+function requireDoc(): string {
+  const id = useArcStore.getState().overview?.active;
+  if (!id) throw new Error("no active document");
+  return id;
+}
+
+export const actions = {
+  refresh: guard(async () => {
+    const overview = await ipc.getState();
+    useArcStore.getState().setOverview(overview);
+    if (overview.active) {
+      useArcStore.getState().setScene(await ipc.getScene(overview.active));
+    }
+  }),
+
+  newDocument: guard(async () => {
+    await ipc.newDocument();
+    const overview = await ipc.getState();
+    useArcStore.getState().setOverview(overview);
+    if (overview.active) {
+      useArcStore.getState().setScene(await ipc.getScene(overview.active));
+    }
+  }),
+
+  openDocument: guard(async () => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const path = await open({
+      title: "Open document",
+      filters: [{ name: "arc documents", extensions: ["arc", "json"] }],
+    });
+    if (!path) return;
+    await ipc.openDocument(path as string);
+    const overview = await ipc.getState();
+    useArcStore.getState().setOverview(overview);
+    if (overview.active) {
+      useArcStore.getState().setScene(await ipc.getScene(overview.active));
+    }
+  }),
+
+  saveActive: guard(async () => {
+    const id = requireDoc();
+    const scene = useArcStore.getState().scene;
+    const existing = scene?.path ?? undefined;
+    if (existing) {
+      await ipc.saveDocument(id, existing);
+    } else {
+      await saveDocumentAs();
+    }
+    useArcStore.getState().setStatusMessage("Saved");
+  }),
+
+  saveDocumentAs: guard(async () => {
+    await saveDocumentAs();
+  }),
+
+  closeActive: guard(async () => {
+    const id = requireDoc();
+    await ipc.closeDocument(id);
+  }),
+
+  switchDocument: guard(async (id?: string) => {
+    if (!id) return;
+    await ipc.setActiveDocument(id);
+  }),
+
+  undo: guard(async () => {
+    const id = requireDoc();
+    await ipc.undo(id);
+  }),
+
+  redo: guard(async () => {
+    const id = requireDoc();
+    await ipc.redo(id);
+  }),
+
+  duplicateSelection: guard(async () => {
+    const id = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.selection.length === 0) return;
+    const created = await ipc.duplicateEntities(id, scene.selection);
+    if (created.length > 0) {
+      await ipc.setSelection(id, created, created[0]);
+    }
+  }),
+
+  deleteSelection: guard(async () => {
+    const id = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.selection.length === 0) return;
+    await ipc.deleteEntities(id, scene.selection);
+    await ipc.setSelection(id, [], null);
+  }),
+
+  explodeSelection: guard(async () => {
+    const id = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.selection.length < 2) {
+      useArcStore.getState().setStatusMessage("Explode needs two or more selected entities");
+      return;
+    }
+    await ipc.explodeEntities(id, scene.selection, 40);
+  }),
+
+  selectAll: guard(async () => {
+    const id = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.entities.length === 0) return;
+    const ids = scene.entities.filter((e) => !e.locked).map((e) => e.id);
+    await ipc.setSelection(id, ids, ids[ids.length - 1] ?? null);
+  }),
+
+  clearSelection: guard(async () => {
+    const id = requireDoc();
+    await ipc.setSelection(id, [], null);
+  }),
+
+  setTool: (tool: ToolId) => {
+    useArcStore.getState().setTool(tool);
+  },
+
+  setLayerActive: guard(async (layerId?: string) => {
+    const id = requireDoc();
+    if (!layerId) return;
+    await ipc.setActiveLayer(id, layerId);
+  }),
+
+  addLayer: guard(async () => {
+    const id = requireDoc();
+    await ipc.addLayer(id);
+  }),
+
+  exportActive: guard(async (format?: string) => {
+    const fmt = (format ?? "obj") as string;
+    const id = requireDoc();
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const ext = fmt === "obj" ? "obj" : "stl";
+    const path = await save({
+      title: `Export ${fmt.toUpperCase()}`,
+      filters: [{ name: fmt.toUpperCase(), extensions: [ext] }],
+      defaultPath: `${useArcStore.getState().scene?.name ?? "scene"}.${ext}`,
+    });
+    if (!path) return;
+    await ipc.exportScene(id, path as string, fmt);
+    useArcStore.getState().setStatusMessage(`Exported ${(path as string).slice(-40)}`);
+  }),
+
+  fitView: () => {
+    window.dispatchEvent(new CustomEvent("arc-fit-view"));
+  },
+
+  togglePalette: () => {
+    const st = useArcStore.getState();
+    st.setPaletteOpen(!st.paletteOpen);
+  },
+
+  openSettings: () => {
+    useArcStore.getState().setSettingsOpen(true);
+  },
+
+  openPlugins: () => {
+    useArcStore.getState().setPluginsOpen(true);
+  },
+
+  reloadPlugins: guard(async () => {
+    const list = await ipc.reloadPlugins();
+    useArcStore.getState().setPlugins(list);
+  }),
+
+  focusEntity: (entityId: string) => {
+    window.dispatchEvent(
+      new CustomEvent("arc-focus-entity", { detail: { entityId } }),
+    );
+  },
+};
+
+async function saveDocumentAs(): Promise<void> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const id = requireDoc();
+  const scene = useArcStore.getState().scene;
+  const path = await save({
+    title: "Save document",
+    filters: [{ name: "arc documents", extensions: ["arc", "json"] }],
+    defaultPath: `${scene?.name ?? "Untitled"}.arc`,
+  });
+  if (!path) return;
+  await ipc.saveDocument(id, path as string);
+}
+
+/** Create geometry for the active tool at a world point (creation tools). */
+export function geometryForTool(tool: ToolId): { type: string } | null {
+  return DEFAULT_GEOMETRY[tool] ?? null;
+}

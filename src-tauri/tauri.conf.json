@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "arc",
+  "version": "0.2.0",
+  "identifier": "com.arc.cad",
+  "build": {
+    "beforeBuildCommand": "npm --prefix ../frontend run build",
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:*"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "arc CAD",
+        "url": "index.html",
+        "width": 1600,
+        "height": 1000,
+        "minWidth": 1120,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "skipTaskbar": false,
+        "theme": "Dark"
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "publisher": "arc Contributors",
+    "license": "MIT OR Apache-2.0",
+    "category": "Development",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

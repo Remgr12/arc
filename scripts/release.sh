@@ -70,11 +70,9 @@ update_cargo_toml() {
 
 update_tauri_conf() {
     local new_version="$1"
-    # Update root tauri.conf.json
-    sed -i "s/\"version\": \".*\"/\"version\": \"${new_version}\"/" "${PROJECT_ROOT}/tauri.conf.json"
-    # Update arc-app tauri.conf.json
-    sed -i "s/\"version\": \".*\"/\"version\": \"${new_version}\"/" "${PROJECT_ROOT}/crates/arc-app/tauri.conf.json"
-    log_info "Updated tauri.conf.json files to version ${new_version}"
+    # Update the app tauri.conf.json (crate version comes from the workspace)
+    sed -i "s/\"version\": \".*\"/\"version\": \"${new_version}\"/" "${PROJECT_ROOT}/src-tauri/tauri.conf.json"
+    log_info "Updated src-tauri/tauri.conf.json to version ${new_version}"
 }
 
 update_flatpak_manifest() {
@@ -88,8 +86,10 @@ update_flatpak_manifest() {
 commit_changes() {
     local new_version="$1"
     git add "${PROJECT_ROOT}/Cargo.toml" \
-            "${PROJECT_ROOT}/tauri.conf.json" \
-            "${PROJECT_ROOT}/crates/arc-app/tauri.conf.json" \
+            "${PROJECT_ROOT}/Cargo.lock" \
+            "${PROJECT_ROOT}/crates/arc-core/Cargo.toml" \
+            "${PROJECT_ROOT}/src-tauri/Cargo.toml" \
+            "${PROJECT_ROOT}/src-tauri/tauri.conf.json" \
             "${PROJECT_ROOT}/flatpak/com.arc.cad.metainfo.xml"
     git commit -m "chore: release v${new_version}"
     log_success "Committed version bump to v${new_version}"

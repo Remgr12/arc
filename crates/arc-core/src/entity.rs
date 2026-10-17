@@ -1,288 +1,362 @@
-use std::any::Any;
-use std::fmt::Debug;
-use std::sync::Arc;
-use uuid::Uuid;
+//! Entities and parametric geometry payloads.
+
 use serde::{Deserialize, Serialize};
-use nalgebra::{Point3, Vector3, UnitQuaternion, Matrix4};
-use parking_lot::RwLock;
-use dashmap::DashMap;
-use crate::{EntityId, EntityType, EntityCategory, BoundingBox, Color};
 
-pub trait Entity: Send + Sync + Debug + Any {
-    fn id(&self) -> EntityId;
-    fn entity_type(&self) -> EntityType;
-    fn name(&self) -> &str;
-    fn set_name(&mut self, name: String);
-    fn visible(&self) -> bool;
-    fn set_visible(&mut self, visible: bool);
-    fn locked(&self) -> bool;
-    fn set_locked(&mut self, locked: bool);
-    fn color(&self) -> Option<Color>;
-    fn set_color(&mut self, color: Option<Color>);
-    fn layer_id(&self) -> EntityId;
-    fn set_layer_id(&mut self, layer_id: EntityId);
-    fn transform(&self) -> Transform;
-    fn set_transform(&mut self, transform: Transform);
-    fn bounding_box(&self) -> BoundingBox;
-    fn update_bounding_box(&mut self);
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn clone_box(&self) -> Box<dyn Entity>;
-}
+use crate::{Color, EntityId, Transform};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BaseEntity {
+/// A document layer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Layer {
     pub id: EntityId,
     pub name: String,
     pub visible: bool,
     pub locked: bool,
-    pub color: Option<Color>,
-    pub layer_id: EntityId,
-    pub transform: Transform,
-    pub bounding_box: BoundingBox,
-    pub metadata: Metadata,
+    pub color: Color,
 }
 
-impl Default for BaseEntity {
-    fn default() -> Self {
+impl Layer {
+    pub fn new(name: String, color: Option<Color>) -> Self {
         Self {
             id: EntityId::new(),
-            name: String::new(),
+            name,
             visible: true,
             locked: false,
-            color: None,
-            layer_id: EntityId::nil(),
-            transform: Transform::identity(),
-            bounding_box: BoundingBox::empty(),
-            metadata: Metadata::default(),
+            color: color.unwrap_or(Color::GRAY),
         }
     }
 }
 
-impl BaseEntity {
-    pub fn new(entity_type: EntityType) -> Self {
-        let mut base = Self::default();
-        base.name = format!("{:?}_{}", entity_type, Uuid::new_v4().to_string()[..8].to_string());
-        base
-    }
+/// Parameterized geometry description of an entity. Entity placement
+/// (position/orientation/scale) lives on the entity transform; these
+/// parameters describe the shape in local space.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Geometry {
+    /// Axis-aligned box with optional rounded vertical edges.
+    Box {
+        width: f64,
+        depth: f64,
+        height: f64,
+        #[serde(default)]
+        corner_radius: f64,
+    },
+    /// UV sphere centered at local origin.
+    Sphere { radius: f64, segments: u32 },
+    /// Cylinder along +Y.
+    Cylinder { radius: f64, height: f64, segments: u32 },
+    /// Cone along +Y (apex on top).
+    Cone { radius: f64, height: f64, segments: u32 },
+    /// Torus lying in the XZ plane.
+    Torus {
+        radius: f64,
+        tube: f64,
+        segments: u32,
+        tubular_segments: u32,
+    },
+    /// Flat ground plane in XZ.
+    Plane { width: f64, depth: f64 },
+
+    // --- wireframe curves (selectable, not raycast-solid) ---
+    /// Straight line from local origin to `end`.
+    LineCurve { end: [f64; 3] },
+    /// Polyline through points.
+    PolylineCurve { points: Vec<[f64; 3]> },
+    /// Circle in XZ plane.
+    CircleCurve { radius: f64, segments: u32 },
+    /// Arc in XZ plane.
+    ArcCurve {
+        radius: f64,
+        start_angle_deg: f64,
+        end_angle_deg: f64,
+        segments: u32,
+    },
+    /// Rectangle outline in XZ plane.
+    RectangleCurve { width: f64, depth: f64 },
+    /// Regular polygon outline in XZ plane.
+    PolygonCurve { radius: f64, sides: u32 },
+
+    // --- sweeps & boolean style solids ---
+    /// Extrusion of a closed XY polygon upwards by `height`.
+    Extrude { polygon: Vec<[f64; 2]>, height: f64 },
+    /// Revolution of an XZ profile (x = radius, z = height) about the local Y axis.
+    Revolve {
+        profile: Vec<[f64; 2]>,
+        steps: u32,
+        #[serde(default = "default_revolve_angle")]
+        angle_deg: f64,
+    },
+    /// Tube swept along a polyline path.
+    Sweep {
+        path: Vec<[f64; 3]>,
+        radius: f64,
+        sides: u32,
+    },
+    /// Loft between N cross sections with equal vertex counts.
+    Loft { sections: Vec<Vec<[f64; 3]>> },
+
+    // --- architecture ---
+    /// Wall following a polyline footprint.
+    Wall {
+        path: Vec<[f64; 2]>,
+        width: f64,
+        height: f64,
+    },
+    /// Staircase: `count` steps, each `run` deep, total rise `rise * count`.
+    Stair {
+        width: f64,
+        rise: f64,
+        run: f64,
+        count: u32,
+    },
+    /// Flat pad / floor plate over a closed polygon.
+    Slab { polygon: Vec<[f64; 2]>, height: f64 },
+    /// Gable roof over a rectangular footprint.
+    Roof {
+        width: f64,
+        depth: f64,
+        pitch_deg: f64,
+        overhang: f64,
+    },
+    /// Circular or square column along +Y.
+    Column {
+        radius: f64,
+        height: f64,
+        sides: u32,
+    },
+    /// Rectangular beam along X.
+    Beam {
+        length: f64,
+        width: f64,
+        height: f64,
+    },
+    /// Door with frame and panel, oriented in X facing +Z.
+    Door {
+        width: f64,
+        height: f64,
+        depth: f64,
+        swing_deg: f64,
+    },
+    /// Window with frame, glazing bars and glass, oriented in X facing +Z.
+    Window {
+        width: f64,
+        height: f64,
+        depth: f64,
+        panes_x: u32,
+        panes_y: u32,
+    },
+
+    // --- annotation ---
+    /// Dimension between two points (rendered as line + arrows + label).
+    Dimension { start: [f64; 3], end: [f64; 3] },
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Metadata {
-    pub tags: Vec<String>,
-    pub properties: std::collections::HashMap<String, serde_json::Value>,
-    pub description: String,
+fn default_revolve_angle() -> f64 {
+    360.0
 }
 
-impl Metadata {
-    pub fn get<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Option<T> {
-        self.properties.get(key).and_then(|v| serde_json::from_value(v.clone()).ok())
-    }
-
-    pub fn set<T: Serialize>(&mut self, key: &str, value: T) {
-        if let Ok(val) = serde_json::to_value(value) {
-            self.properties.insert(key.to_string(), val);
+impl Geometry {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Geometry::Box { .. } => "box",
+            Geometry::Sphere { .. } => "sphere",
+            Geometry::Cylinder { .. } => "cylinder",
+            Geometry::Cone { .. } => "cone",
+            Geometry::Torus { .. } => "torus",
+            Geometry::Plane { .. } => "plane",
+            Geometry::LineCurve { .. } => "line",
+            Geometry::PolylineCurve { .. } => "polyline",
+            Geometry::CircleCurve { .. } => "circle",
+            Geometry::ArcCurve { .. } => "arc",
+            Geometry::RectangleCurve { .. } => "rectangle",
+            Geometry::PolygonCurve { .. } => "polygon",
+            Geometry::Extrude { .. } => "extrude",
+            Geometry::Revolve { .. } => "revolve",
+            Geometry::Sweep { .. } => "sweep",
+            Geometry::Loft { .. } => "loft",
+            Geometry::Wall { .. } => "wall",
+            Geometry::Stair { .. } => "stair",
+            Geometry::Slab { .. } => "slab",
+            Geometry::Roof { .. } => "roof",
+            Geometry::Column { .. } => "column",
+            Geometry::Beam { .. } => "beam",
+            Geometry::Door { .. } => "door",
+            Geometry::Window { .. } => "window",
+            Geometry::Dimension { .. } => "dimension",
         }
     }
 
-    pub fn has_tag(&self, tag: &str) -> bool {
-        self.tags.iter().any(|t| t == tag)
-    }
-
-    pub fn add_tag(&mut self, tag: String) {
-        if !self.tags.iter().any(|t| t == &tag) {
-            self.tags.push(tag);
+    /// Human-friendly category.
+    pub fn category(&self) -> GeometryCategory {
+        match self {
+            Geometry::Box { .. }
+            | Geometry::Sphere { .. }
+            | Geometry::Cylinder { .. }
+            | Geometry::Cone { .. }
+            | Geometry::Torus { .. }
+            | Geometry::Plane { .. } => GeometryCategory::Primitive,
+            Geometry::LineCurve { .. }
+            | Geometry::PolylineCurve { .. }
+            | Geometry::CircleCurve { .. }
+            | Geometry::ArcCurve { .. }
+            | Geometry::RectangleCurve { .. }
+            | Geometry::PolygonCurve { .. } => GeometryCategory::Sketch,
+            Geometry::Extrude { .. }
+            | Geometry::Revolve { .. }
+            | Geometry::Sweep { .. }
+            | Geometry::Loft { .. } => GeometryCategory::Solid,
+            Geometry::Wall { .. }
+            | Geometry::Stair { .. }
+            | Geometry::Slab { .. }
+            | Geometry::Roof { .. }
+            | Geometry::Column { .. }
+            | Geometry::Beam { .. }
+            | Geometry::Door { .. }
+            | Geometry::Window { .. } => GeometryCategory::Architecture,
+            Geometry::Dimension { .. } => GeometryCategory::Annotation,
         }
     }
 
-    pub fn remove_tag(&mut self, tag: &str) {
-        self.tags.retain(|t| t != tag);
-    }
-}
-
-pub type EntityRef = Arc<RwLock<dyn Entity>>;
-
-#[derive(Debug)]
-pub struct EntityContainer {
-    entities: DashMap<EntityId, EntityRef>,
-    by_type: DashMap<EntityType, Vec<EntityId>>,
-    by_layer: DashMap<EntityId, Vec<EntityId>>,
-}
-
-impl EntityContainer {
-    pub fn new() -> Self {
-        Self {
-            entities: DashMap::new(),
-            by_type: DashMap::new(),
-            by_layer: DashMap::new(),
-        }
-    }
-
-    pub fn add(&self, entity: EntityRef) {
-        let id = entity.read().id();
-        let entity_type = entity.read().entity_type();
-        let layer_id = entity.read().layer_id();
-
-        self.entities.insert(id, entity);
-        self.by_type.entry(entity_type).or_default().push(id);
-        self.by_layer.entry(layer_id).or_default().push(id);
-    }
-
-    pub fn remove(&self, id: EntityId) -> Option<EntityRef> {
-        if let Some((_, entity)) = self.entities.remove(&id) {
-            let entity_type = entity.read().entity_type();
-            let layer_id = entity.read().layer_id();
-
-            if let Some(mut vec) = self.by_type.get_mut(&entity_type) {
-                vec.retain(|eid| *eid != id);
-            }
-            if let Some(mut vec) = self.by_layer.get_mut(&layer_id) {
-                vec.retain(|eid| *eid != id);
-            }
-            Some(entity)
-        } else {
-            None
-        }
-    }
-
-    pub fn get(&self, id: EntityId) -> Option<EntityRef> {
-        self.entities.get(&id).map(|e| e.clone())
-    }
-
-    pub fn get_by_type(&self, entity_type: EntityType) -> Vec<EntityRef> {
-        self.by_type.get(&entity_type)
-            .map(|ids| ids.iter().filter_map(|id| self.entities.get(id).map(|e| e.clone())).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn get_by_layer(&self, layer_id: EntityId) -> Vec<EntityRef> {
-        self.by_layer.get(&layer_id)
-            .map(|ids| ids.iter().filter_map(|id| self.entities.get(id).map(|e| e.clone())).collect())
-            .unwrap_or_default()
-    }
-
-    pub fn all(&self) -> Vec<EntityRef> {
-        self.entities.iter().map(|e| e.clone()).collect()
-    }
-
-    pub fn count(&self) -> usize {
-        self.entities.len()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = EntityRef> + '_ {
-        self.entities.iter().map(|e| e.clone())
-    }
-}
-
-impl Default for EntityContainer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Transform {
-    pub translation: Vector3<f64>,
-    pub rotation: UnitQuaternion<f64>,
-    pub scale: Vector3<f64>,
-}
-
-impl Transform {
-    pub fn identity() -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            rotation: UnitQuaternion::identity(),
-            scale: Vector3::new(1.0, 1.0, 1.0),
-        }
-    }
-
-    pub fn from_translation(t: Vector3<f64>) -> Self {
-        Self {
-            translation: t,
-            rotation: UnitQuaternion::identity(),
-            scale: Vector3::new(1.0, 1.0, 1.0),
-        }
-    }
-
-    pub fn from_rotation(r: UnitQuaternion<f64>) -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            rotation: r,
-            scale: Vector3::new(1.0, 1.0, 1.0),
-        }
-    }
-
-    pub fn from_scale(s: Vector3<f64>) -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            rotation: UnitQuaternion::identity(),
-            scale: s,
-        }
-    }
-
-    pub fn to_matrix(&self) -> Matrix4<f64> {
-        Matrix4::new_nonuniform_scaling(&self.scale)
-            * self.rotation.to_homogeneous()
-            * Matrix4::new_translation(&self.translation)
-    }
-
-    pub fn inverse(&self) -> Self {
-        let inv_scale = Vector3::new(
-            1.0 / self.scale.x,
-            1.0 / self.scale.y,
-            1.0 / self.scale.z,
-        );
-        let inv_rot = self.rotation.inverse();
-        let inv_trans = -(inv_rot * (self.translation.component_mul(&inv_scale)));
-        
-        Self {
-            translation: inv_trans,
-            rotation: inv_rot,
-            scale: inv_scale,
-        }
-    }
-
-    pub fn transform_point(&self, point: Point3<f64>) -> Point3<f64> {
-        self.to_matrix().transform_point(&point)
-    }
-
-    pub fn transform_vector(&self, vector: Vector3<f64>) -> Vector3<f64> {
-        self.rotation * (vector.component_mul(&self.scale))
-    }
-
-    pub fn mul(&self, other: &Transform) -> Transform {
-        let matrix = self.to_matrix() * other.to_matrix();
-        let rot_matrix: nalgebra::Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).clone().try_into().unwrap();
-        let rotation = UnitQuaternion::from_matrix(&rot_matrix);
-        Transform {
-            translation: Vector3::new(matrix[(3, 0)], matrix[(3, 1)], matrix[(3, 2)]),
-            rotation,
-            scale: Vector3::new(1.0, 1.0, 1.0),
-        }
-    }
-
-    pub fn transform_bounding_box(&self, bbox: &crate::BoundingBox) -> crate::BoundingBox {
-        let min = self.transform_point(bbox.min);
-        let max = self.transform_point(bbox.max);
-        crate::BoundingBox::new(
-            Point3::new(min.x.min(max.x), min.y.min(max.y), min.z.min(max.z)),
-            Point3::new(min.x.max(max.x), min.y.max(max.y), min.z.max(max.z)),
+    /// Entities composed of triangles are raycast targets; curves only hit
+    /// segment-based picking.
+    pub fn has_triangles(&self) -> bool {
+        !matches!(
+            self,
+            Geometry::LineCurve { .. }
+                | Geometry::PolylineCurve { .. }
+                | Geometry::CircleCurve { .. }
+                | Geometry::ArcCurve { .. }
+                | Geometry::RectangleCurve { .. }
+                | Geometry::PolygonCurve { .. }
+                | Geometry::Dimension { .. }
         )
     }
 
-    pub fn from_matrix(matrix: nalgebra::Matrix4<f64>) -> Self {
-        let rot_matrix: nalgebra::Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).clone().try_into().unwrap();
-        let rotation = UnitQuaternion::from_matrix(&rot_matrix);
-        Transform {
-            translation: Vector3::new(matrix[(3, 0)], matrix[(3, 1)], matrix[(3, 2)]),
-            rotation,
-            scale: Vector3::new(1.0, 1.0, 1.0),
+    /// Curves that render as line geometry.
+    pub fn has_lines(&self) -> bool {
+        matches!(
+            self,
+            Geometry::LineCurve { .. }
+                | Geometry::PolylineCurve { .. }
+                | Geometry::CircleCurve { .. }
+                | Geometry::ArcCurve { .. }
+                | Geometry::RectangleCurve { .. }
+                | Geometry::PolygonCurve { .. }
+        ) || matches!(self, Geometry::Dimension { .. })
+    }
+
+    /// All polygons must be closed for cap triangulation.
+    pub fn validate(&self) -> Result<(), String> {
+        let check_poly = |poly: &[[f64; 2]], name: &str| {
+            if poly.len() < 3 {
+                return Err(format!("{name} needs at least 3 points"));
+            }
+            Ok(())
+        };
+        match self {
+            Geometry::Box { width, depth, height, .. } => {
+                if *width <= 0.0 || *depth <= 0.0 || *height <= 0.0 {
+                    return Err("box dimensions must be positive".into());
+                }
+            }
+            Geometry::Sphere { radius, .. }
+            | Geometry::Cylinder { radius, .. }
+            | Geometry::Cone { radius, .. }
+            | Geometry::CircleCurve { radius, .. }
+            | Geometry::ArcCurve { radius, .. }
+            | Geometry::PolygonCurve { radius, .. }
+            | Geometry::Sweep { radius, .. }
+            | Geometry::Column { radius, .. }
+            | Geometry::Torus { radius, .. } => {
+                if *radius <= 0.0 {
+                    return Err("radius must be positive".into());
+                }
+            }
+            Geometry::Extrude { polygon, height } => {
+                check_poly(polygon, "extrude profile")?;
+                if *height <= 0.0 {
+                    return Err("extrude height must be positive".into());
+                }
+            }
+            Geometry::Revolve { profile, steps, .. } => {
+                check_poly(profile, "revolve profile")?;
+                if *steps < 3 {
+                    return Err("revolve steps must be >= 3".into());
+                }
+            }
+            Geometry::Wall { path, width, height } => {
+                if path.len() < 2 {
+                    return Err("wall path needs at least 2 points".into());
+                }
+                if *width <= 0.0 || *height <= 0.0 {
+                    return Err("wall width/height must be positive".into());
+                }
+            }
+            Geometry::Stair { rise, run, count, .. } => {
+                if *rise <= 0.0 || *run <= 0.0 || *count == 0 {
+                    return Err("stair rise/run/count must be positive".into());
+                }
+            }
+            Geometry::Slab { polygon, height } => {
+                check_poly(polygon, "slab polygon")?;
+                if *height <= 0.0 {
+                    return Err("slab height must be positive".into());
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeometryCategory {
+    Primitive,
+    Sketch,
+    Solid,
+    Architecture,
+    Annotation,
+}
+
+/// A document entity: identity, display info, transform and parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Entity {
+    pub id: EntityId,
+    pub name: String,
+    pub layer: EntityId,
+    pub visible: bool,
+    pub locked: bool,
+    pub color: Option<Color>,
+    pub transform: Transform,
+    pub kind: Geometry,
+}
+
+impl Entity {
+    pub fn new(id: EntityId, name: String, layer: EntityId, kind: Geometry) -> Self {
+        Self {
+            id,
+            name,
+            layer,
+            visible: true,
+            locked: false,
+            color: None,
+            transform: Transform::default(),
+            kind,
         }
     }
 }
 
-impl Default for Transform {
-    fn default() -> Self {
-        Self::identity()
-    }
+/// Entity as sent to the frontend (without mesh buffers; mesh arrays ride along in SceneData).
+#[derive(Debug, Clone, Serialize)]
+pub struct EntityData {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub category: GeometryCategory,
+    pub layer: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub color: Option<[f32; 4]>,
+    pub transform: Transform,
+    pub geometry: Geometry,
 }
