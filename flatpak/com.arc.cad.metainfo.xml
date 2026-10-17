@@ -3,32 +3,38 @@
   <id>com.arc.cad</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>arc CAD</name>
-  <summary>Professional 3D CAD software for parametric modeling</summary>
+  <name>arc</name>
+  <summary>Modern, open-source 3D modeling built on a mesh geometry kernel</summary>
   <description>
-    <p>arc CAD is a modern, open-source 3D CAD application built with Rust and Tauri.</p>
+    <p>arc is a modern, open-source 3D modeling application for general design, architecture, and interior design workflows. It is built around a mesh-based geometry kernel written in Rust with a native desktop shell powered by Tauri.</p>
     <p>Features:</p>
     <ul>
-      <li>Parametric 3D modeling</li>
-      <li>STEP/IGES import/export</li>
-      <li>Assembly constraints</li>
-      <li>Technical drawing generation</li>
-      <li>Plugin system (Lua/WASM)</li>
-      <li>Modern WebGPU-based renderer</li>
+      <li>Primitive modeling - box, sphere, cylinder, cone, torus, and plane primitives with editable parameters</li>
+      <li>Sketch tools - circle, line, polyline, rectangle, dimension, and wall drawing with grid snapping</li>
+      <li>Solid generation - extrude, revolve, sweep, and loft profiles into solids</li>
+      <li>Architecture tools - walls, stairs, slabs, roofs, columns, beams, doors, and windows</li>
+      <li>Layers with visibility, locking, and color overrides</li>
+      <li>Full undo/redo history and multi-document editing</li>
+      <li>Plugin system via Lua scripts</li>
+      <li>OBJ and binary STL export</li>
+      <li>Modern WebGL renderer (three.js)</li>
     </ul>
   </description>
-  <developer_name>arc Contributors</developer_name>
-  <project_group>Graphics</project_group>
-  <url type="homepage">https://github.com/yourusername/arc</url>
-  <url type="bugtracker">https://github.com/yourusername/arc/issues</url>
-  <url type="help">https://github.com/yourusername/arc/wiki</url>
-  <url type="donate">https://github.com/sponsors/yourusername</url>
+  <developer_name>Zsombor Simon</developer_name>
+  <url type="homepage">https://remgr12.github.io/arc/</url>
+  <url type="bugtracker">https://github.com/Remgr12/arc/issues</url>
+  <url type="help">https://github.com/Remgr12/arc/wiki</url>
   <icon type="cached" height="128" width="128">com.arc.cad.png</icon>
   <launchable type="desktop-id">com.arc.cad.desktop</launchable>
   <provides>
     <binary>arc</binary>
   </provides>
   <releases>
+    <release version="0.2.0" date="2026-10-17">
+      <description>
+        <p>Current release: primitives, sketch tools, solid generation, architecture tools, layers, plugins, and OBJ and STL export.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2024-01-15">
       <description>Initial release</description>
     </release>

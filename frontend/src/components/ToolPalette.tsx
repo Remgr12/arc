@@ -27,7 +27,7 @@ export function ToolPalette() {
                 return (
                   <button
                     key={item.id}
-                    title={`${item.label} — ${item.tip}`}
+                    title={`${item.label}: ${item.tip}`}
                     onClick={() => setTool(item.id as ToolId)}
                     className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                       active

@@ -172,7 +172,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           cd flatpak
-          flatpak build-update-repo --title="arc CAD" --generate-static-deltas --prune-depth=20 repo
+          flatpak build-update-repo --title="arc" --generate-static-deltas --prune-depth=20 repo
 
       - name: Upload Flatpak repo
         uses: actions/upload-artifact@v4

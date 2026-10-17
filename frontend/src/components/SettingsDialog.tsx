@@ -4,6 +4,7 @@ import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
 import { Button, Checkbox, Modal, Row, SelectField, TextField } from "./ui";
 import type { Settings } from "../lib/types";
+import { Logo } from "./Logo";
 
 export function SettingsDialog() {
   const open = useArcStore((s) => s.settingsOpen);
@@ -115,6 +116,23 @@ export function SettingsDialog() {
             )}
           </>
         )}
+      </div>
+      <div className="mt-4 flex items-center gap-2.5 border-t border-base-300 pt-3">
+        <Logo size={16} />
+        <div className="flex flex-col leading-tight">
+          <span className="text-[11px] font-semibold text-base-700">arc</span>
+          <span className="text-[10px] text-base-500">
+            dual-licensed under MIT OR Apache-2.0
+          </span>
+        </div>
+        <a
+          href="https://remgr12.github.io/arc/"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto text-[10px] text-base-500 underline-offset-2 hover:text-base-300 hover:underline"
+        >
+          website
+        </a>
       </div>
     </Modal>
   );

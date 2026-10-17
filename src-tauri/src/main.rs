@@ -106,5 +106,5 @@ fn main() {
             commands::export_scene,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running arc CAD");
+        .expect("error while running arc");
 }

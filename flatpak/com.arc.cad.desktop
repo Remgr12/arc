@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=arc
-GenericName=CAD Application
-Comment=Parametric CAD application
+GenericName=3D Modeling Application
+Comment=Modern 3D modeling for design, architecture, and interiors
 Exec=arc
 Icon=com.arc.cad
 Terminal=false

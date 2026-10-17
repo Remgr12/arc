@@ -797,7 +797,7 @@ fn bytes_of_text(text: &str) -> Vec<u8> {
 }
 
 fn export_obj(doc: &mut Document) -> String {
-    let mut out = String::from("# arc CAD export\n");
+    let mut out = String::from("# arc export\n");
     let mut base: usize = 1;
     let ids: Vec<EntityId> = doc
         .entities

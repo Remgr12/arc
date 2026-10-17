@@ -4,6 +4,7 @@ import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { KEYBINDS } from "../lib/keybinds";
 import { Button, IconButton } from "./ui";
+import { Logo } from "./Logo";
 
 function useOutsideClose(onClose: () => void) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -29,7 +30,7 @@ export function TopBar() {
   const helpRef = useOutsideClose(() => setHelpOpen(false));
 
   const dirty = scene?.modified ?? false;
-  const title = scene ? `${scene.name}${dirty ? " •" : ""}` : "Arc CAD";
+  const title = scene ? `${scene.name}${dirty ? " •" : ""}` : "arc";
   const docId = overview?.active ?? null;
 
   const fileItem = (label: string, hint: string, fn: () => void) => (
@@ -49,11 +50,8 @@ export function TopBar() {
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-base-300 bg-base-100 px-2">
       <div className="flex items-center gap-2 pl-1 pr-2">
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-          <path d="M12 2 2 12l10 10 10-10Z" fill="none" stroke="oklch(0.72 0.16 260)" strokeWidth="1.8" />
-          <path d="M2 12h20M12 2v20" stroke="oklch(0.72 0.16 260)" strokeWidth="0.9" opacity="0.6" />
-        </svg>
-        <span className="text-sm font-semibold tracking-wide text-base-100">ARC</span>
+        <Logo size={18} />
+        <span className="text-sm font-semibold lowercase tracking-wide text-base-100">arc</span>
       </div>
 
       <div className="relative" ref={fileRef}>
@@ -95,7 +93,7 @@ export function TopBar() {
       />
 
       <div className="flex-1 truncate text-center text-xs text-base-400">
-        {docId ? `${title}${scene?.path ? ` — ${scene.path}` : ""}` : "No document open"}
+        {docId ? `${title}${scene?.path ? `: ${scene.path}` : ""}` : "No document open"}
       </div>
 
       <IconButton icon={<Settings size={15} />} title="Settings (Ctrl ,)" onClick={actions.openSettings} />
@@ -133,7 +131,7 @@ export function StatusBar() {
         X {fmt(cursorWorld[0])}  Y {fmt(cursorWorld[2])}
       </span>
       <span>
-        grid {settings ? `${settings.grid_size}${settings.units === "metric" ? "cm" : '"'}` : "—"}
+        grid {settings ? `${settings.grid_size}${settings.units === "metric" ? "cm" : '"'}` : "-"}
         {settings?.snap_enabled ? " · snap" : ""}
       </span>
       <span className="flex-1 truncate text-center text-base-600">{statusMessage}</span>

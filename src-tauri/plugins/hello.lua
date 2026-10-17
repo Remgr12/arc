@@ -1,4 +1,4 @@
--- Sample arc CAD plugin. Logs sentry messages and re-centers geometry on open.
+-- Sample arc plugin. Logs sentry messages and re-centers geometry on open.
 arc.log("sample plugin loaded")
 
 arc.on("start", function()

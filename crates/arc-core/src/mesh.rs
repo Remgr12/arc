@@ -214,7 +214,7 @@ pub fn earclip_xz(points: &[[f64; 2]]) -> Vec<[usize; 3]> {
     tris
 }
 
-/// Möller–Trumbore ray-triangle intersection. Returns distance along ray.
+/// Möller-Trumbore ray-triangle intersection. Returns distance along ray.
 pub fn ray_triangle(
     origin: [f64; 3],
     dir: [f64; 3],

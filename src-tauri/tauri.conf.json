@@ -16,7 +16,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "arc CAD",
+        "title": "arc",
         "url": "index.html",
         "width": 1600,
         "height": 1000,
@@ -42,7 +42,7 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
-    "publisher": "arc Contributors",
+    "publisher": "Zsombor Simon",
     "license": "MIT OR Apache-2.0",
     "category": "Development",
     "macOS": {

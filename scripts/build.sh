@@ -23,7 +23,7 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Builds arc CAD for distribution.
+Builds arc for distribution.
 
 Options:
   --target TARGET     Target triple (default: host)

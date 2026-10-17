@@ -1,4 +1,4 @@
-//! arc-core — the domain kernel of the arc CAD application.
+//! arc-core is the domain kernel of the arc application.
 //!
 //! Contains the entity model, parametric geometry payload definitions,
 //! mesh generation, document model with layers/selection/history,
