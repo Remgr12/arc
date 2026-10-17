@@ -144,6 +144,12 @@ jobs:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: 'tauri_[platform]-[arch]-[bundle]'
 
+      - name: Install Flatpak runtime
+        working-directory: ${{ github.workspace }}
+        run: |
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install --noninteractive flathub org.freedesktop.Sdk//24.08 org.freedesktop.Platform//24.08
+
       - name: Build Flatpak
         working-directory: ${{ github.workspace }}
         run: |
