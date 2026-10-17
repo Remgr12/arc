@@ -1,6 +1,6 @@
-# arc - Advanced CAD Application
+# arc
 
-arc is a modern, multi-platform CAD (Computer-Aided Design) application built around a mesh-based geometry kernel written in Rust. It features a Shapr3D-like intuitive interface for general design, architecture, and interior design workflows.
+arc is a modern, multi-platform CAD (Computer-Aided Design) application built around a mesh-based geometry kernel written in Rust. It features a modern and intuitive interface for general design, architecture, and interior design workflows.
 
 ## Features
 
