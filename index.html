@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>arc: open-source 3D modeling</title>
-  <meta name="description" content="arc is a modern, open-source 3D modeling application for design, architecture, and interiors, built around a mesh-based geometry kernel written in Rust. Native apps for Windows, macOS, and Linux." />
+  <meta name="description" content="arc is a 3D modeling application for design, architecture, and interiors. Mesh-based geometry kernel written in Rust, native apps for Windows, macOS, and Linux, MIT licensed." />
 
   <link rel="canonical" href="https://remgr12.github.io/arc/" />
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
@@ -14,7 +14,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="arc" />
   <meta property="og:title" content="arc: open-source 3D modeling" />
-  <meta property="og:description" content="A modern, open-source 3D modeling application built around a mesh-based geometry kernel. Windows, macOS, and Linux." />
+  <meta property="og:description" content="A 3D modeling application with a Rust geometry kernel. Windows, macOS, and Linux." />
   <meta property="og:url" content="https://remgr12.github.io/arc/" />
   <meta property="og:image" content="https://remgr12.github.io/arc/assets/og.png" />
   <meta property="og:image:width" content="1200" />
@@ -52,21 +52,19 @@
 
     :root {
       --bg: #0b0e14;
-      --bg-soft: #10131a;
-      --panel: #131720;
-      --border: #232833;
+      --panel: #0e1118;
+      --line: #1c212c;
+      --line-soft: #171b24;
       --text: #e8ecf6;
-      --text-dim: #9aa3b4;
-      --text-faint: #6b7383;
+      --dim: #98a2b4;
+      --faint: #667082;
       --blue: #58a9ff;
-      --violet: #9e6bfa;
-      --grad: linear-gradient(120deg, #58a9ff, #9e6bfa);
-      --radius: 14px;
+      --radius: 10px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
     body {
       background: var(--bg);
@@ -77,108 +75,174 @@
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
     }
+    ::selection { background: rgba(88, 169, 255, 0.25); }
+    :focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent); outline-offset: 2px; border-radius: 4px; }
 
     code, kbd, .mono { font-family: "JetBrains Mono Var", ui-monospace, "Cascadia Code", monospace; }
 
     a { color: var(--blue); text-decoration: none; }
     a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
 
+    /* ---------- header ---------- */
     header.site {
       position: sticky; top: 0; z-index: 50;
-      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      background: color-mix(in srgb, var(--bg) 86%, transparent);
       backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--line);
     }
-    header.site .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 18px; color: var(--text); }
-    .brand img { width: 26px; height: 26px; }
-    nav { margin-left: auto; display: flex; align-items: center; gap: 22px; }
-    nav a { color: var(--text-dim); font-size: 14.5px; font-weight: 550; }
+    header.site .wrap { display: flex; align-items: center; gap: 12px; height: 58px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+    .brand img { width: 24px; height: 24px; }
+    nav { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+    nav a { color: var(--dim); font-size: 14px; font-weight: 500; }
     nav a:hover { color: var(--text); text-decoration: none; }
     nav a.gh {
       display: inline-flex; align-items: center; gap: 7px;
-      border: 1px solid var(--border); border-radius: 9px; padding: 6px 12px; color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; color: var(--text);
     }
-    nav a.gh:hover { border-color: #39404e; }
+    nav a.gh:hover { border-color: #333c4d; }
 
-    .hero { padding: 84px 0 64px; text-align: center; }
-    .hero img.mark { width: 132px; height: 132px; margin-bottom: 20px; }
+    /* ---------- hero ---------- */
+    .hero { padding: 88px 0 56px; text-align: center; }
+    .hero img.mark { width: 96px; height: 96px; }
     .hero h1 {
-      font-size: clamp(56px, 9vw, 96px);
-      font-weight: 800; letter-spacing: -0.045em; line-height: 1;
-      background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+      margin-top: 20px;
+      font-size: clamp(64px, 11vw, 112px);
+      font-weight: 830; letter-spacing: -0.05em; line-height: 0.95;
+      color: var(--text);
     }
     .hero p.tag {
-      margin: 18px auto 0; max-width: 640px;
-      font-size: 19px; color: var(--text-dim); font-weight: 480;
+      margin: 18px auto 0; max-width: 705px;
+      font-size: 19px; color: var(--dim); text-wrap: balance;
     }
-    .cta { margin-top: 34px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .hero p.tag strong { color: var(--text); font-weight: 600; }
+    @media (max-width: 720px) { .hero p.tag { max-width: 460px; font-size: 17.5px; } }
+    .cta { margin-top: 32px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
     .btn {
       display: inline-flex; align-items: center; gap: 9px;
-      padding: 12px 22px; border-radius: 11px; font-weight: 650; font-size: 15.5px;
+      padding: 11px 20px; border-radius: 9px; font-weight: 600; font-size: 15px;
       border: 1px solid transparent;
     }
-    .btn:hover { text-decoration: none; filter: brightness(1.08); }
-    .btn.primary { background: var(--grad); color: #0b0e14; }
-    .btn.ghost { border-color: var(--border); color: var(--text); }
-    .btn.ghost:hover { border-color: #39404e; }
-    .os-hint { margin-top: 16px; color: var(--text-faint); font-size: 13.5px; }
-
-    section { padding: 64px 0; }
-    section.alt { background: var(--bg-soft); border-block: 1px solid var(--border); }
-    h2 { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; margin-bottom: 8px; }
-    p.sect { color: var(--text-dim); max-width: 660px; }
-    .num { color: var(--text-faint); font-size: 13px; letter-spacing: 0.2em; font-weight: 600; margin-bottom: 8px; display: block; text-transform: uppercase; }
-
-    .grid {
-      margin-top: 40px; display: grid; gap: 16px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    .btn:hover { text-decoration: none; }
+    .btn.primary { background: var(--blue); color: #0a0d13; }
+    .btn.primary:hover { background: #6db4ff; }
+    .btn.ghost { border-color: var(--line); color: var(--text); }
+    .btn.ghost:hover { border-color: #333c4d; }
+    .keysline {
+      margin-top: 40px; padding-top: 22px;
+      border-top: 1px solid var(--line-soft);
+      font-family: "JetBrains Mono Var", monospace;
+      font-size: 13px; color: var(--faint);
+      display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center;
     }
-    .card {
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 22px 22px 20px;
-    }
-    .card h3 { font-size: 16.5px; font-weight: 650; margin-bottom: 7px; letter-spacing: -0.01em; }
-    .card p { font-size: 14.5px; color: var(--text-dim); }
-    .badge {
-      display: inline-block; margin-bottom: 13px; padding: 5px 10px; border-radius: 8px;
-      font-family: "JetBrains Mono Var", monospace; font-size: 11.5px; font-weight: 500;
-      color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent);
-      border: 1px solid color-mix(in srgb, var(--blue) 22%, transparent);
-    }
+    .keysline b { font-weight: 550; color: var(--dim); }
 
-    .kbds { margin-top: 34px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-    .kbd-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 9px 13px; font-size: 13.5px; color: var(--text-dim); }
+    /* ---------- sections ---------- */
+    section { padding: 60px 0; }
+    section + section { border-top: 1px solid var(--line-soft); }
+    .eyebrow {
+      display: block;
+      font-family: "JetBrains Mono Var", monospace;
+      font-size: 11.5px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 10px;
+    }
+    h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+    p.sect { color: var(--dim); max-width: 640px; margin-top: 6px; }
+    p.sect .mono { font-size: 0.92em; color: var(--text); }
+
+    /* capability rows */
+    .caps { margin-top: 36px; border-top: 1px solid var(--line); }
+    .caps .row {
+      display: grid; grid-template-columns: 168px 1fr; gap: 18px;
+      padding: 13px 2px; border-bottom: 1px solid var(--line-soft);
+      font-size: 14.5px;
+    }
+    .caps .row:hover { background: color-mix(in srgb, var(--blue) 3%, transparent); }
+    .caps .k { color: var(--blue); font-family: "JetBrains Mono Var", monospace; font-size: 13px; padding-top: 1px; }
+    .caps .d { color: var(--dim); }
+    .caps .d .mono { color: var(--text); font-size: 12.5px; }
+
+    /* architecture stack */
+    .stack {
+      margin-top: 36px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 6px 0;
+    }
+    .stack .row {
+      display: grid; grid-template-columns: 130px 260px 1fr; gap: 18px; align-items: baseline;
+      padding: 12px 20px; font-size: 14px;
+    }
+    .stack .row + .row { border-top: 1px solid var(--line-soft); }
+    .stack .k { font-family: "JetBrains Mono Var", monospace; font-size: 13px; color: var(--text); }
+    .stack .m { font-family: "JetBrains Mono Var", monospace; font-size: 12.5px; color: var(--faint); }
+    .stack .r { color: var(--dim); }
+
+    /* keyboard */
+    .kbds { margin-top: 34px; display: grid; gap: 0 40px; grid-template-columns: 1fr 1fr; }
+    .kbd-row {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 10px 2px; border-bottom: 1px solid var(--line-soft);
+      font-size: 14px; color: var(--dim);
+    }
+    .kbd-row .keys { min-width: 148px; flex-shrink: 0; }
     kbd {
-      font-size: 11.5px; color: var(--text); background: #1b202b;
-      border: 1px solid #2a3140; border-bottom-width: 2px; border-radius: 6px; padding: 2px 7px;
+      font-size: 11.5px; color: var(--text); background: #141926;
+      border: 1px solid #262e3d; border-bottom-width: 2px; border-radius: 5px; padding: 2px 6px;
     }
 
-    .install { margin-top: 36px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-    pre {
-      background: #0e1118; border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 18px 20px; overflow-x: auto; font-size: 13px; line-height: 1.65;
-      color: #c9d1e0;
+    /* terminals */
+    .terminals { margin-top: 34px; display: grid; gap: 16px; grid-template-columns: 1.2fr 1fr; }
+    .term {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden;
     }
-    pre .c { color: #5d6678; }
-    pre .k { color: var(--violet); }
+    .term .bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 16px; border-bottom: 1px solid var(--line-soft);
+      font-family: "JetBrains Mono Var", monospace;
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+    }
+    .term .bar em { font-style: normal; }
+    .term .bar s { text-decoration: none; color: #3a4356; }
+    .term pre {
+      padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.65; color: #c6cedd;
+    }
+    .term pre .c { color: #5d6678; }
+    .term pre .k { color: var(--blue); }
+    pre.code {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      margin-top: 34px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.65; color: #c6cedd;
+    }
+    pre.code .c { color: #5d6678; }
+    pre.code .k { color: var(--blue); }
+    pre.code .fn { color: #b48ef8; }
 
-    footer.site {
-      border-top: 1px solid var(--border); padding: 42px 0 48px; background: var(--bg-soft);
-    }
-    footer.site .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-    footer.site img { width: 30px; height: 30px; }
-    footer.site .who { font-size: 14px; color: var(--text-dim); font-weight: 550; }
-    footer.site .who small { display: block; font-weight: 420; color: var(--text-faint); }
-    footer.site .right { margin-left: auto; display: flex; gap: 20px; font-size: 13.5px; }
-    footer.site .right a { color: var(--text-dim); }
+    /* footer */
+    footer.site { border-top: 1px solid var(--line); padding: 40px 0 44px; }
+    footer.site .wrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    footer.site img { width: 26px; height: 26px; }
+    footer.site .who { font-size: 14px; color: var(--dim); font-weight: 500; }
+    footer.site .who a { color: var(--text); }
+    footer.site .right { margin-left: auto; display: flex; gap: 18px; font-size: 13.5px; }
+    footer.site .right a { color: var(--dim); }
     footer.site .right a:hover { color: var(--text); text-decoration: none; }
+    footer.site .legal { width: 100%; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+    footer.site .legal small { color: var(--faint); font-size: 12.5px; }
+    footer.site .legal a { color: var(--dim); }
 
-    @media (max-width: 640px) {
+    [id] { scroll-margin-top: 76px; }
+
+    @media (max-width: 720px) {
       nav a:not(.gh) { display: none; }
-      .hero { padding: 60px 0 48px; }
+      .hero { padding: 56px 0 44px; }
+      .caps .row { grid-template-columns: 1fr; gap: 2px; }
+      .stack .row { grid-template-columns: 1fr; gap: 2px; padding: 12px 16px; }
+      .kbds { grid-template-columns: 1fr; }
+      .terminals { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -187,8 +251,9 @@
     <div class="wrap">
       <a class="brand" href="./index.html"><img src="./assets/logo.svg" alt="" />arc</a>
       <nav>
-        <a href="#features">Features</a>
-        <a href="#quickstart">Quick start</a>
+        <a href="#modeling">Modeling</a>
+        <a href="#built">Built</a>
+        <a href="#keyboard">Keyboard</a>
         <a href="#plugins">Plugins</a>
         <a href="https://github.com/Remgr12/arc" class="gh">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
@@ -200,15 +265,15 @@
 
   <main>
     <div class="hero wrap">
-      <img class="mark" src="./assets/logo.svg" alt="arc logo" width="132" height="132" />
+      <img class="mark" src="./assets/logo.svg" alt="arc logo" width="96" height="96" />
       <h1>arc</h1>
       <p class="tag">
-        A modern, open-source 3D modeling application for design, architecture, and interiors,
-        built around a mesh-based geometry kernel written in Rust.
+        A <strong>3D modeling app</strong> for design, architecture, and interiors.
+        Rust geometry kernel, native on Windows, macOS, and Linux — free and open-source.
       </p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/Remgr12/arc/releases">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           Download arc
         </a>
         <a class="btn ghost" href="https://github.com/Remgr12/arc">
@@ -216,85 +281,104 @@
           View source
         </a>
       </div>
-      <div class="os-hint">Windows, macOS, and Linux. Bundles: MSI, NSIS, DMG, AppImage, DEB, RPM, and Flatpak</div>
+      <p class="keysline">
+        <span><b>v</b> select</span>
+        <span><b>m</b> move</span>
+        <span><b>b</b> box</span>
+        <span><b>y</b> sphere</span>
+        <span><b>c</b> cylinder</span>
+        <span><b>g</b> wall</span>
+        <span><b>ctrl+k</b> palette</span>
+      </p>
     </div>
 
-    <section id="features" class="alt">
+    <section id="modeling">
       <div class="wrap">
-        <span class="num">01 · Modeling</span>
-        <h2>Everything you need, nothing you don't</h2>
-        <p class="sect">A focused toolset that covers general design, architecture, and interior workflows and stays out of your way.</p>
-        <div class="grid">
-          <div class="card"><span class="badge">primitives</span><h3>Primitive modeling</h3><p>Box, sphere, cylinder, cone, torus, and plane primitives with fully editable parameters.</p></div>
-          <div class="card"><span class="badge">sketch</span><h3>Sketch tools</h3><p>Circle, line, polyline, rectangle, dimension, and wall drawing on the ground plane with grid snapping.</p></div>
-          <div class="card"><span class="badge">solids</span><h3>Solid generation</h3><p>Extrude, revolve, sweep, and loft 2D profiles into watertight solids.</p></div>
-          <div class="card"><span class="badge">architecture</span><h3>Architecture tools</h3><p>Walls, stairs, slabs, roofs, columns, beams, doors, and windows.</p></div>
-          <div class="card"><span class="badge">layers</span><h3>Layers</h3><p>Visibility, locking, colors, and per-entity overrides.</p></div>
-          <div class="card"><span class="badge">history</span><h3>Undo and redo</h3><p>Full command history with every editing operation, so nothing is a dead end.</p></div>
-          <div class="card"><span class="badge">documents</span><h3>Multi-document</h3><p>Work on several documents at once with live switching.</p></div>
-          <div class="card"><span class="badge">export</span><h3>File formats</h3><p>Native <span class="mono">.arc</span> (JSON) documents plus OBJ and binary STL export.</p></div>
+        <span class="eyebrow">Modeling</span>
+        <h2>One toolset, no spring-loaded distractions</h2>
+        <p class="sect">Sketch on the ground plane, spin profiles into solids, and place them like building parts. Walls snap, dimensions draw themselves, and every step of the way back is kept.</p>
+        <div class="caps">
+          <div class="row"><span class="k">primitives</span><span class="d">Box, sphere, cylinder, cone, torus, plane — parametric and editable in place.</span></div>
+          <div class="row"><span class="k">sketch tools</span><span class="d">Circle, line, polyline, rectangle, dimension, and wall drawing with grid snapping.</span></div>
+          <div class="row"><span class="k">solids</span><span class="d">Extrude, revolve, sweep, and loft two-dimensional profiles into watertight solids.</span></div>
+          <div class="row"><span class="k">architecture</span><span class="d">Walls, stairs, slabs, roofs, columns, beams, doors, and windows as real parts.</span></div>
+          <div class="row"><span class="k">layers</span><span class="d">Visibility, locking, and colors, with per-entity overrides.</span></div>
+          <div class="row"><span class="k">history</span><span class="d">Every operation is a reversible command; full undo and redo.</span></div>
+          <div class="row"><span class="k">documents</span><span class="d">Several open at once, switching live.</span></div>
+          <div class="row"><span class="k">formats</span><span class="d">Native <span class="mono">.arc</span> documents are plain JSON; OBJ and binary STL export.</span></div>
         </div>
       </div>
     </section>
 
-    <section id="engine">
+    <section id="built">
       <div class="wrap">
-        <span class="num">02 · Engine</span>
-        <h2>Rust kernel, Tauri shell, three.js viewport</h2>
-        <p class="sect">A typed document and entity model with layers, selection state, and undoable command history lives in <span class="mono">arc-core</span>. Geometry compiles to triangle and line buffers, raycast picking operates directly on the meshes, and scene updates stream to a WebGL viewport over IPC.</p>
-        <div class="grid">
-          <div class="card"><h3 class="mono" style="letter-spacing:0">arc-core</h3><p>Mesh generation, winding, raycast picking, documents, layers, history, all in Rust.</p></div>
-          <div class="card"><h3 class="mono" style="letter-spacing:0">Tauri 2</h3><p>~30 typed IPC commands map every frontend action onto the kernel.</p></div>
-          <div class="card"><h3 class="mono" style="letter-spacing:0">React + three.js</h3><p>Zustand-driven one-way data flow into a live WebGL scene with selection and hover highlighting.</p></div>
+        <span class="eyebrow">Built</span>
+        <h2>A small, legible stack</h2>
+        <p class="sect">The viewport never owns a copy of the truth. React draws the UI, <span class="mono">arc-core</span> owns the document, and typed messages bridge the two.</p>
+        <div class="stack">
+          <div class="row"><span class="k">frontend</span><span class="m">React · Zustand · three.js</span><span class="r">WebGL scene, picking, drafting tools, themes.</span></div>
+          <div class="row"><span class="k">ipc</span><span class="m">Tauri 2, ~30 typed commands</span><span class="r">Every editing action crosses as a typed call.</span></div>
+          <div class="row"><span class="k">kernel</span><span class="m">arc-core, Rust</span><span class="r">Document, entities, layers, history, mesh generation.</span></div>
         </div>
       </div>
     </section>
 
-    <section id="quickstart" class="alt">
+    <section id="keyboard">
       <div class="wrap">
-        <span class="num">03 · Quick start</span>
-        <h2>Download or build in a minute</h2>
-        <p class="sect">Grab a prebuilt bundle from <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>, install via Flatpak, or compile from source.</p>
-        <div class="install">
-          <pre><code><span class="c"># Build from source</span>
-git clone https://github.com/Remgr12/arc.git
-cd arc
-
-<span class="c"># frontend deps + build</span>
-<span class="k">cd</span> frontend &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; <span class="k">cd</span> ..
-
-<span class="c"># run in dev mode, or build for release</span>
-cargo tauri dev
-cargo tauri build</code></pre>
-          <pre><code><span class="c"># Linux: add the arc flatpak repository</span>
-flatpak remote-add arc \
-  https://remgr12.github.io/arc/flatpak-repo
-
-<span class="c"># install</span>
-flatpak install arc com.arc.cad</code></pre>
-        </div>
+        <span class="eyebrow">Keyboard</span>
+        <h2>Draft at the speed of the alphabet</h2>
+        <p class="sect">Every tool sits under one key, so tools are picked without leaving the drawing. Bindings are profiles you can edit and share.</p>
         <div class="kbds">
-          <div class="kbd-row"><kbd>V</kbd><kbd>M</kbd> select and move</div>
-          <div class="kbd-row"><kbd>B</kbd><kbd>Y</kbd><kbd>C</kbd><kbd>O</kbd><kbd>T</kbd><kbd>P</kbd> box, sphere, cylinder, cone, torus, plane</div>
-          <div class="kbd-row"><kbd>G</kbd><kbd>L</kbd><kbd>J</kbd><kbd>R</kbd><kbd>D</kbd><kbd>H</kbd> circle, line, polyline, rect, dim, wall</div>
-          <div class="kbd-row"><kbd>Ctrl</kbd> <kbd>K</kbd> command palette</div>
-          <div class="kbd-row"><kbd>Ctrl</kbd> <kbd>Z</kbd> or <kbd>Ctrl</kbd> <kbd>⇧</kbd> <kbd>Z</kbd> undo and redo</div>
-          <div class="kbd-row"><kbd>Ctrl</kbd> <kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd> <kbd>E</kbd> new, open, save, export</div>
-          <div class="kbd-row"><kbd>F</kbd> fit view to selection · <kbd>Esc</kbd> clear</div>
-          <div class="kbd-row">middle-drag orbit · right-drag pan · wheel zoom</div>
+          <div class="kbd-row"><span class="keys"><kbd>V</kbd> <kbd>M</kbd></span> select and move</div>
+          <div class="kbd-row"><span class="keys"><kbd>B</kbd> <kbd>Y</kbd> <kbd>C</kbd> <kbd>O</kbd> <kbd>T</kbd> <kbd>P</kbd></span> box, sphere, cylinder, cone, torus, plane</div>
+          <div class="kbd-row"><span class="keys"><kbd>G</kbd> <kbd>L</kbd> <kbd>J</kbd> <kbd>R</kbd> <kbd>D</kbd> <kbd>H</kbd></span> circle, line, polyline, rect, dim, wall</div>
+          <div class="kbd-row"><span class="keys"><kbd>Ctrl</kbd> <kbd>K</kbd></span> command palette</div>
+          <div class="kbd-row"><span class="keys"><kbd>Ctrl</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>⇧</kbd> <kbd>Z</kbd></span> undo and redo</div>
+          <div class="kbd-row"><span class="keys"><kbd>Ctrl</kbd> <kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd> <kbd>E</kbd></span> new, open, save, export</div>
+          <div class="kbd-row"><span class="keys"><kbd>F</kbd> <kbd>Esc</kbd></span> fit view to selection, clear</div>
+          <div class="kbd-row"><span class="keys">mouse</span> middle-drag orbit, right-drag pan, wheel zoom</div>
         </div>
       </div>
     </section>
 
     <section id="plugins">
       <div class="wrap">
-        <span class="num">04 · Extend</span>
-        <h2>Plugins in plain Lua</h2>
-        <p class="sect">Drop a Lua file into a plugin directory and hook into the app's lifecycle. The <span class="mono">arc</span> API exposes entities, transforms, raycasting, and history.</p>
-<pre style="margin-top:36px"><code>arc.on(<span class="k">"new"</span>, <span class="k">function</span>()
-  local id = arc.add_entity({ type = <span class="k">"box"</span>, width = 60, depth = 40, height = 20 }, <span class="k">"Plugin box"</span>)
-  arc.log(<span class="k">"created "</span> .. tostring(id))
+        <span class="eyebrow">Plugins</span>
+        <h2>Extend with Lua</h2>
+        <p class="sect">Drop a Lua file into the plugin directory. It fires on <span class="mono">start</span>, <span class="mono">new</span>, <span class="mono">open</span>, and <span class="mono">save</span>, and talks to the document through the <span class="mono">arc</span> API — entities, transforms, raycasting, history.</p>
+        <pre class="code"><code><span class="fn">arc</span>.on(<span class="k">"new"</span>, <span class="k">function</span>()
+  <span class="k">local</span> id = <span class="fn">arc</span>.add_entity({ type = <span class="k">"box"</span>, width = 60, depth = 40, height = 20 }, <span class="k">"Plugin box"</span>)
+  <span class="fn">arc</span>.log(<span class="k">"created "</span> .. <span class="fn">tostring</span>(id))
 <span class="k">end</span>)</code></pre>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <div class="wrap">
+        <span class="eyebrow">Quick start</span>
+        <h2>Download or compile</h2>
+        <p class="sect">Prebuilt bundles on <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a> (MSI, NSIS, DMG, AppImage, DEB, RPM, Flatpak), or build it yourself.</p>
+        <div class="terminals">
+          <div class="term">
+            <div class="bar"><em>build from source</em><s>$</s></div>
+            <pre><code><span class="c"># frontend deps + build</span>
+<span class="k">git clone</span> https://github.com/Remgr12/arc.git
+<span class="k">cd</span> arc/frontend &amp;&amp; npm install &amp;&amp; npm run build &amp;&amp; <span class="k">cd</span> ..
+
+<span class="c"># dev mode, or a release build</span>
+cargo tauri dev
+cargo tauri build</code></pre>
+          </div>
+          <div class="term">
+            <div class="bar"><em>linux · flatpak</em><s>$</s></div>
+            <pre><code><span class="c"># add the arc repository</span>
+<span class="k">flatpak remote-add</span> arc \
+  https://remgr12.github.io/arc/flatpak-repo
+
+<span class="c"># install</span>
+<span class="k">flatpak install</span> arc com.arc.cad</code></pre>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -303,19 +387,20 @@ flatpak install arc com.arc.cad</code></pre>
     <div class="wrap">
       <img src="./assets/icon.svg" alt="" />
       <div class="who">
-        arc by Zsombor Simon
-        <small>Lead developer &amp; project owner</small>
+        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon
       </div>
       <div class="right">
         <a href="https://github.com/Remgr12/arc">GitHub</a>
         <a href="https://github.com/Remgr12/arc/releases">Releases</a>
         <a href="https://github.com/Remgr12/arc/issues">Issues</a>
       </div>
-    </div>
-    <div class="wrap" style="margin-top:26px; border-top:1px solid var(--border); padding-top:22px;">
-      <small style="color:var(--text-faint); font-size:12.5px;">
-        Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option. Not affiliated with the Arc browser by The Browser Company.
-      </small>
+      <div class="legal">
+        <small>
+          Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or
+          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
+          Not affiliated with the Arc browser, a product of The Browser Company.
+        </small>
+      </div>
     </div>
   </footer>
 </body>
