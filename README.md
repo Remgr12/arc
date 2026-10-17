@@ -94,6 +94,11 @@ cargo tauri dev
 ### Production build
 
 ```bash
+# Build the frontend first (the bundler does not run it for you)
+cd frontend
+npm run build
+cd ..
+
 cargo tauri build
 ```
 

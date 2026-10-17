@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "identifier": "com.arc.cad",
   "build": {
-    "beforeBuildCommand": "npm --prefix ../frontend run build",
+    "beforeBuildCommand": "echo frontend prebuilt by npm run build - CI and scripts/build.sh",
     "beforeDevCommand": "npm --prefix ../frontend run dev",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../frontend/dist"
