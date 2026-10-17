@@ -18,7 +18,7 @@
 
 arc is a multi-platform 3D modeling application built around a mesh-based geometry kernel written in Rust. It features a modern and intuitive interface for general design, architecture, and interior design workflows.
 
-The logo plays on the name: two 270° rings, each missing one quadrant. The inner ring's gap sits diametrically opposite the outer one.
+The logo plays on the name: two concentric 270° rings, each missing one quadrant. The outer ring's gap faces north-east, the inner ring's gap sits diametrically opposite, facing south-west (the 270–360° and 90–180° spans, measured clockwise from east). Geometry constants live in `assets/logo.svg` and `scripts/gen_icons.py`.
 
 ## Features
 

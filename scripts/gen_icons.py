@@ -31,8 +31,8 @@ S = 4  # supersampling factor for raster drawing
 # shared geometry, must mirror assets/logo.svg
 V = 512.0
 C = 256.0
-R1, W1 = 168.0, 48.0  # outer ring: centerline radius + stroke width
-R2, W2 = 84.0, 48.0   # inner ring
+R1, W1 = 160.0, 48.0  # outer ring: centerline radius + stroke width
+R2, W2 = 72.0, 48.0   # inner ring
 RX = 95.0             # app-icon background corner radius
 # outer ring: PIL angles sweep from east (0) clockwise to north (270)
 # inner ring: from west (180) clockwise to south (450)
@@ -167,7 +167,7 @@ def draw_banner(width: int, height: int, path: Path) -> None:
         d.text(((width - w) / 2, y), text, font=font, fill=fill)
 
     text_center(404, "arc", fb, BANNER_FG)
-    text_center(548, "Open-source 3D modeling in three rings", fs, BANNER_SUB)
+    text_center(548, "Open-source 3D modeling with a Rust geometry kernel", fs, BANNER_SUB)
     save_png(img, path)
 
 
