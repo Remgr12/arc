@@ -204,6 +204,14 @@ pub fn close_document(
         if s.active.as_deref() == Some(&id) {
             s.active = s.order.last().cloned();
         }
+        // Keep the workspace usable: never leave it with no document.
+        if s.active.is_none() {
+            let new_id = s.next_doc_id();
+            let name = format!("Untitled {}", s.doc_counter);
+            s.documents.insert(new_id.clone(), Document::new(name));
+            s.order.push(new_id.clone());
+            s.active = Some(new_id);
+        }
     }
     emit_documents(&app, &state);
     Ok(())

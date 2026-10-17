@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Keyboard, Redo2, Settings, Undo2 } from "lucide-react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
-import { KEYBINDS } from "../lib/keybinds";
+import { bindingHint, listKeybindInfos } from "../lib/keybinds";
+import { useKeybindStore } from "../lib/keybindProfiles";
 import { Button, IconButton } from "./ui";
 import { Logo } from "./Logo";
 
@@ -24,16 +25,21 @@ function useOutsideClose(onClose: () => void) {
 export function TopBar() {
   const scene = useArcStore((s) => s.scene);
   const overview = useArcStore((s) => s.overview);
+  const keybindActiveId = useKeybindStore((s) => s.activeId);
+  const keybindProfiles = useKeybindStore((s) => s.profiles);
   const [fileOpen, setFileOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const fileRef = useOutsideClose(() => setFileOpen(false));
   const helpRef = useOutsideClose(() => setHelpOpen(false));
+  // Rebuild hint strings whenever the profile set or active profile changes.
+  void keybindActiveId;
+  void keybindProfiles;
 
   const dirty = scene?.modified ?? false;
   const title = scene ? `${scene.name}${dirty ? " •" : ""}` : "arc";
   const docId = overview?.active ?? null;
 
-  const fileItem = (label: string, hint: string, fn: () => void) => (
+  const fileItem = (label: string, actionId: string, fn: () => void) => (
     <button
       key={label}
       className="flex w-full items-center justify-between gap-6 rounded-md px-3 py-1.5 text-sm text-base-700 hover:bg-base-300 hover:text-base-50"
@@ -43,7 +49,7 @@ export function TopBar() {
       }}
     >
       <span>{label}</span>
-      <span className="font-mono text-[10px] text-base-500">{hint}</span>
+      <span className="font-mono text-[10px] text-base-500">{bindingHint(actionId)}</span>
     </button>
   );
 
@@ -60,26 +66,26 @@ export function TopBar() {
         </Button>
         {fileOpen && (
           <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-base-400 bg-base-100 p-1 shadow-xl">
-            {fileItem("New", "Ctrl N", () => void actions.newDocument())}
-            {fileItem("Open…", "Ctrl O", actions.openDocument)}
-            {fileItem("Save", "Ctrl S", () => void actions.saveActive())}
-            {fileItem("Save As…", "", () => void actions.saveDocumentAs())}
+            {fileItem("New", "doc:new", () => void actions.newDocument())}
+            {fileItem("Open…", "doc:open", actions.openDocument)}
+            {fileItem("Save", "doc:save", () => void actions.saveActive())}
+            {fileItem("Save As…", "doc:saveAs", () => void actions.saveDocumentAs())}
             <div className="my-1 border-t border-base-800" />
-            {fileItem("Export OBJ", "", () => void actions.exportActive("obj"))}
-            {fileItem("Export STL", "", () => void actions.exportActive("stl"))}
+            {fileItem("Export OBJ", "doc:export", () => void actions.exportActive("obj"))}
+            {fileItem("Export STL", "doc:export", () => void actions.exportActive("stl"))}
           </div>
         )}
       </div>
 
       <IconButton
         icon={<Undo2 size={15} />}
-        title="Undo (Ctrl Z)"
+        title={`Undo (${bindingHint("edit:undo")})`}
         disabled={!scene?.canUndo}
         onClick={() => void actions.undo()}
       />
       <IconButton
         icon={<Redo2 size={15} />}
-        title="Redo (Ctrl Shift Z)"
+        title={`Redo (${bindingHint("edit:redo")})`}
         disabled={!scene?.canRedo}
         onClick={() => void actions.redo()}
       />
@@ -88,7 +94,7 @@ export function TopBar() {
 
       <IconButton
         icon={<Keyboard size={15} />}
-        title="Command palette (Ctrl K)"
+        title={`Command palette (${bindingHint("app:palette")})`}
         onClick={() => useArcStore.getState().setPaletteOpen(true)}
       />
 
@@ -96,19 +102,34 @@ export function TopBar() {
         {docId ? `${title}${scene?.path ? `: ${scene.path}` : ""}` : "No document open"}
       </div>
 
-      <IconButton icon={<Settings size={15} />} title="Settings (Ctrl ,)" onClick={actions.openSettings} />
+      <IconButton
+        icon={<Settings size={15} />}
+        title={`Settings (${bindingHint("app:settings")})`}
+        onClick={actions.openSettings}
+      />
 
       <div className="relative" ref={helpRef}>
         <IconButton icon={<ChevronDown size={15} />} title="Keybinds" onClick={() => setHelpOpen((v) => !v)} />
         {helpOpen && (
           <div className="absolute top-full right-0 z-50 mt-1 max-h-96 w-64 overflow-y-auto rounded-lg border border-base-400 bg-base-100 p-2 shadow-xl">
             <div className="mb-1 text-[11px] font-semibold text-base-500 uppercase">Keybinds</div>
-            {KEYBINDS.filter((k) => k.keys).map((k) => (
+            {listKeybindInfos().map((k) => (
               <div key={k.label + k.keys} className="flex items-center justify-between gap-3 px-1 py-0.5 text-xs">
                 <span className="text-base-700">{k.label}</span>
                 <span className="font-mono text-[10px] text-base-500">{k.keys}</span>
               </div>
             ))}
+            <div className="mt-1 border-t border-base-800 pt-1.5">
+              <button
+                className="text-[10px] text-base-500 underline-offset-2 hover:text-base-300 hover:underline"
+                onClick={() => {
+                  setHelpOpen(false);
+                  actions.openSettings();
+                }}
+              >
+                Customize in settings…
+              </button>
+            </div>
           </div>
         )}
       </div>

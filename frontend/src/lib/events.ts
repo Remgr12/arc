@@ -52,6 +52,7 @@ export async function initEvents(): Promise<() => void> {
         .catch(() => {});
     }
   }
+  void ipc.getPlugins().then((list) => useArcStore.setState({ pluginsList: list })).catch(() => {});
 
   return () => {
     unlisteners.forEach((u) => u());

@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { uiCapture } from "../lib/uiCapture";
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
@@ -307,6 +308,7 @@ export function Modal({
     if (!open) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (uiCapture.active) return; // capture fields own Escape while active
         e.stopPropagation();
         onClose();
       }

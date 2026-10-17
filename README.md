@@ -27,6 +27,8 @@ The logo plays on the name: two 270° rings, each missing one quadrant. The inne
 - **Solid generation** - extrude, revolve, sweep, and loft profiles into solids
 - **Architecture tools** - walls, stairs, slabs, roofs, columns, beams, doors, and windows
 - **Layers** - visibility, locking, colors, and per-entity overrides
+- **Themes** - built-in color themes, plus import/export of custom themes from simple JSON color files
+- **Keybind profiles** - multiple keyboard layouts with per-action rebinding, stored as named profiles
 - **Undo and redo** - full command history with every editing operation
 - **Multi-document** - work on several documents at once with live switching
 - **Plugin system** - extend functionality with Lua scripts
@@ -89,6 +91,8 @@ arc/
 | `Esc` | Clear selection and close menus |
 
 Navigation: middle-drag orbits, right-drag pans, wheel zooms. Double-click an entity to zoom to it.
+
+The view cube in the top-right corner of the viewport mirrors the camera orientation: hover and click a face to focus that plane (top, bottom, front, back, left, right), or drag it to orbit. All keybinds above live in the default "Classic" profile - create and edit custom profiles under Settings > Keyboard, and switch or import themes under Settings > Appearance.
 
 ## Building
 

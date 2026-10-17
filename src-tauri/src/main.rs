@@ -9,6 +9,7 @@ mod commands;
 mod plugins;
 mod state;
 
+use arc_core::Document;
 use state::{load_settings, save_settings, SharedState, Settings};
 
 fn main() {
@@ -35,6 +36,15 @@ fn main() {
                 let mut s = shared.lock();
                 s.settings = settings.clone();
                 s.settings_path = Some(settings_path.clone());
+                // The editor needs an active document to be usable, so create
+                // one on first launch (and whenever none remains).
+                if s.active.is_none() {
+                    let id = s.next_doc_id();
+                    let name = format!("Untitled {}", s.doc_counter);
+                    s.documents.insert(id.clone(), Document::new(name));
+                    s.order.push(id.clone());
+                    s.active = Some(id);
+                }
             }
 
             // Plugin dirs: beside the executable + app data dir.
@@ -48,14 +58,14 @@ fn main() {
                 dirs.push(std::path::PathBuf::from(manifest).join("plugins"));
             }
 
+            // Initial settings payload for the webview renderer.
+            let _ = app.handle().emit("arc://settings", settings.clone());
+
             #[cfg(feature = "lua")]
             {
                 let plugins = app.state::<Arc<plugins::PluginLock>>();
                 plugins.lock().dirs = dirs;
                 plugins.lock().reload(&shared, &app.handle().clone());
-
-                // Initial settings payload for the webview renderer.
-                let _ = app.handle().emit("arc://settings", settings.clone());
             }
 
             Ok(())

@@ -1,11 +1,14 @@
 import { useArcStore } from "../lib/store";
 import { TOOLS } from "../data/tools";
+import { bindingHint } from "../lib/keybinds";
+import { useKeybindStore } from "../lib/keybindProfiles";
 import type { ToolId } from "../lib/types";
 
 export function ToolPalette() {
   const tool = useArcStore((s) => s.tool);
   const setTool = useArcStore((s) => s.setTool);
   const scene = useArcStore((s) => s.scene);
+  useKeybindStore((s) => s.profiles); // re-render when bindings change (tooltips show keys)
 
   const groups: { title: string; items: typeof TOOLS }[] = [
     { title: "Tools", items: TOOLS.filter((t) => t.id === "select" || t.id === "move") },
@@ -24,10 +27,11 @@ export function ToolPalette() {
                 const Icon = item.icon;
                 const active = tool === item.id;
                 const enabled = scene != null;
+                const hint = bindingHint(`tool:${item.id}`);
                 return (
                   <button
                     key={item.id}
-                    title={`${item.label}: ${item.tip}`}
+                    title={`${item.label}${hint ? ` (${hint})` : ""}: ${item.tip}`}
                     onClick={() => setTool(item.id as ToolId)}
                     className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                       active
