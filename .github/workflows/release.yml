@@ -145,9 +145,14 @@ jobs:
           workflowArtifactNamePattern: 'tauri_[platform]-[arch]-[bundle]'
 
       - name: Build Flatpak
+        working-directory: ${{ github.workspace }}
         run: |
           cd flatpak
-          flatpak-builder --force-clean --repo=repo build-dir com.arc.cad.yml
+          flatpak-builder --force-clean \
+            --exclude=.git --exclude=.flatpak-builder \
+            --exclude=flatpak/build-dir --exclude=flatpak/repo \
+            --exclude=frontend/node_modules \
+            --repo=repo build-dir com.arc.cad.yml
           flatpak build-bundle repo arc-${{ github.ref_name }}.flatpak com.arc.cad
 
       - name: Upload Flatpak artifact
@@ -157,6 +162,7 @@ jobs:
           path: flatpak/arc-${{ github.ref_name }}.flatpak
 
       - name: Create Flatpak repository
+        working-directory: ${{ github.workspace }}
         run: |
           cd flatpak
           flatpak build-update-repo --title="arc CAD" --generate-static-deltas --prune-depth=20 repo

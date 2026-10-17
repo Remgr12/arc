@@ -29,7 +29,7 @@ modules:
     buildsystem: simple
     build-commands:
       - install -Dm755 target/release/arc ${FLATPAK_DEST}/bin/arc
-      - install -Dm644 tauri.conf.json ${FLATPAK_DEST}/share/com.arc.cad/tauri.conf.json
+      - install -Dm644 crates/arc-app/tauri.conf.json ${FLATPAK_DEST}/share/com.arc.cad/tauri.conf.json
       - install -Dm644 flatpak/com.arc.cad.desktop ${FLATPAK_DEST}/share/applications/com.arc.cad.desktop
       - install -Dm644 flatpak/com.arc.cad.metainfo.xml ${FLATPAK_DEST}/share/metainfo/com.arc.cad.metainfo.xml
       - install -Dm644 flatpak/icons/128x128/com.arc.cad.png ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps/com.arc.cad.png

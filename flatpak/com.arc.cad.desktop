@@ -1,14 +1,10 @@
 [Desktop Entry]
-Version=1.0
 Type=Application
-Name=arc CAD
-GenericName=3D CAD Application
-Comment=Professional 3D CAD software for parametric modeling
+Name=arc
+GenericName=CAD Application
+Comment=Parametric CAD application
 Exec=arc
 Icon=com.arc.cad
 Terminal=false
-Categories=Graphics;3DGraphics;Engineering;CAD;
-Keywords=CAD;3D;modeling;parametric;STEP;IGES;
+Categories=Graphics;Engineering;Development;
 StartupNotify=true
-StartupWMClass=arc-main
-MimeType=application/step;application/iges;model/stl;model/obj;
