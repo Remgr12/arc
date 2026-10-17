@@ -22,7 +22,7 @@ dashmap = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
-mlua = { version = "0.9", features = ["send", "async", "lua54", "serialize"] }
+mlua = { version = "0.9", features = ["send", "async", "lua54", "serialize", "vendored"] }
 wasmtime = { version = "24.0", features = ["component-model"] }
 pulldown-cmark = { workspace = true }
 
