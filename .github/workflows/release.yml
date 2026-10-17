@@ -154,7 +154,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           mkdir -p flatpak/payload/target/release flatpak/payload/crates/arc-app flatpak/payload/flatpak
-          cp target/release/arc flatpak/payload/target/release/
+          cp target/x86_64-unknown-linux-gnu/release/arc flatpak/payload/target/release/
           cp crates/arc-app/tauri.conf.json flatpak/payload/crates/arc-app/
           cp flatpak/com.arc.cad.desktop flatpak/com.arc.cad.metainfo.xml flatpak/payload/flatpak/
           cp -r flatpak/icons flatpak/payload/flatpak/icons
