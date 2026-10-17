@@ -39,7 +39,15 @@ modules:
     sources:
       - type: dir
         path: .
-        dest-filename: arc-source
+        skip:
+          - .git
+          - .flatpak-builder
+          - flatpak/build-dir
+          - flatpak/repo
+          - frontend/node_modules
+          - target/debug
+          - target/release/bundles
+          - target/release/build
     build-options:
       env:
         CARGO_HOME: /run/build/arc/cargo

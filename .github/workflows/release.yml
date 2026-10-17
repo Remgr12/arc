@@ -148,11 +148,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           cd flatpak
-          flatpak-builder --force-clean \
-            --exclude=.git --exclude=.flatpak-builder \
-            --exclude=flatpak/build-dir --exclude=flatpak/repo \
-            --exclude=frontend/node_modules \
-            --repo=repo build-dir com.arc.cad.yml
+          flatpak-builder --force-clean --repo=repo build-dir com.arc.cad.yml
           flatpak build-bundle repo arc-${{ github.ref_name }}.flatpak com.arc.cad
 
       - name: Upload Flatpak artifact
