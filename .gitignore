@@ -28,3 +28,9 @@ frontend/node_modules
 frontend/dist
 frontend/.env
 **/.DS_Store
+
+# Flatpak build outputs
+flatpak/payload/
+flatpak/build-dir/
+flatpak/repo/
+flatpak/.flatpak-builder/

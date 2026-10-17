@@ -38,16 +38,7 @@ modules:
         done
     sources:
       - type: dir
-        path: .
-        skip:
-          - .git
-          - .flatpak-builder
-          - flatpak/build-dir
-          - flatpak/repo
-          - frontend/node_modules
-          - target/debug
-          - target/release/bundles
-          - target/release/build
+        path: payload
     build-options:
       env:
         CARGO_HOME: /run/build/arc/cargo

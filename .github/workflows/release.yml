@@ -153,6 +153,11 @@ jobs:
       - name: Build Flatpak
         working-directory: ${{ github.workspace }}
         run: |
+          mkdir -p flatpak/payload/target/release flatpak/payload/crates/arc-app flatpak/payload/flatpak
+          cp target/release/arc flatpak/payload/target/release/
+          cp crates/arc-app/tauri.conf.json flatpak/payload/crates/arc-app/
+          cp flatpak/com.arc.cad.desktop flatpak/com.arc.cad.metainfo.xml flatpak/payload/flatpak/
+          cp -r flatpak/icons flatpak/payload/flatpak/icons
           cd flatpak
           flatpak-builder --force-clean --repo=repo build-dir com.arc.cad.yml
           flatpak build-bundle repo arc-${{ github.ref_name }}.flatpak com.arc.cad
