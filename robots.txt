@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://remgr12.github.io/arc/sitemap.xml
