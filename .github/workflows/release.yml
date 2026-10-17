@@ -254,21 +254,46 @@ jobs:
           name: flatpak-repo
           path: dist/flatpak-repo
 
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist/*.msi
-            dist/*.exe
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.rpm
-            dist/*.dmg
-            dist/*.app.tar.gz
-            dist/flatpak/*.flatpak
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+      - name: Publish release (tauri draft -> latest)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "unexpected tag $TAG"; exit 1 ;;
+          esac
+          FILES=(dist/*.msi dist/*.exe dist/*.AppImage dist/*.deb dist/*.rpm
+                 dist/*.dmg dist/*.app.tar.gz dist/flatpak/*.flatpak)
+
+          # tauri-action creates a draft for the tag; drafts never resolve by
+          # tag lookup, so find it by listing releases.
+          DRAFT_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '([.[] | select(.draft and .tag_name == "'"$TAG"'")][0].id) // empty')
+
+          if [ -z "$DRAFT_ID" ]; then
+            echo "no draft for $TAG; creating a release instead"
+            gh release create "$TAG" "${FILES[@]}" --title "arc $TAG" \
+              --latest --generate-notes
+            exit 0
+          fi
+
+          # Draft releases have no tag object; upload assets against the
+          # draft's upload_url directly.
+          UPLD=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+            --jq '.upload_url' | sed 's/{.*$//')
+          for f in "${FILES[@]}"; do
+            echo "uploading $f"
+            gh api --method POST "$UPLD?name=$(basename "$f")" \
+              --input "$f" --retry 3 >/dev/null \
+              -H "Content-Type: application/octet-stream"
+          done
+
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+            -F draft=false -F prerelease=false -F make_latest=true \
+            -F generate_release_notes=true >/dev/null
+          echo "published release for $TAG"
 
   flatpak-repo-update:
     name: Update Flatpak Repository
