@@ -183,6 +183,22 @@ pub enum Geometry {
         samples_u: u32,
         samples_v: u32,
     },
+    /// Boolean combination of two child geometries (union, difference, intersection).
+    /// Both children are evaluated in local space before the operation.
+    Csg {
+        operation: CsgOperation,
+        first: Box<Geometry>,
+        second: Box<Geometry>,
+    },
+}
+
+/// Boolean operation applied by a `Geometry::Csg`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CsgOperation {
+    Union,
+    Difference,
+    Intersection,
 }
 
 fn default_revolve_angle() -> f64 {
@@ -211,6 +227,7 @@ impl Geometry {
             Geometry::NurbsSurface { .. } => "nurbs_surface",
             Geometry::NurbsLoft { .. } => "nurbs_loft",
             Geometry::NurbsSweep { .. } => "nurbs_sweep",
+            Geometry::Csg { .. } => "csg",
             Geometry::ImportedMesh { .. } => "imported_mesh",
             Geometry::Wall { .. } => "wall",
             Geometry::Stair { .. } => "stair",
@@ -245,7 +262,8 @@ impl Geometry {
             | Geometry::Loft { .. }
             | Geometry::NurbsSurface { .. }
             | Geometry::NurbsLoft { .. }
-            | Geometry::NurbsSweep { .. } => GeometryCategory::Solid,
+            | Geometry::NurbsSweep { .. }
+            | Geometry::Csg { .. } => GeometryCategory::Solid,
             Geometry::Wall { .. }
             | Geometry::Stair { .. }
             | Geometry::Slab { .. }
@@ -359,6 +377,7 @@ pub enum GeometryCategory {
     Solid,
     Architecture,
     Annotation,
+    Csg,
 }
 
 /// A document entity: identity, display info, transform and parameters.
@@ -402,4 +421,7 @@ pub struct EntityData {
     pub color: Option<[f32; 4]>,
     pub transform: Transform,
     pub geometry: Geometry,
+    /// Optional material key from the materials library (e.g. "steel", "glass").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
 }

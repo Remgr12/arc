@@ -7,6 +7,7 @@
 pub mod annotation;
 pub mod assembly;
 pub mod constraints;
+pub mod csg;
 pub mod entity;
 pub mod document;
 pub mod formats;

@@ -94,8 +94,36 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
         Geometry::NurbsSweep { path, profile, path_degree, profile_degree, samples_u, samples_v } => {
             gen_nurbs_sweep(&mut mb, path, profile, *path_degree, *profile_degree, *samples_u, *samples_v)?
         }
+        Geometry::Csg { operation, first, second } => {
+            gen_csg(&mut mb, *operation, first, second)?
+        }
     }
     Ok(mb.into_buffer())
+}
+
+/// Boolean combination of two child geometries: both children are tessellated
+/// in local space, then the CSG operation is applied to the resulting meshes.
+fn gen_csg(
+    mb: &mut MeshBuilder,
+    op: crate::entity::CsgOperation,
+    first: &crate::entity::Geometry,
+    second: &crate::entity::Geometry,
+) -> Result<(), String> {
+    let a = generate(first)?;
+    let b = generate(second)?;
+    let result = crate::csg::boolean(op, &a, &b)?;
+    for tri in result.positions.chunks(9) {
+        let a = [tri[0] as f64, tri[1] as f64, tri[2] as f64];
+        let b = [tri[3] as f64, tri[4] as f64, tri[5] as f64];
+        let c = [tri[6] as f64, tri[7] as f64, tri[8] as f64];
+        let n = [
+            result.normals[0] as f64,
+            result.normals[1] as f64,
+            result.normals[2] as f64,
+        ];
+        mb.push_tri(a, b, c, n);
+    }
+    Ok(())
 }
 
 // ------------------------------------------------------------------ helpers
