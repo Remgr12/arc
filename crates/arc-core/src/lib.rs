@@ -4,11 +4,15 @@
 //! mesh generation, document model with layers/selection/history,
 //! raycasting and persistence-friendly serialization types.
 
+pub mod annotation;
+pub mod assembly;
+pub mod constraints;
 pub mod entity;
 pub mod document;
 pub mod history;
 pub mod mesh;
 pub mod meshgen;
+pub mod nurbs;
 pub mod units;
 
 pub use document::*;

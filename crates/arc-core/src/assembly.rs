@@ -219,6 +219,7 @@ pub struct Assembly {
     pub is_root: bool,
 }
 
+impl Assembly {
     pub fn new(id: EntityId, name: String) -> Self {
         let now = get_current_timestamp();
 
@@ -305,10 +306,15 @@ pub struct Assembly {
     }
 
     pub fn update_transforms(&mut self) {
-        for (component_id, component_transform) in &mut self.component_transforms {
-            let parent_global = component_transform.parent_id.and_then(|pid| {
-                self.component_transforms.get(&pid).map(|t| &t.global_transform)
-            });
+        let globals: std::collections::BTreeMap<EntityId, Transform> = self
+            .component_transforms
+            .iter()
+            .map(|(id, t)| (*id, t.global_transform))
+            .collect();
+        for component_transform in self.component_transforms.values_mut() {
+            let parent_global = component_transform
+                .parent_id
+                .and_then(|pid| globals.get(&pid));
             component_transform.update_global(parent_global);
         }
         self.metadata.modified_at = get_current_timestamp();

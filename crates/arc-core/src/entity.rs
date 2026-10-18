@@ -148,6 +148,34 @@ pub enum Geometry {
     // --- annotation ---
     /// Dimension between two points (rendered as line + arrows + label).
     Dimension { start: [f64; 3], end: [f64; 3] },
+
+    // --- NURBS ---
+    /// Tensor-product NURBS surface. Rows index U, columns index V;
+    /// each control point is homogeneous [x, y, z, weight].
+    NurbsSurface {
+        control_points: Vec<Vec<[f64; 4]>>,
+        u_degree: u32,
+        v_degree: u32,
+        u_knots: Vec<f64>,
+        v_knots: Vec<f64>,
+    },
+    /// Loft through NURBS curves; each section is a row of homogeneous
+    /// control points sampled into the shared U direction.
+    NurbsLoft {
+        sections: Vec<Vec<[f64; 4]>>,
+        degree: u32,
+        samples_u: u32,
+        samples_v: u32,
+    },
+    /// Sweep a NURBS profile curve along a NURBS path curve.
+    NurbsSweep {
+        path: Vec<[f64; 4]>,
+        profile: Vec<[f64; 4]>,
+        path_degree: u32,
+        profile_degree: u32,
+        samples_u: u32,
+        samples_v: u32,
+    },
 }
 
 fn default_revolve_angle() -> f64 {

@@ -261,13 +261,13 @@ impl NURBSSurface {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NURBSTrimCurve {
-    pub type: TrimCurveType,
+    pub trim_type: TrimCurveType,
     pub points: Vec<[f64; 3]>,
 }
 
 impl NURBSTrimCurve {
-    pub fn new(type: TrimCurveType, points: Vec<[f64; 3]>) -> Self {
-        Self { type, points }
+    pub fn new(trim_type: TrimCurveType, points: Vec<[f64; 3]>) -> Self {
+        Self { trim_type, points }
     }
 }
 
@@ -335,7 +335,7 @@ impl NURBSSurfaceGeometry {
             let mut row = Vec::new();
             let theta = TAU * (i as f64) / (u_segments as f64);
             for j in 0..v_segments as usize {
-                let phi = PI * (j as f64) / (v_segments as f64 - 1);
+                let phi = PI * (j as f64) / (v_segments as f64 - 1.0);
                 let r = radius * phi.sin();
                 let x = center[0] + r * theta.cos();
                 let y = center[1] + r * theta.sin();
@@ -351,7 +351,7 @@ impl NURBSSurfaceGeometry {
         for _ in 0..(degree as usize + 1) {
             knots_u.push(0.0);
         }
-        for i in 0..u_segments - degree as usize + 1 {
+        for i in 0..u_segments.saturating_sub(degree) + 1 {
             knots_u.push(i as f64);
         }
         for _ in 0..(degree as usize + 1) {
@@ -361,7 +361,7 @@ impl NURBSSurfaceGeometry {
         for _ in 0..(degree as usize + 1) {
             knots_v.push(0.0);
         }
-        for i in 0..v_segments - degree as usize + 1 {
+        for i in 0..v_segments.saturating_sub(degree) + 1 {
             knots_v.push(i as f64);
         }
         for _ in 0..(degree as usize + 1) {
@@ -394,7 +394,11 @@ impl NURBSSurfaceGeometry {
         for u_row in points {
             let mut v_row = Vec::new();
             for (i, pos) in u_row.iter().enumerate() {
-                let weight = weights.as_ref().and_then(|w| w.get(i)).copied().unwrap_or(1.0);
+                let weight = weights
+                    .as_ref()
+                    .and_then(|w| w.first().and_then(|row| row.get(i)))
+                    .copied()
+                    .unwrap_or(1.0);
                 v_row.push(ControlPoint::new(*pos, weight));
             }
             control_points.push(v_row);
@@ -404,7 +408,7 @@ impl NURBSSurfaceGeometry {
         for _ in 0..(degree as usize + 1) {
             knots_u.push(0.0);
         }
-        for i in 1..u_segments as usize - degree as usize + 1 {
+        for i in 1..(u_segments as usize).saturating_sub(degree as usize) + 1 {
             knots_u.push(i as f64);
         }
         for _ in 0..(degree as usize + 1) {
@@ -414,7 +418,7 @@ impl NURBSSurfaceGeometry {
         for _ in 0..(degree as usize + 1) {
             knots_v.push(0.0);
         }
-        for i in 1..v_segments as usize - degree as usize + 1 {
+        for i in 1..(v_segments as usize).saturating_sub(degree as usize) + 1 {
             knots_v.push(i as f64);
         }
         for _ in 0..(degree as usize + 1) {
