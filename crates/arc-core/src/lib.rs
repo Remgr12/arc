@@ -9,10 +9,12 @@ pub mod assembly;
 pub mod constraints;
 pub mod entity;
 pub mod document;
+pub mod formats;
 pub mod history;
 pub mod mesh;
 pub mod meshgen;
 pub mod nurbs;
+pub mod sheetmetal;
 pub mod units;
 
 pub use document::*;
