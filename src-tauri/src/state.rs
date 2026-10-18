@@ -1,3 +1,5 @@
+use arc_core::annotation::AnnotationRegistry;
+use arc_core::constraints::ConstraintSystem;
 use arc_core::document::SceneData;
 use arc_core::{Document, EntityId};
 use parking_lot::Mutex;
@@ -63,6 +65,29 @@ pub struct PluginInfo {
     pub error: Option<String>,
 }
 
+/// Per-document constraint bookkeeping: the kernel solver plus a mapping
+/// from entity id strings to the solver's numeric entity handles (the
+/// kernel addresses entities by `u64`, documents by UUID string).
+#[derive(Debug, Default)]
+pub struct ConstraintDocState {
+    pub system: ConstraintSystem,
+    entity_handles: HashMap<String, u64>,
+    next_handle: u64,
+}
+
+impl ConstraintDocState {
+    /// Stable numeric handle for an entity id, allocating one on first use.
+    pub fn handle(&mut self, entity_id: &str) -> u64 {
+        if let Some(h) = self.entity_handles.get(entity_id) {
+            return *h;
+        }
+        self.next_handle += 1;
+        self.entity_handles
+            .insert(entity_id.to_string(), self.next_handle);
+        self.next_handle
+    }
+}
+
 /// Interior state shared with all commands.
 pub struct AppState {
     pub documents: HashMap<String, Document>,
@@ -72,6 +97,10 @@ pub struct AppState {
     pub doc_paths: HashMap<String, PathBuf>,
     pub settings: Settings,
     pub settings_path: Option<PathBuf>,
+    /// Dimension annotations, kept outside `Document` (kernel type).
+    pub annotations: HashMap<String, AnnotationRegistry>,
+    /// Constraint systems, kept outside `Document` (kernel type).
+    pub constraints: HashMap<String, ConstraintDocState>,
 }
 
 pub type SharedState = Arc<Mutex<AppState>>;
@@ -86,6 +115,8 @@ impl AppState {
             doc_paths: HashMap::new(),
             settings: Settings::default(),
             settings_path: None,
+            annotations: HashMap::new(),
+            constraints: HashMap::new(),
         }
     }
 

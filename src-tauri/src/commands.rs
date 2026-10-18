@@ -6,7 +6,11 @@ use crate::state::{
     doc_mut, doc_ref, parse_ids, AppOverview, DocumentInfo, SceneEnvelope, Settings,
     SharedState, TransformUpdate,
 };
-use arc_core::{Color, Document, Entity, EntityId, Geometry, RayHit, Transform};
+use arc_core::annotation::{Annotation, AnnotationKind, DimensionGeometry};
+use arc_core::constraints::{Constraint, ConstraintExpression, ConstraintType, GeometryParameter};
+use arc_core::formats::{Format, TriangleSoup};
+use arc_core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
+use arc_core::{Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, Transform};
 use serde::Deserialize;
 use serde_json::Value as Json;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -203,6 +207,8 @@ pub fn close_document(
         let mut s = state.lock();
         s.documents.remove(&id);
         s.doc_paths.remove(&id);
+        s.annotations.remove(&id);
+        s.constraints.remove(&id);
         s.order.retain(|x| x != &id);
         if s.active.as_deref() == Some(&id) {
             s.active = s.order.last().cloned();
@@ -866,6 +872,14 @@ pub fn export_scene(
         match format.as_str() {
             "obj" => bytes_of_text(&export_obj(doc)),
             "stl" => export_stl_binary(doc),
+            "stl_ascii" => bytes_of_text(&arc_core::formats::export_stl_ascii(
+                &merged_world_mesh(doc),
+                &doc.name,
+            )),
+            "gltf" => bytes_of_text(&arc_core::formats::export_gltf(
+                &merged_world_mesh(doc),
+                &doc.name,
+            )?),
             other => return Err(format!("unsupported format: {other}")),
         }
     };
@@ -952,4 +966,392 @@ fn export_stl_binary(doc: &mut Document) -> Vec<u8> {
         cursor += 2;
     }
     out
+}
+
+/// All visible geometry baked into one world-space triangle buffer, for the
+/// single-mesh exporters in `arc_core::formats` (STL ASCII, glTF).
+fn merged_world_mesh(doc: &mut Document) -> MeshBuffer {
+    let ids: Vec<EntityId> = doc
+        .entities
+        .values()
+        .filter(|e| e.visible && !e.locked)
+        .map(|e| e.id)
+        .collect();
+    let mut merged = MeshBuffer::default();
+    for id in ids {
+        let Some(t) = doc.get(&id).map(|e| e.transform) else {
+            continue;
+        };
+        let Some(buffer) = doc.mesh(&id) else {
+            continue;
+        };
+        let world = arc_core::mesh::mesh_world(&buffer, &t);
+        merged.positions.extend_from_slice(&world.positions);
+        merged.normals.extend_from_slice(&world.normals);
+    }
+    merged
+}
+
+// ------------------------------------------------------------ import
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ImportReport {
+    pub format: String,
+    pub entities_created: Vec<String>,
+}
+
+fn format_name(format: Format) -> &'static str {
+    match format {
+        Format::Obj => "obj",
+        Format::Stl => "stl",
+        Format::StlAscii => "stl_ascii",
+        Format::Dxf => "dxf",
+        Format::Gltf => "gltf",
+    }
+}
+
+/// DXF drawings live in the XY plane with +Z up, while arc's ground plane is
+/// XZ with +Y up; imported coordinates swap Y and Z so plans lie flat.
+fn dxf_point(p: [f64; 3]) -> [f64; 3] {
+    [p[0], p[2], p[1]]
+}
+
+fn soup_entity(what: &str, soup: TriangleSoup) -> Result<(String, Geometry, Transform), String> {
+    if soup.is_empty() {
+        return Err(format!("no triangles found in {what}"));
+    }
+    let indices = soup
+        .indices
+        .iter()
+        .flat_map(|t| t.iter().copied())
+        .collect();
+    Ok((
+        what.to_string(),
+        Geometry::ImportedMesh {
+            positions: soup.positions,
+            indices,
+        },
+        Transform::default(),
+    ))
+}
+
+#[tauri::command]
+pub fn import_file(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    path: String,
+    format: Option<String>,
+) -> Result<ImportReport, String> {
+    let override_format = format.as_deref().map(str::to_ascii_lowercase);
+    let detected = match override_format.as_deref() {
+        Some("obj") => Format::Obj,
+        Some("stl") | Some("stl_binary") => Format::Stl,
+        Some("stl_ascii") => Format::StlAscii,
+        Some("dxf") => Format::Dxf,
+        Some("gltf") => return Err("gltf import is not supported".into()),
+        Some(other) => return Err(format!("unsupported import format: {other}")),
+        None => {
+            let detected = Format::detect(&path)
+                .ok_or_else(|| format!("cannot detect format of {path}; pass an explicit format"))?;
+            if detected == Format::Gltf {
+                return Err("gltf import is not supported".into());
+            }
+            detected
+        }
+    };
+    let report_format = format_name(detected).to_string();
+    let bytes = std::fs::read(&path).map_err(|e| format!("read failed: {e}"))?;
+    let stem = std::path::Path::new(&path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Imported")
+        .to_string();
+
+    let mut new_entities: Vec<(String, Geometry, Transform)> = Vec::new();
+    match detected {
+        Format::Obj => {
+            let obj = arc_core::formats::parse_obj(&String::from_utf8_lossy(&bytes))?;
+            let soup = TriangleSoup::from_triangles(obj.faces.iter().filter_map(|f| {
+                if f.len() != 3 {
+                    return None;
+                }
+                let (a, b, c) = (f[0] as usize, f[1] as usize, f[2] as usize);
+                Some([obj.positions[a], obj.positions[b], obj.positions[c]])
+            }));
+            new_entities.push(soup_entity(&stem, soup)?);
+        }
+        Format::Stl | Format::StlAscii => {
+            let mesh = arc_core::formats::parse_stl(&bytes)?;
+            let name = mesh.name.clone().unwrap_or_else(|| stem.clone());
+            let soup = TriangleSoup::from_stl(&mesh);
+            new_entities.push(soup_entity(&path, soup).map(|(_, g, t)| (name, g, t))?);
+        }
+        Format::Dxf => {
+            let drawing = arc_core::formats::parse_dxf(&String::from_utf8_lossy(&bytes))?;
+            for line in drawing.lines {
+                let start = dxf_point(line.start);
+                let end = dxf_point(line.end);
+                let delta = [
+                    end[0] - start[0],
+                    end[1] - start[1],
+                    end[2] - start[2],
+                ];
+                if delta.iter().all(|c| c.abs() < 1e-12) {
+                    continue;
+                }
+                new_entities.push((
+                    String::new(),
+                    Geometry::LineCurve { end: delta },
+                    Transform::at(start[0], start[1], start[2]),
+                ));
+            }
+            for circle in drawing.circles {
+                let center = dxf_point(circle.center);
+                new_entities.push((
+                    String::new(),
+                    Geometry::CircleCurve {
+                        radius: circle.radius,
+                        segments: 48,
+                    },
+                    Transform::at(center[0], center[1], center[2]),
+                ));
+            }
+            for arc in drawing.arcs {
+                let center = dxf_point(arc.center);
+                new_entities.push((
+                    String::new(),
+                    Geometry::ArcCurve {
+                        radius: arc.radius,
+                        start_angle_deg: arc.start_angle_deg,
+                        end_angle_deg: arc.end_angle_deg,
+                        segments: 48,
+                    },
+                    Transform::at(center[0], center[1], center[2]),
+                ));
+            }
+            for polyline in drawing.polylines {
+                let first = dxf_point([
+                    polyline.vertices[0][0],
+                    polyline.vertices[0][1],
+                    0.0,
+                ]);
+                let points = polyline
+                    .vertices
+                    .iter()
+                    .map(|v| {
+                        let w = dxf_point([v[0], v[1], 0.0]);
+                        [w[0] - first[0], w[1] - first[1], w[2] - first[2]]
+                    })
+                    .collect();
+                new_entities.push((
+                    String::new(),
+                    Geometry::PolylineCurve { points },
+                    Transform::at(first[0], first[1], first[2]),
+                ));
+            }
+        }
+        Format::Gltf => unreachable!("rejected above"),
+    }
+
+    let mut created: Vec<String> = Vec::new();
+    doc_mut(&state, &document_id, "Import", |doc| {
+        for (name, kind, transform) in new_entities {
+            let mut entity = Entity::new(EntityId::new(), name, doc.active_layer, kind);
+            entity.transform = transform;
+            let (id, res) = doc.add_entity(entity);
+            if res.is_ok() {
+                created.push(id.as_string());
+            }
+        }
+    })?;
+    emit_scene(&app, &state, &document_id);
+    Ok(ImportReport {
+        format: report_format,
+        entities_created: created,
+    })
+}
+
+// ------------------------------------------------------------ sheet metal
+
+#[tauri::command]
+pub fn sheetmetal_materials() -> Vec<SheetMetalMaterial> {
+    arc_core::sheetmetal::default_materials()
+}
+
+#[tauri::command]
+pub fn sheetmetal_flat_pattern(spec: Json) -> Result<FlatPattern, String> {
+    let part: SheetMetalPart =
+        serde_json::from_value(spec).map_err(|e| format!("bad sheet metal part: {e}"))?;
+    part.validate()?;
+    arc_core::sheetmetal::flat_pattern(&part)
+}
+
+// ------------------------------------------------------------ annotations
+
+#[tauri::command]
+pub fn annotation_create(
+    state: State<'_, SharedState>,
+    document_id: String,
+    kind: Json,
+    style: Option<String>,
+) -> Result<String, String> {
+    let kind: AnnotationKind =
+        serde_json::from_value(kind).map_err(|e| format!("bad annotation kind: {e}"))?;
+    let label = match &kind {
+        AnnotationKind::Linear(_) => "Linear",
+        AnnotationKind::Angular(_) => "Angular",
+        AnnotationKind::Radial(_) => "Radial",
+    }
+    .to_string();
+    let style = style.unwrap_or_else(|| "default".to_string());
+    let id = {
+        let mut s = state.lock();
+        if !s.documents.contains_key(&document_id) {
+            return Err(format!("unknown document {document_id}"));
+        }
+        let registry = s.annotations.entry(document_id).or_default();
+        let annotation = Annotation::new(label, kind, style);
+        registry.add_annotation(annotation)?.as_string()
+    };
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn annotation_measure(
+    state: State<'_, SharedState>,
+    document_id: String,
+    annotation_id: String,
+) -> Result<f64, String> {
+    let id = parse_one(&annotation_id)?;
+    let s = state.lock();
+    if !s.documents.contains_key(&document_id) {
+        return Err(format!("unknown document {document_id}"));
+    }
+    let registry = s
+        .annotations
+        .get(&document_id)
+        .ok_or_else(|| format!("unknown annotation {annotation_id}"))?;
+    registry.measure(&id)
+}
+
+#[tauri::command]
+pub fn annotation_geometry(
+    state: State<'_, SharedState>,
+    document_id: String,
+    annotation_id: String,
+) -> Result<DimensionGeometry, String> {
+    let id = parse_one(&annotation_id)?;
+    let s = state.lock();
+    if !s.documents.contains_key(&document_id) {
+        return Err(format!("unknown document {document_id}"));
+    }
+    let registry = s
+        .annotations
+        .get(&document_id)
+        .ok_or_else(|| format!("unknown annotation {annotation_id}"))?;
+    registry.build_geometry(&id)
+}
+
+// ------------------------------------------------------------ constraints
+
+#[tauri::command]
+pub fn constraint_add(
+    state: State<'_, SharedState>,
+    document_id: String,
+    kind: ConstraintType,
+    lhs_entity: String,
+    lhs_param: GeometryParameter,
+    rhs: Option<Json>,
+) -> Result<u64, String> {
+    let lhs_id = parse_one(&lhs_entity)?;
+    {
+        let s = state.lock();
+        let doc = s
+            .documents
+            .get(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        if !doc.entities.contains_key(&lhs_id) {
+            return Err(format!("unknown entity {lhs_entity}"));
+        }
+    }
+    let mut s = state.lock();
+    let cstate = s.constraints.entry(document_id).or_default();
+    let lhs = ConstraintExpression::GeometryParameter {
+        entity_id: cstate.handle(lhs_entity.as_str()),
+        parameter: lhs_param,
+    };
+    let rhs_expr = match rhs {
+        None => None,
+        Some(value) => {
+            if let Some(constant) = value.as_f64() {
+                Some(ConstraintExpression::Constant(constant))
+            } else {
+                #[derive(Deserialize)]
+                struct RhsParam {
+                    entity_id: String,
+                    parameter: GeometryParameter,
+                }
+                let param: RhsParam =
+                    serde_json::from_value(value).map_err(|e| format!("bad rhs: {e}"))?;
+                Some(ConstraintExpression::GeometryParameter {
+                    entity_id: cstate.handle(&param.entity_id),
+                    parameter: param.parameter,
+                })
+            }
+        }
+    };
+    let constraint = Constraint::new(0, kind, lhs, rhs_expr, 1e-6);
+    Ok(cstate.system.add_constraint(constraint))
+}
+
+/// The kernel reports only the first violation per `solve`; parse its id out
+/// of the message so the probe loop below can drop it and surface every
+/// remaining violation as well.
+fn violated_constraint_id(message: &str) -> Option<u64> {
+    let rest = message.strip_prefix("constraint ")?;
+    let end = rest.find(' ')?;
+    rest[..end].parse().ok()
+}
+
+#[tauri::command]
+pub fn solve_constraints(
+    state: State<'_, SharedState>,
+    document_id: String,
+) -> Result<Vec<String>, String> {
+    let entities: Vec<(String, Entity)> = {
+        let s = state.lock();
+        let doc = s
+            .documents
+            .get(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.entities
+            .values()
+            .map(|e| (e.id.as_string(), e.clone()))
+            .collect()
+    };
+    let mut s = state.lock();
+    let cstate = s.constraints.entry(document_id).or_default();
+    for (entity_id, entity) in &entities {
+        let handle = cstate.handle(entity_id);
+        cstate.system.update_entity(handle, entity);
+    }
+    // Solve on a clone, dropping each reported violation so the next pass
+    // reveals further ones; the live system is left untouched.
+    let mut violations: Vec<String> = Vec::new();
+    let mut probe = cstate.system.clone();
+    loop {
+        match probe.solve() {
+            Ok(()) => break,
+            Err(message) => {
+                let removed = violated_constraint_id(&message)
+                    .is_some_and(|id| probe.remove_constraint(id));
+                violations.push(message);
+                if !removed {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(violations)
 }

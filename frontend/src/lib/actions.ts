@@ -57,6 +57,25 @@ export const actions = {
     }
   }),
 
+  importFile: guard(async () => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const path = await open({
+      title: "Import geometry",
+      filters: [{ name: "Geometry (STL / OBJ / DXF)", extensions: ["stl", "obj", "dxf"] }],
+    });
+    if (!path) return;
+    const docId = requireDoc();
+    const result = await ipc.importFile(docId, path as string);
+    const overview = await ipc.getState();
+    useArcStore.getState().setOverview(overview);
+    if (overview.active) {
+      useArcStore.getState().setScene(await ipc.getScene(overview.active));
+    }
+    useArcStore
+      .getState()
+      .setStatusMessage(`Imported ${result.entities_created.length} entities from ${result.format.toUpperCase()}`);
+  }),
+
   saveActive: guard(async () => {
     const id = requireDoc();
     const scene = useArcStore.getState().scene;
@@ -153,10 +172,10 @@ export const actions = {
     const fmt = (format ?? "obj") as string;
     const id = requireDoc();
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const ext = fmt === "obj" ? "obj" : "stl";
+    const ext = fmt === "gltf" ? "gltf" : fmt === "obj" ? "obj" : "stl";
     const path = await save({
-      title: `Export ${fmt.toUpperCase()}`,
-      filters: [{ name: fmt.toUpperCase(), extensions: [ext] }],
+      title: `Export ${fmt === "stl_ascii" ? "STL ASCII" : fmt.toUpperCase()}`,
+      filters: [{ name: fmt === "stl_ascii" ? "STL ASCII" : fmt.toUpperCase(), extensions: [ext] }],
       defaultPath: `${useArcStore.getState().scene?.name ?? "scene"}.${ext}`,
     });
     if (!path) return;

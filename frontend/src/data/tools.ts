@@ -65,6 +65,14 @@ export const DEFAULT_GEOMETRY: Record<ToolId, Geometry | null> = {
   sketch: null,
 };
 
+/** Export format choices shared by the File menu and command palette. */
+export const EXPORT_FORMATS: { id: string; label: string; ext: string }[] = [
+  { id: "obj", label: "Export OBJ", ext: "obj" },
+  { id: "stl", label: "Export STL", ext: "stl" },
+  { id: "stl_ascii", label: "Export STL (ASCII)", ext: "stl" },
+  { id: "gltf", label: "Export glTF", ext: "gltf" },
+];
+
 /** Two-point sketch tools collect points before sending geometry. */
 export const MULTI_POINT_TOOLS: ReadonlySet<ToolId> = new Set([
   "line",

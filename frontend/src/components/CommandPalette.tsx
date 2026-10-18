@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { bindingHint } from "../lib/keybinds";
-import { TOOLS } from "../data/tools";
+import { EXPORT_FORMATS, TOOLS } from "../data/tools";
 import { Modal, TextField } from "./ui";
 import type { LucideIcon } from "lucide-react";
 
@@ -38,10 +38,14 @@ export function CommandPalette() {
     for (const action of [
       { label: "New document", hint: "File", run: () => void actions.newDocument() },
       { label: "Open file…", hint: "File", run: () => actions.openDocument() },
+      { label: "Import file…", hint: "File", run: () => void actions.importFile() },
       { label: "Save", hint: "File", run: () => void actions.saveActive() },
       { label: "Save As…", hint: "File", run: () => void actions.saveDocumentAs() },
-      { label: "Export OBJ", hint: "File", run: () => void actions.exportActive("obj") },
-      { label: "Export STL", hint: "File", run: () => void actions.exportActive("stl") },
+      ...EXPORT_FORMATS.map((f) => ({
+        label: f.label,
+        hint: "File",
+        run: () => void actions.exportActive(f.id),
+      })),
       { label: "Undo", hint: "Edit", run: () => void actions.undo() },
       { label: "Redo", hint: "Edit", run: () => void actions.redo() },
       { label: "Duplicate selection", hint: "Edit", run: () => void actions.duplicateSelection() },

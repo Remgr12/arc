@@ -106,13 +106,47 @@ export const ipc = {
   setPluginEnabled: (name: string, enabled: boolean): Promise<void> =>
     invoke("set_plugin_enabled", { name, enabled }),
 
+  // import
+  importFile: (documentId: string, path: string, format?: string): Promise<ImportResult> =>
+    invoke("import_file", { documentId, path, format: format ?? null }),
+
   // export
   exportScene: (documentId: string, path: string, format: string): Promise<string> =>
     invoke("export_scene", { documentId, path, format }),
+
+  // sheet metal
+  sheetmetalMaterials: (): Promise<SheetMetalMaterial[]> =>
+    invoke("sheetmetal_materials"),
+  sheetmetalFlatPattern: (spec: unknown): Promise<SheetMetalFlatPattern> =>
+    invoke("sheetmetal_flat_pattern", { spec }),
 
   // updater
   checkForUpdates: (): Promise<UpdateNotice> => invoke("check_for_updates"),
   installUpdate: (): Promise<void> => invoke("install_update"),
 };
+
+export interface ImportResult {
+  format: string;
+  entities_created: string[];
+}
+
+export interface SheetMetalMaterial {
+  name: string;
+  thickness_mm: number;
+  k_factor: number;
+  min_bend_radius_mm: number;
+}
+
+export interface SheetMetalBendLine {
+  position: [number, number];
+  direction: [number, number];
+  angle_deg: number;
+  radius_mm: number;
+}
+
+export interface SheetMetalFlatPattern {
+  outline: [number, number][];
+  bend_lines: SheetMetalBendLine[];
+}
 
 export type { LayerData };

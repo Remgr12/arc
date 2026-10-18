@@ -4,6 +4,7 @@ import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { bindingHint, listKeybindInfos } from "../lib/keybinds";
 import { useKeybindStore } from "../lib/keybindProfiles";
+import { EXPORT_FORMATS } from "../data/tools";
 import { Button, IconButton } from "./ui";
 import { Logo } from "./Logo";
 
@@ -75,6 +76,7 @@ export function TopBar() {
           <div className="absolute top-full left-0 z-50 mt-1 w-60 rounded-lg border border-base-400 bg-base-100 p-1 shadow-xl">
             {fileItem("New", "doc:new", () => void actions.newDocument())}
             {fileItem("Open…", "doc:open", actions.openDocument)}
+            {fileItem("Import…", "doc:import", () => void actions.importFile())}
             {fileItem("Save", "doc:save", () => void actions.saveActive())}
             {fileItem("Save As…", "doc:saveAs", () => void actions.saveDocumentAs())}
             {recents.length > 0 && (
@@ -90,8 +92,9 @@ export function TopBar() {
               </>
             )}
             <div className="my-1 border-t border-base-800" />
-            {fileItem("Export OBJ", "doc:export", () => void actions.exportActive("obj"))}
-            {fileItem("Export STL", "doc:export", () => void actions.exportActive("stl"))}
+            {EXPORT_FORMATS.map((f) =>
+              fileItem(f.label, "doc:export", () => void actions.exportActive(f.id)),
+            )}
           </div>
         )}
       </div>
