@@ -20,11 +20,17 @@ interface ViewPalette {
 }
 
 interface ViewAnim {
-  dirFrom: THREE.Vector3;
-  dirTo: THREE.Vector3;
-  radius: number;
   start: number;
   duration: number;
+  /** Orbit direction flight (gizmo planes). */
+  dirFrom?: THREE.Vector3;
+  dirTo?: THREE.Vector3;
+  radius?: number;
+  /** Camera + target flight (fit view, focus entity). */
+  posFrom?: THREE.Vector3;
+  posTo?: THREE.Vector3;
+  targetFrom?: THREE.Vector3;
+  targetTo?: THREE.Vector3;
 }
 
 interface DraftCommit {
@@ -345,13 +351,18 @@ function startLoop(ref: ViewportRefs): () => void {
   const tick = () => {
     if (ref.disposed) return;
 
-    // Camera flight to a gizmo plane.
+    // Camera flight (gizmo plane focus or fit-view).
     if (ref.viewAnim) {
       const anim = ref.viewAnim;
       const t = Math.min(1, (performance.now() - anim.start) / anim.duration);
       const k = t * t * (3 - 2 * t);
-      const dir = slerpDir(anim.dirFrom, anim.dirTo, k);
-      ref.camera.position.copy(ref.controls.target).addScaledVector(dir, anim.radius);
+      if (anim.dirFrom && anim.dirTo && anim.radius !== undefined) {
+        const dir = slerpDir(anim.dirFrom, anim.dirTo, k);
+        ref.camera.position.copy(ref.controls.target).addScaledVector(dir, anim.radius);
+      } else if (anim.posFrom && anim.posTo && anim.targetFrom && anim.targetTo) {
+        ref.camera.position.lerpVectors(anim.posFrom, anim.posTo, k);
+        ref.controls.target.lerpVectors(anim.targetFrom, anim.targetTo, k);
+      }
       if (t >= 1) ref.viewAnim = null;
     }
 
@@ -455,25 +466,31 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   const tris =
     entity.triPositions && entity.triPositions.length > 0 ? entity.triPositions : null;
   const lineData = entity.lines && entity.lines.length > 0 ? entity.lines : null;
+  let obj: THREE.Object3D;
   if (lineData && !tris) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData.slice(), 3));
     const material = ref.lineMaterial.clone();
-    return new THREE.LineSegments(geometry, material);
-  }
-  if (!tris) return null;
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(tris.slice(), 3));
-  if (entity.triNormals && entity.triNormals.length > 0) {
-    geometry.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(entity.triNormals.slice(), 3),
-    );
+    obj = new THREE.LineSegments(geometry, material);
   } else {
-    geometry.computeVertexNormals();
+    if (!tris) return null;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(tris.slice(), 3));
+    if (entity.triNormals && entity.triNormals.length > 0) {
+      geometry.setAttribute(
+        "normal",
+        new THREE.Float32BufferAttribute(entity.triNormals.slice(), 3),
+      );
+    } else {
+      geometry.computeVertexNormals();
+    }
+    geometry.computeBoundingSphere();
+    obj = new THREE.Mesh(geometry, ref.columnMaterial.clone());
   }
-  geometry.computeBoundingSphere();
-  return new THREE.Mesh(geometry, ref.columnMaterial.clone());
+  // Entry animation metadata; present() and the render loop animate from here.
+  obj.userData.spawnAt = performance.now();
+  obj.userData.realScale = [...entity.transform.scale] as [number, number, number];
+  return obj;
 }
 
 function present(
@@ -487,13 +504,70 @@ function present(
   const selected = scene.selection.includes(entity.id);
   const hovered = useArcStore.getState().hoverEntity === entity.id;
   const color = entityColor(entity, layers);
+  const colorHex = color.getHex();
+  const visible = entity.visible && layerVisible(layer);
+
+  // Cheap diff: skip material/transform churn when nothing changed.
+  const pos = entity.transform.position;
+  const rot = entity.transform.rotation;
+  const scl = entity.transform.scale;
+  const cache = obj.userData.cache as
+    | {
+        color: number;
+        selected: boolean;
+        hovered: boolean;
+        locked: boolean;
+        visible: boolean;
+        pos: [number, number, number];
+        rot: [number, number, number, number];
+        scl: [number, number, number];
+      }
+    | undefined;
+  const dirty =
+    !cache ||
+    cache.color !== colorHex ||
+    cache.selected !== selected ||
+    cache.hovered !== hovered ||
+    cache.locked !== entity.locked ||
+    cache.visible !== visible ||
+    cache.pos[0] !== pos[0] ||
+    cache.pos[1] !== pos[1] ||
+    cache.pos[2] !== pos[2] ||
+    cache.rot[0] !== rot[0] ||
+    cache.rot[1] !== rot[1] ||
+    cache.rot[2] !== rot[2] ||
+    cache.rot[3] !== rot[3] ||
+    cache.scl[0] !== scl[0] ||
+    cache.scl[1] !== scl[1] ||
+    cache.scl[2] !== scl[2];
+  if (cache && !dirty) {
+    if (obj.userData.spawnAt !== undefined) {
+      applySpawnScale(obj, performance.now());
+    }
+    return;
+  }
+  obj.userData.cache = {
+    color: colorHex,
+    selected,
+    hovered,
+    locked: entity.locked,
+    visible,
+    pos: [...pos] as [number, number, number],
+    rot: [...rot] as [number, number, number, number],
+    scl: [...scl] as [number, number, number],
+  };
 
   obj.position.set(...entity.transform.position);
   obj.quaternion.set(...entity.transform.rotation);
-  obj.scale.set(...entity.transform.scale);
+  obj.userData.realScale = [...entity.transform.scale] as [number, number, number];
+  const spawnAt = obj.userData.spawnAt as number | undefined;
+  if (spawnAt === undefined) {
+    obj.scale.set(...entity.transform.scale);
+  } else {
+    applySpawnScale(obj, performance.now());
+  }
+  obj.visible = visible;
   obj.updateMatrix();
-  obj.matrixWorldNeedsUpdate = true;
-  obj.visible = entity.visible && layerVisible(layer);
 
   const mesh = obj as THREE.Mesh;
   if (mesh.isMesh) {
@@ -512,16 +586,32 @@ function present(
   }
 }
 
+/** Ease the object from zero scale to its real scale during the spawn window. */
+function applySpawnScale(obj: THREE.Object3D, now: number): void {
+  const spawnAt = obj.userData.spawnAt as number;
+  const realScale = obj.userData.realScale as [number, number, number];
+  const t = Math.min(1, (now - spawnAt) / SPAWN_DURATION);
+  const k = t * t * (3 - 2 * t); // smoothstep
+  obj.scale.set(realScale[0] * k, realScale[1] * k, realScale[2] * k);
+  if (t >= 1) delete obj.userData.spawnAt;
+}
+
 const BLACK = new THREE.Color(0x000000);
+const SPAWN_DURATION = 220;
 
 function layerVisible(layer: LayerData | undefined): boolean {
   return !(layer && !layer.visible);
 }
 
+// Shared scratch object to avoid per-entity allocations.
+const scratchColor = new THREE.Color();
+
 function entityColor(entity: EntityData, layers: Map<string, LayerData>): THREE.Color {
-  const color = entity.color ?? layers.get(entity.layer)?.color ?? [0.62, 0.62, 0.65, 1];
-  return new THREE.Color(color[0], color[1], color[2]);
+  const color = entity.color ?? layers.get(entity.layer)?.color ?? DEFAULT_ENTITY_COLOR;
+  return scratchColor.setRGB(color[0], color[1], color[2]);
 }
+
+const DEFAULT_ENTITY_COLOR: [number, number, number, number] = [0.62, 0.62, 0.65, 1];
 
 function disposeObject(obj: THREE.Object3D): void {
   obj.traverse((node) => {
@@ -1236,12 +1326,23 @@ export function fitEntities(ref: ViewportRefs, ids: string[]): void {
   const size = box.getSize(new THREE.Vector3()).length();
   const distance = Math.max(90, size * 1.6 || 90);
   const direction = new THREE.Vector3(0.62, 0.45, 0.65).normalize();
-  ref.camera.position.copy(center).addScaledVector(direction, distance);
+  const posTo = center.clone().addScaledVector(direction, distance);
   ref.camera.near = Math.max(0.1, distance / 1000);
   ref.camera.far = distance * 40;
   ref.camera.updateProjectionMatrix();
-  ref.controls.target.copy(center);
-  ref.controls.update();
+  flyCamera(ref, posTo, center, 380);
+}
+
+/** Fly the camera position and orbit target smoothly. */
+function flyCamera(ref: ViewportRefs, posTo: THREE.Vector3, targetTo: THREE.Vector3, duration: number): void {
+  ref.viewAnim = {
+    start: performance.now(),
+    duration,
+    posFrom: ref.camera.position.clone(),
+    posTo,
+    targetFrom: ref.controls.target.clone(),
+    targetTo,
+  };
 }
 
 // ------------------------------------------------------------------ dispose
