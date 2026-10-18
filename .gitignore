@@ -39,6 +39,6 @@ flatpak/.flatpak-builder/
 AGENT*.md
 CLAUDE*.md
 RTK*.md
+MCP-NOTES.md
 .rtk/
-SESSION-STATUS.md
 
