@@ -133,6 +133,9 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'arc ${{ github.ref_name }}'
@@ -218,6 +221,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'arc ${{ github.ref_name }}'
@@ -265,37 +269,107 @@ jobs:
             *) echo "unexpected tag $TAG"; exit 1 ;;
           esac
           FILES=(dist/*.msi dist/*.exe dist/*.AppImage dist/*.deb dist/*.rpm
-                 dist/*.dmg dist/*.app.tar.gz dist/flatpak/*.flatpak)
+                 dist/*.dmg dist/*.app.tar.gz dist/flatpak/*.flatpak dist/*.sig)
 
           # tauri-action creates a draft for the tag; drafts never resolve by
           # tag lookup, so find it by listing releases.
           DRAFT_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             --jq '([.[] | select(.draft and .tag_name == "'"$TAG"'")][0].id) // empty')
 
-          if [ -z "$DRAFT_ID" ]; then
+          if [ -n "$DRAFT_ID" ]; then
+            UPLD=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+              --jq '.upload_url' | sed 's/{.*$//')
+            # tauri-action may already have uploaded most assets to the draft;
+            # only upload what is missing, then publish the draft.
+            EXISTING=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+              --jq '[.assets[].name] | join("\n")')
+            for f in "${FILES[@]}"; do
+              name=$(basename "$f")
+              if grep -qx "$name" <<<"$EXISTING"; then
+                echo "already in draft: $name"
+                continue
+              fi
+              echo "uploading $name"
+              gh api --method POST "$UPLD?name=$name" \
+                --input "$f" >/dev/null \
+                -H "Content-Type: application/octet-stream"
+            done
+          else
             echo "no draft for $TAG; creating a release instead"
             gh release create "$TAG" "${FILES[@]}" --title "arc $TAG" \
               --latest --generate-notes
-            exit 0
+            DRAFT_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')
           fi
 
-          UPLD=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
-            --jq '.upload_url' | sed 's/{.*$//')
-          # tauri-action may already have uploaded most assets to the draft;
-          # only upload what is missing, then publish the draft.
-          EXISTING=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
-            --jq '[.assets[].name] | join("\n")')
-          for f in "${FILES[@]}"; do
-            name=$(basename "$f")
-            if grep -qx "$name" <<<"$EXISTING"; then
-              echo "already in draft: $name"
-              continue
-            fi
-            echo "uploading $name"
-            gh api --method POST "$UPLD?name=$name" \
-              --input "$f" >/dev/null \
+          # Replace the updater manifest: each tauri-action run only lists its
+          # own platform inside latest.json, so one merged manifest covering
+          # all platforms is assembled here from the .sig assets. Flatpak has
+          # its own update channel via the Flatpak repo and is not included.
+          python3 - "$TAG" <<'PY'
+          import datetime, glob, json, os, sys
+
+          tag = sys.argv[1]
+          dist = "dist"
+          assets = sorted(os.listdir(dist))
+
+          def pick(pattern):  # pattern -> asset name whose key it is
+              winners = [a for a in assets if glob.fnmatch.fnmatch(a, pattern) and not a.endswith(".sig")]
+              return winners[-1] if winners else None
+
+          def sig_of(asset):
+              s = asset + ".sig"
+              if s in assets:
+                  with open(os.path.join(dist, s), encoding="utf-8") as f:
+                      return f.read()
+              return None
+
+          base = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{tag}"
+          platforms = {}
+          for win in (pick("*-setup.exe"), pick("*.msi")):
+              if win and sig_of(win):
+                  platforms["windows-x86_64"] = {
+                      "artifactName": win,
+                      "signature": sig_of(win),
+                      "url": f"{base}/{win}",
+                  }
+                  break
+          for mac in (pick("*.app.tar.gz"),):
+              if mac and sig_of(mac):
+                  for key in ("darwin-aarch64", "darwin-x86_64"):
+                      platforms[key] = {"artifactName": mac, "signature": sig_of(mac), "url": f"{base}/{mac}"}
+          linux = pick("*.AppImage")
+          if linux and sig_of(linux):
+              platforms["linux-x86_64"] = {"artifactName": linux, "signature": sig_of(linux), "url": f"{base}/{linux}"}
+
+          if not platforms:
+              print("no updater artifacts found; skipping latest.json")
+              sys.exit(0)
+          manifest = {
+              "version": tag[1:],
+              "notes": f"arc {tag}",
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+          with open(os.path.join(dist, "latest.json"), "w", encoding="utf-8") as f:
+              json.dump(manifest, f, indent=2)
+          print("latest.json:", list(platforms))
+          PY
+
+          if [ -f dist/latest.json ]; then
+            UPLD=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+              --jq '.upload_url' | sed 's/{.*$//')
+            # drop the partial per-platform manifests the build jobs uploaded,
+            # then publish the merged one
+            for name in $(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+              --jq '.assets[].name' | grep -x "latest.json" || true); do
+              ASSET_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+                --jq '.assets[] | select(.name == "latest.json") | .id')
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID" >/dev/null
+            done
+            gh api --method POST "$UPLD?name=latest.json" \
+              --input dist/latest.json >/dev/null \
               -H "Content-Type: application/octet-stream"
-          done
+          fi
 
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
             -F draft=false -F prerelease=false -F make_latest=true \

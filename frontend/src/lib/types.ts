@@ -14,7 +14,10 @@ export type ToolId =
   | "polyline"
   | "rectangle"
   | "dimension"
-  | "wall";
+  | "wall"
+  | "sketch";
+
+export type SketchShape = "line" | "polyline" | "rectangle" | "circle";
 
 export type GeometryCategory = "Primitive" | "Sketch" | "Solid" | "Architecture" | "Annotation";
 
@@ -85,6 +88,17 @@ export interface Settings {
   show_grid: boolean;
   show_axes: boolean;
   enabled_plugins: string[];
+  recent_files: string[];
+  reopen_last_session: boolean;
+  workspace_dir: string | null;
+  updater_last_check: number | null;
+}
+
+export interface ProjectSummary {
+  name: string;
+  path: string;
+  modified: number;
+  size: number;
 }
 
 export interface PluginInfo {
@@ -95,10 +109,18 @@ export interface PluginInfo {
   error: string | null;
 }
 
+export interface UpdateNotice {
+  available: boolean;
+  version: string | null;
+  notes: string | null;
+  installable: boolean;
+}
+
 export interface AppOverview {
   documents: DocumentInfo[];
   active: string | null;
   settings: Settings;
+  updater?: UpdateNotice;
 }
 
 export interface RayHit {

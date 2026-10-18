@@ -154,7 +154,7 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
     };
 
     match cmd {
-        "get_state" => to_json(Ok(commands::get_state(st(app), st(app)))),
+        "get_state" => to_json(Ok(commands::get_state(app.clone(), st(app)))),
         "get_plugins" => to_json(Ok(commands::get_plugins(st(app)))),
         "get_settings" => to_json(Ok(commands::get_settings(st(app)))),
         "set_settings" => to_json(Ok(commands::set_settings(

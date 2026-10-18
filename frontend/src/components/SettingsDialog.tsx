@@ -5,7 +5,6 @@ import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
 import { Button, Checkbox, Modal, Row, SelectField, TextField } from "./ui";
 import type { Settings } from "../lib/types";
-import { Logo } from "./Logo";
 import { ThemeSettings } from "./ThemeSettings";
 import { KeybindSettings } from "./KeybindSettings";
 import { cn } from "./ui";
@@ -69,13 +68,6 @@ export function SettingsDialog() {
           )}
         </div>
       </div>
-
-      <div className="mt-4 flex items-center gap-2.5 border-t border-base-300 pt-3">
-        <Logo size={16} />
-        <div className="flex flex-col leading-tight">
-          <span className="text-[11px] font-semibold text-base-700 lowercase tracking-wide">arc</span>
-        </div>
-      </div>
     </Modal>
   );
 }
@@ -133,8 +125,42 @@ function GeneralTab({
           label="Show axes"
         />
       </Row>
+      <Row label="Startup">
+        <Checkbox
+          checked={settings.reopen_last_session}
+          onChange={(reopen_last_session) => patch({ reopen_last_session })}
+          label="Reopen last session at launch"
+        />
+      </Row>
+      <Row label="Updates">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              useArcStore.getState().setStatusMessage("Checking for updates…");
+              void ipc.checkForUpdates().catch((error) => {
+                useArcStore.getState().setStatusMessage(`Update check failed: ${String(error)}`);
+              });
+            }}
+          >
+            <RefreshCw size={12} /> Check for updates
+          </Button>
+          {settings.updater_last_check && (
+            <span className="text-[11px] text-base-500">
+              last checked {formatLastCheck(settings.updater_last_check)}
+            </span>
+          )}
+        </div>
+      </Row>
     </div>
   );
+}
+
+function formatLastCheck(secs: number): string {
+  const diff = Math.max(0, Date.now() / 1000 - secs);
+  if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function PluginsTab({

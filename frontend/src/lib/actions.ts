@@ -44,7 +44,12 @@ export const actions = {
       filters: [{ name: "arc documents", extensions: ["arc", "json"] }],
     });
     if (!path) return;
-    await ipc.openDocument(path as string);
+    await actions.openRecent(path as string);
+  }),
+
+  openRecent: guard(async (path: string) => {
+    if (!path) return;
+    await ipc.openDocument(path);
     const overview = await ipc.getState();
     useArcStore.getState().setOverview(overview);
     if (overview.active) {

@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { Circle, Minus, RectangleHorizontal, Waypoints } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
 import { useThemeStore, viewportPalette, type ViewportPalette } from "../lib/themes";
 import { ViewCube } from "../lib/viewcube";
 import { DEFAULT_GEOMETRY, MULTI_POINT_TOOLS } from "../data/tools";
-import type { EntityData, Geometry, LayerData, SceneData, ToolId } from "../lib/types";
+import { IconButton } from "./ui";
+import type { EntityData, Geometry, LayerData, SceneData, SketchShape, ToolId } from "../lib/types";
 
 interface ViewPalette {
   bg: THREE.Color;
@@ -23,6 +25,24 @@ interface ViewAnim {
   radius: number;
   start: number;
   duration: number;
+}
+
+interface DraftCommit {
+  geometry: Geometry;
+  position: [number, number, number];
+}
+
+interface ShapeBuild {
+  commit: DraftCommit;
+  preview: THREE.Object3D;
+}
+
+interface DragDraft {
+  shape: string;
+  start: THREE.Vector3;
+  pressX: number;
+  pressY: number;
+  built: ShapeBuild | null;
 }
 
 interface ViewportRefs {
@@ -43,16 +63,81 @@ interface ViewportRefs {
   dragging: EntityData | null;
   dragOffset: THREE.Vector3;
   dragMoved: boolean;
+  dragDraft: DragDraft | null;
+  dragPreview: THREE.Object3D | null;
+  lastTool: ToolId | null;
+  lastCommitAt: number;
   disposed: boolean;
   gizmo: ViewCube;
   viewAnim: ViewAnim | null;
   palette: ViewPalette;
 }
 
-/** The three.js editor viewport. Handles navigation, picking and tools. */
+const DRAG_SHAPES: ReadonlySet<string> = new Set([
+  "box",
+  "sphere",
+  "cylinder",
+  "cone",
+  "torus",
+  "plane",
+  "circle",
+  "rectangle",
+]);
+
+const SKETCH_SHAPES: ReadonlySet<string> = new Set(["line", "polyline", "rectangle", "circle"]);
+
+const SKETCH_UI: { shape: SketchShape; label: string; hint: string; icon: typeof Minus }[] = [
+  { shape: "line", label: "Line", hint: "Line: click two points", icon: Minus },
+  { shape: "polyline", label: "Polyline", hint: "Polyline: click points, Enter to finish", icon: Waypoints },
+  { shape: "rectangle", label: "Rectangle", hint: "Rectangle: drag corner to corner", icon: RectangleHorizontal },
+  { shape: "circle", label: "Circle", hint: "Circle: drag from center to radius", icon: Circle },
+];
+
+function messageForSketchShape(shape: SketchShape): string {
+  switch (shape) {
+    case "line":
+      return "Sketch Line · click two points · Esc exits";
+    case "polyline":
+      return "Sketch Polyline · click to add points · Enter finishes · Esc exits";
+    case "rectangle":
+      return "Sketch Rectangle · drag corner to corner · Esc exits";
+    case "circle":
+      return "Sketch Circle · drag from center to radius · Esc exits";
+  }
+}
+
+function hintForTool(tool: ToolId): string {
+  switch (tool) {
+    case "sketch":
+      return "Sketch mode";
+    case "line":
+      return "Line · click two points · Enter finishes · Esc cancels";
+    case "polyline":
+      return "Polyline · click to add points · Enter finishes · Esc cancels";
+    case "dimension":
+      return "Dimension · click two points · Enter finishes · Esc cancels";
+    case "wall":
+      return "Wall · click to add points · Enter finishes · Esc cancels";
+    case "box":
+    case "sphere":
+    case "cylinder":
+    case "cone":
+    case "torus":
+    case "plane":
+    case "circle":
+    case "rectangle":
+      return "Click to place, or drag to size";
+    default:
+      return "";
+  }
+}
+
+/** The main editor viewport. Handles navigation, picking and tools. */
 export function Viewport() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const labelsRef = useRef<HTMLDivElement | null>(null);
+  const tool = useArcStore((s) => s.tool);
+  const sketchShape = useArcStore((s) => s.sketchShape);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -79,6 +164,29 @@ export function Viewport() {
   return (
     <div className="relative h-full w-full">
       <div ref={hostRef} className="h-full w-full" />
+      {tool === "sketch" && (
+        <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-base-300 bg-base-100/95 py-1 pl-2 pr-1 shadow-md">
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
+            Sketch
+          </span>
+          {SKETCH_UI.map((item) => {
+            const Icon = item.icon;
+            return (
+              <IconButton
+                key={item.shape}
+                icon={<Icon size={14} />}
+                title={item.hint}
+                active={sketchShape === item.shape}
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent<SketchShape>("arc-sketch-shape", { detail: item.shape }),
+                  )
+                }
+              />
+            );
+          })}
+        </div>
+      )}
       <div ref={labelsRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
     </div>
   );
@@ -126,6 +234,8 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   ref.gridNode = next;
   ref.gizmo.applyTheme(palette);
 }
+
+let currentRef: ViewportRefs | null = null;
 
 function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -204,6 +314,10 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
     dragging: null,
     dragOffset: new THREE.Vector3(),
     dragMoved: false,
+    dragDraft: null,
+    dragPreview: null,
+    lastTool: null,
+    lastCommitAt: 0,
     disposed: false,
     gizmo: null as unknown as ViewCube,
     viewAnim: null,
@@ -211,6 +325,7 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
   };
 
   ref.gizmo = new ViewCube(renderer.domElement, (normal) => focusPlane(ref, normal), labels);
+  currentRef = ref;
 
   return ref;
 }
@@ -289,15 +404,27 @@ function focusPlane(ref: ViewportRefs, normal: THREE.Vector3): void {
 // -------------------------------------------------------------- scene sync
 
 function syncSceneToThree(ref: ViewportRefs): void {
-  const scene = useArcStore.getState().scene;
+  const state = useArcStore.getState();
+  const scene = state.scene;
   if (scene) rebuildEntities(ref, scene);
-  const settings = useArcStore.getState().settings;
+  const settings = state.settings;
   ref.gridNode.visible = settings?.show_grid ?? true;
   ref.axes.visible = settings?.show_axes ?? true;
-  if (!MULTI_POINT_TOOLS.has(useArcStore.getState().tool)) {
-    ref.draftPoints = [];
-    setDraft(ref, []);
+  const tool = state.tool;
+  if (tool !== ref.lastTool) {
+    ref.lastTool = tool;
+    clearDraftState(ref);
+    ref.renderer.domElement.style.cursor = MULTI_POINT_TOOLS.has(tool) ? "crosshair" : "";
+    storeHint(tool);
   }
+}
+
+function storeHint(tool: ToolId): void {
+  let hint = hintForTool(tool);
+  if (tool === "sketch") {
+    hint = `${hint} · ${messageForSketchShape(useArcStore.getState().sketchShape)}`;
+  }
+  if (hint) useArcStore.getState().setStatusMessage(hint);
 }
 
 function rebuildEntities(ref: ViewportRefs, scene: SceneData): void {
@@ -449,18 +576,64 @@ function attachHandlers(ref: ViewportRefs): () => void {
   const down = (event: PointerEvent) => onPointerDown(ref, event);
   const move = (event: PointerEvent) => onPointerMove(ref, event);
   const up = (event: PointerEvent) => onPointerUp(ref, event);
+  const cancel = (event: PointerEvent) => {
+    if (ref.dragging) {
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      ref.dragging = null;
+      ref.dragMoved = false;
+    }
+    clearDraftState(ref);
+  };
   const dbl = (event: MouseEvent) => onDoubleClick(ref, event);
   const ctx = (event: Event) => event.preventDefault();
   const wheel = () => {
     ref.viewAnim = null;
   };
+  const sketchShape = (event: Event) => {
+    const shape = (event as CustomEvent<SketchShape>).detail;
+    if (!shape || !(SKETCH_SHAPES as ReadonlySet<string>).has(shape)) return;
+    const store = useArcStore.getState();
+    store.setSketchShape(shape);
+    clearDraftState(ref);
+    store.setStatusMessage(messageForSketchShape(shape));
+  };
+  const draftCancel = () => {
+    clearDraftState(ref);
+    const store = useArcStore.getState();
+    if (store.tool === "sketch") {
+      store.setTool("select");
+      store.setStatusMessage("Sketch exited");
+    } else {
+      store.setStatusMessage("Draft cancelled");
+    }
+  };
+  const draftEnter = () => {
+    if (!commitCurrentDraft(ref)) {
+      useArcStore.getState().setStatusMessage("Nothing to finish · add more points or press Esc");
+    }
+  };
+  const draftBackspace = () => {
+    if (ref.draftPoints.length === 0) return;
+    ref.draftPoints.pop();
+    setDraft(ref, [...ref.draftPoints]);
+    if (ref.draftPoints.length === 0) useArcStore.getState().setDrafting(false);
+  };
 
   el.addEventListener("pointerdown", down);
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", cancel);
   el.addEventListener("dblclick", dbl);
   el.addEventListener("wheel", wheel, { passive: true });
   el.addEventListener("contextmenu", ctx);
+  window.addEventListener("arc-sketch-shape", sketchShape);
+  window.addEventListener("arc-draft-cancel", draftCancel);
+  window.addEventListener("arc-draft-enter", draftEnter);
+  window.addEventListener("arc-draft-backspace", draftBackspace);
 
   const fit = () => fitSelection(ref);
   window.addEventListener("arc-fit-view", fit);
@@ -474,9 +647,14 @@ function attachHandlers(ref: ViewportRefs): () => void {
     el.removeEventListener("pointerdown", down);
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", up);
+    el.removeEventListener("pointercancel", cancel);
     el.removeEventListener("dblclick", dbl);
     el.removeEventListener("wheel", wheel);
     el.removeEventListener("contextmenu", ctx);
+    window.removeEventListener("arc-sketch-shape", sketchShape);
+    window.removeEventListener("arc-draft-cancel", draftCancel);
+    window.removeEventListener("arc-draft-enter", draftEnter);
+    window.removeEventListener("arc-draft-backspace", draftBackspace);
     window.removeEventListener("arc-fit-view", fit);
     window.removeEventListener("arc-focus-entity", focus);
   };
@@ -548,27 +726,61 @@ function onPointerDown(ref: ViewportRefs, event: PointerEvent): void {
     snapCoord(hit.z, gridSize, snapOn),
   );
 
-  if (MULTI_POINT_TOOLS.has(tool)) {
+  const sketching = tool === "sketch";
+  const shape = sketching ? store.sketchShape : tool;
+  const draftingPoints = sketching
+    ? shape === "line" || shape === "polyline"
+    : MULTI_POINT_TOOLS.has(tool);
+
+  if (draftingPoints) {
     ref.draftPoints.push(snapped);
     setDraft(ref, [...ref.draftPoints]);
+    if (!store.drafting) store.setDrafting(true);
+    store.setStatusMessage("Click to add points · Enter finishes · Esc cancels");
+    if ((tool === "line" || tool === "dimension" || (sketching && shape === "line")) && ref.draftPoints.length >= 2) {
+      commitCurrentDraft(ref);
+    }
+    return;
+  }
+
+  if ((DRAG_SHAPES as ReadonlySet<string>).has(shape)) {
+    ref.dragDraft = {
+      shape,
+      start: snapped.clone(),
+      pressX: event.clientX,
+      pressY: event.clientY,
+      built: null,
+    };
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+    ref.renderer.domElement.style.cursor = "crosshair";
+    if (!store.drafting) store.setDrafting(true);
+    store.setStatusMessage("Drag to size · release to place");
     return;
   }
 
   const geometry = DEFAULT_GEOMETRY[tool as ToolId];
   if (!geometry) return;
-  void ipc
-    .createEntity(docId, geometry as Geometry)
-    .then(({ id }) => {
-      const current = useArcStore.getState().scene?.entities.find((e) => e.id === id);
-      const transform = {
-        ...(current?.transform ?? { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }),
-        position: [snapped.x, 0, snapped.z] as [number, number, number],
-      };
-      return ipc
-        .setTransform(docId, [{ id, transform }], true)
-        .then(() => ipc.setSelection(docId, [id], id));
-    })
-    .catch((error) => useArcStore.getState().setStatusMessage(`Create failed: ${String(error)}`));
+  createCommitted(ref, {
+    geometry,
+    position: [snapped.x, sitY(geometry), snapped.z],
+  });
+}
+
+function sitY(geometry: Geometry): number {
+  switch (geometry.type) {
+    case "box":
+      return (Number(geometry.height) || 0) / 2;
+    case "sphere":
+      return Number(geometry.radius) || 0;
+    case "torus":
+      return Number(geometry.tube) || 0;
+    default:
+      return 0;
+  }
 }
 
 function onPointerMove(ref: ViewportRefs, event: PointerEvent): void {
@@ -607,6 +819,26 @@ function onPointerMove(ref: ViewportRefs, event: PointerEvent): void {
         false,
       )
       .catch(() => undefined);
+    return;
+  }
+
+  if (ref.dragDraft) {
+    if (!scene) return;
+    const point = localPoint(event);
+    const hit = pointOnHorizontalPlane(rayAt(ref, point), 0);
+    if (!hit) return;
+    const gridSize = store.settings?.grid_size ?? 10;
+    const snapOn = store.settings?.snap_enabled ?? true;
+    const end = new THREE.Vector3(
+      snapCoord(hit.x, gridSize, snapOn),
+      0,
+      snapCoord(hit.z, gridSize, snapOn),
+    );
+    const draft = ref.dragDraft;
+    const built = buildShape(draft.shape, draft.start, end);
+    if (!built) return;
+    draft.built = built;
+    setDragPreview(ref, built.preview);
     return;
   }
 
@@ -663,9 +895,54 @@ function onPointerUp(ref: ViewportRefs, event: PointerEvent): void {
     return;
   }
 
+  if (ref.dragDraft) {
+    commitDragDraft(ref, event);
+    return;
+  }
+
   if (event.button === 0 && ref.gizmo.onPointerUp(event, ref.host.clientWidth, ref.host.clientHeight)) {
     return;
   }
+}
+
+function commitDragDraft(ref: ViewportRefs, event: PointerEvent): void {
+  const draft = ref.dragDraft;
+  ref.dragDraft = null;
+  try {
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  } catch {
+    // pointer may already be released
+  }
+  ref.renderer.domElement.style.cursor = "";
+  useArcStore.getState().setDrafting(false);
+  if (!draft) return;
+  const hit = pointOnHorizontalPlane(rayAt(ref, localPoint(event)), 0);
+  setDragPreview(ref, null);
+  if (!hit) return;
+  const store = useArcStore.getState();
+  const gridSize = store.settings?.grid_size ?? 10;
+  const snapOn = store.settings?.snap_enabled ?? true;
+  const end = new THREE.Vector3(
+    snapCoord(hit.x, gridSize, snapOn),
+    0,
+    snapCoord(hit.z, gridSize, snapOn),
+  );
+  const screenMoved = Math.hypot(event.clientX - draft.pressX, event.clientY - draft.pressY);
+  if (end.distanceTo(draft.start) < gridSize / 2 && screenMoved < 6) {
+    const geometry = DEFAULT_GEOMETRY[draft.shape as ToolId];
+    if (geometry) {
+      createCommitted(ref, {
+        geometry,
+        position: [draft.start.x, sitY(geometry), draft.start.z],
+      });
+      store.setStatusMessage("Default size placed · drag the next one to size it");
+    }
+    return;
+  }
+  const built = draft.built ?? buildShape(draft.shape, draft.start, end);
+  if (!built) return;
+  createCommitted(ref, built.commit);
+  store.setStatusMessage("Placed");
 }
 
 function onDoubleClick(ref: ViewportRefs, event: MouseEvent): void {
@@ -674,20 +951,10 @@ function onDoubleClick(ref: ViewportRefs, event: MouseEvent): void {
   if (!scene) return;
 
   if (ref.gizmo.hitTest(event, ref.host.clientWidth, ref.host.clientHeight)) return;
+  if (performance.now() - ref.lastCommitAt < 300) return;
 
-  if (MULTI_POINT_TOOLS.has(store.tool) && ref.draftPoints.length >= 2) {
-    const geometry = finishSketch(store.tool, ref.draftPoints);
-    if (geometry) {
-      void ipc
-        .createEntity(activeDoc(), geometry)
-        .then(({ id }) => ipc.setSelection(activeDoc(), [id], id))
-        .catch((error) =>
-          useArcStore.getState().setStatusMessage(`Create failed: ${String(error)}`),
-        );
-    }
-    ref.draftPoints = [];
-    setDraft(ref, []);
-    return;
+  if ((MULTI_POINT_TOOLS.has(store.tool) || (store.tool === "sketch" && store.sketchShape === "polyline")) && ref.draftPoints.length >= 2) {
+    if (commitCurrentDraft(ref)) return;
   }
 
   const id = pickEntityAt(ref, localPoint(event));
@@ -710,31 +977,236 @@ function setDraft(ref: ViewportRefs, points: THREE.Vector3[]): void {
   ref.draftNode.visible = true;
 }
 
-function finishSketch(tool: ToolId, points: THREE.Vector3[]): Geometry | null {
+function setDragPreview(ref: ViewportRefs, preview: THREE.Object3D | null): void {
+  if (ref.dragPreview) {
+    ref.sceneRoot.remove(ref.dragPreview);
+    disposeObject(ref.dragPreview);
+    ref.dragPreview = null;
+  }
+  if (preview) {
+    ref.dragPreview = preview;
+    ref.sceneRoot.add(preview);
+  }
+}
+
+function previewMeshMaterial(ref: ViewportRefs): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    transparent: true,
+    opacity: 0.75,
+    roughness: 0.5,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+  });
+  material.color.copy(ref.palette.hover);
+  return material;
+}
+
+function previewLineMaterial(ref: ViewportRefs): THREE.LineBasicMaterial {
+  const material = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9 });
+  material.color.copy(ref.palette.line);
+  return material;
+}
+
+function ringGeometryPoints(radius: number, segments: number): number[] {
+  const points: number[] = [];
+  for (let i = 0; i < segments; i++) {
+    const angle = (Math.PI * 2 * i) / segments;
+    points.push(radius * Math.cos(angle), 0, radius * Math.sin(angle));
+  }
+  return points;
+}
+
+function buildShape(shape: string, start: THREE.Vector3, end: THREE.Vector3): ShapeBuild | null {
+  const ref = currentRef;
+  if (!ref) return null;
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const geometry = {
+    geometry: null as Geometry | null,
+    position: null as [number, number, number] | null,
+    preview: null as THREE.Object3D | null,
+  };
+  switch (shape) {
+    case "box": {
+      const width = Math.max(4, Math.abs(dx));
+      const depth = Math.max(4, Math.abs(dz));
+      const height = 20;
+      geometry.geometry = { type: "box", width, depth, height, corner_radius: 0 };
+      geometry.position = [(start.x + end.x) / 2, height / 2, (start.z + end.z) / 2];
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), previewMeshMaterial(ref));
+      mesh.position.set(...geometry.position);
+      geometry.preview = mesh;
+      break;
+    }
+    case "sphere": {
+      const radius = Math.max(4, Math.hypot(dx, dz));
+      geometry.geometry = { type: "sphere", radius, segments: 32 };
+      geometry.position = [start.x, radius, start.z];
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), previewMeshMaterial(ref));
+      mesh.position.set(...geometry.position);
+      geometry.preview = mesh;
+      break;
+    }
+    case "cylinder":
+    case "cone": {
+      const radius = Math.max(4, Math.hypot(dx, dz));
+      const height = 40;
+      geometry.geometry =
+        shape === "cylinder"
+          ? { type: "cylinder", radius, height, segments: 32 }
+          : { type: "cone", radius, height, segments: 32 };
+      geometry.position = [start.x, 0, start.z];
+      const mesh = new THREE.Mesh(
+        shape === "cylinder"
+          ? new THREE.CylinderGeometry(radius, radius, height, 32)
+          : new THREE.ConeGeometry(radius, height, 32),
+        previewMeshMaterial(ref),
+      );
+      mesh.position.set(start.x, height / 2, start.z);
+      geometry.preview = mesh;
+      break;
+    }
+    case "torus": {
+      const radius = Math.max(6, Math.hypot(dx, dz));
+      const tube = Math.min(8, radius / 3);
+      geometry.geometry = { type: "torus", radius, tube, segments: 32, tubular_segments: 16 };
+      geometry.position = [start.x, tube, start.z];
+      const mesh = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, tube, 14, 48).rotateX(Math.PI / 2),
+        previewMeshMaterial(ref),
+      );
+      mesh.position.set(...geometry.position);
+      geometry.preview = mesh;
+      break;
+    }
+    case "plane": {
+      const width = Math.max(8, Math.abs(dx));
+      const depth = Math.max(8, Math.abs(dz));
+      geometry.geometry = { type: "plane", width, depth };
+      geometry.position = [(start.x + end.x) / 2, 0, (start.z + end.z) / 2];
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth).rotateX(-Math.PI / 2),
+        previewMeshMaterial(ref),
+      );
+      mesh.position.set(...geometry.position);
+      geometry.preview = mesh;
+      break;
+    }
+    case "circle": {
+      const radius = Math.max(4, Math.hypot(dx, dz));
+      geometry.geometry = { type: "circle_curve", radius, segments: 48 };
+      geometry.position = [start.x, 0, start.z];
+      const line = new THREE.BufferGeometry();
+      line.setAttribute("position", new THREE.Float32BufferAttribute(ringGeometryPoints(radius, 48), 3));
+      const loop = new THREE.LineLoop(line, previewLineMaterial(ref));
+      loop.position.set(...geometry.position);
+      geometry.preview = loop;
+      break;
+    }
+    case "rectangle": {
+      const width = Math.max(4, Math.abs(dx));
+      const depth = Math.max(4, Math.abs(dz));
+      geometry.geometry = { type: "rectangle_curve", width, depth };
+      geometry.position = [(start.x + end.x) / 2, 0, (start.z + end.z) / 2];
+      const hw = width / 2;
+      const hd = depth / 2;
+      const positions = [-hw, 0, -hd, hw, 0, -hd, hw, 0, hd, -hw, 0, hd, -hw, 0, -hd];
+      const line = new THREE.BufferGeometry();
+      line.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      const path = new THREE.Line(line, previewLineMaterial(ref));
+      path.position.set(...geometry.position);
+      geometry.preview = path;
+      break;
+    }
+    default:
+      return null;
+  }
+  if (!geometry.geometry || !geometry.position || !geometry.preview) return null;
+  return {
+    commit: { geometry: geometry.geometry, position: geometry.position },
+    preview: geometry.preview,
+  };
+}
+
+function buildMultiGeometry(shape: string, points: THREE.Vector3[]): DraftCommit | null {
   if (points.length < 2) return null;
   const flatten = (p: THREE.Vector3): [number, number, number] => [p.x, p.y, p.z];
   const first = flatten(points[0]);
   const last = flatten(points[points.length - 1]);
-  switch (tool) {
+  switch (shape) {
     case "line":
       return {
-        type: "line",
-        end: [last[0] - first[0], last[1] - first[1], last[2] - first[2]],
+        geometry: {
+          type: "line_curve",
+          end: [last[0] - first[0], last[1] - first[1], last[2] - first[2]],
+        },
+        position: first,
       };
     case "polyline":
-      return { type: "polyline", points: points.map(flatten) };
+      return {
+        geometry: { type: "polyline_curve", points: points.map(flatten) },
+        position: [0, 0, 0],
+      };
     case "dimension":
-      return { type: "dimension", start: first, end: last };
+      return {
+        geometry: { type: "dimension", start: first, end: last },
+        position: [0, 0, 0],
+      };
     case "wall":
       return {
-        type: "wall",
-        path: points.map((p) => [p.x, p.z] as [number, number]),
-        width: 10,
-        height: 80,
+        geometry: {
+          type: "wall",
+          path: points.map((p) => [p.x, p.z] as [number, number]),
+          width: 10,
+          height: 80,
+        },
+        position: [0, 0, 0],
       };
     default:
       return null;
   }
+}
+
+function createCommitted(ref: ViewportRefs, commit: DraftCommit): void {
+  ref.lastCommitAt = performance.now();
+  const docId = activeDoc();
+  if (!docId) return;
+  void ipc
+    .createEntity(docId, commit.geometry)
+    .then(({ id }) => {
+      const needsPlace = commit.position[0] !== 0 || commit.position[1] !== 0 || commit.position[2] !== 0;
+      if (!needsPlace) return ipc.setSelection(docId, [id], id);
+      const current = useArcStore.getState().scene?.entities.find((e) => e.id === id);
+      const transform = {
+        ...(current?.transform ?? { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }),
+        position: commit.position,
+      };
+      return ipc
+        .setTransform(docId, [{ id, transform }], true)
+        .then(() => ipc.setSelection(docId, [id], id));
+    })
+    .catch((error) => useArcStore.getState().setStatusMessage(`Create failed: ${String(error)}`));
+}
+
+function commitCurrentDraft(ref: ViewportRefs): boolean {
+  const store = useArcStore.getState();
+  const shape = store.tool === "sketch" ? store.sketchShape : store.tool;
+  if (store.tool !== "sketch" && !MULTI_POINT_TOOLS.has(store.tool)) return false;
+  const commit = buildMultiGeometry(shape, ref.draftPoints);
+  if (!commit) return false;
+  createCommitted(ref, commit);
+  clearDraftState(ref);
+  store.setStatusMessage("Created");
+  return true;
+}
+
+function clearDraftState(ref: ViewportRefs): void {
+  ref.draftPoints = [];
+  ref.dragDraft = null;
+  setDragPreview(ref, null);
+  setDraft(ref, []);
+  const store = useArcStore.getState();
+  if (store.drafting) store.setDrafting(false);
 }
 
 // ------------------------------------------------------------------- camera
@@ -776,6 +1248,7 @@ export function fitEntities(ref: ViewportRefs, ids: string[]): void {
 
 function disposeViewport(ref: ViewportRefs): void {
   ref.disposed = true;
+  if (currentRef === ref) currentRef = null;
   ref.gizmo.dispose();
   for (const obj of ref.objects.values()) disposeObject(obj);
   ref.objects.clear();

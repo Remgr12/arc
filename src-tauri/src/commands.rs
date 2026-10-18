@@ -9,7 +9,7 @@ use crate::state::{
 use arc_core::{Color, Document, Entity, EntityId, Geometry, RayHit, Transform};
 use serde::Deserialize;
 use serde_json::Value as Json;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // ------------------------------------------------------------ event helpers
 
@@ -30,13 +30,19 @@ pub fn emit_documents(app: &AppHandle, state: &SharedState) {
             documents: s.documents_out(),
             active: s.active.clone(),
             settings: s.settings.clone(),
+            updater: updater_notice(app),
         }
     };
     let _ = app.emit("arc://documents", payload);
 }
 
+fn updater_notice(app: &AppHandle) -> Option<crate::updater::UpdateNotice> {
+    app.try_state::<crate::updater::UpdateNoticeCache>()
+        .and_then(|c| c.0.clone())
+}
+
 fn fire_plugin_hook(
-    state: &State<'_, SharedState>,
+    state: &SharedState,
     plugins: Option<&PluginLock>,
     hook: &'static str,
     arg: &Json,
@@ -129,16 +135,13 @@ fn parse_one(s: &str) -> Result<EntityId, String> {
 // ------------------------------------------------------------ app state
 
 #[tauri::command]
-pub fn get_state(
-    state: State<'_, SharedState>,
-    plugins: State<'_, PluginLock>,
-) -> AppOverview {
-    let _ = &plugins;
+pub fn get_state(app: AppHandle, state: State<'_, SharedState>) -> AppOverview {
     let s = state.lock();
     AppOverview {
         documents: s.documents_out(),
         active: s.active.clone(),
         settings: s.settings.clone(),
+        updater: updater_notice(&app),
     }
 }
 
@@ -224,7 +227,17 @@ pub fn open_document(
     plugins: State<'_, PluginLock>,
     path: String,
 ) -> Result<DocumentInfo, String> {
-    let json = std::fs::read_to_string(&path).map_err(|e| format!("open failed: {e}"))?;
+    open_document_impl(&app, &state, Some(&plugins), &path)
+}
+
+/// Shared by the `open_document` command and startup session restore.
+pub fn open_document_impl(
+    app: &AppHandle,
+    state: &SharedState,
+    plugins: Option<&PluginLock>,
+    path: &str,
+) -> Result<DocumentInfo, String> {
+    let json = std::fs::read_to_string(path).map_err(|e| format!("open failed: {e}"))?;
     let doc = Document::from_json(&json).map_err(|e| format!("parse failed: {e}"))?;
 
     let info = {
@@ -233,16 +246,12 @@ pub fn open_document(
         s.documents.insert(id.clone(), doc);
         s.order.push(id.clone());
         s.active = Some(id.clone());
-        s.doc_paths.insert(id.clone(), std::path::PathBuf::from(path.clone()));
+        s.doc_paths.insert(id.clone(), std::path::PathBuf::from(path));
+        crate::state::remember_recent(&mut s.settings, path);
         s.doc_info(&id).expect("just inserted")
     };
-    emit_documents(&app, &state);
-    fire_plugin_hook(
-        &state,
-        Some(&plugins),
-        "open",
-        &serde_json::json!({ "path": path }),
-    );
+    emit_documents(app, state);
+    fire_plugin_hook(state, plugins, "open", &serde_json::json!({ "path": path }));
     Ok(info)
 }
 
@@ -254,19 +263,30 @@ pub fn save_document(
     document_id: String,
     path: Option<String>,
 ) -> Result<DocumentInfo, String> {
-    let json = doc_ref(&state, &document_id, |d| d.save_string())??;
+    save_document_impl(&app, &state, Some(&plugins), &document_id, path.as_deref())
+}
+
+/// Shared by the `save_document` command and programmatic saves.
+pub fn save_document_impl(
+    app: &AppHandle,
+    state: &SharedState,
+    plugins: Option<&PluginLock>,
+    document_id: &str,
+    path: Option<&str>,
+) -> Result<DocumentInfo, String> {
+    let json = doc_ref(state, document_id, |d| d.save_string())??;
     let final_path = match path {
         Some(p) => {
             state
                 .lock()
                 .doc_paths
-                .insert(document_id.clone(), std::path::PathBuf::from(p.clone()));
-            p
+                .insert(document_id.to_string(), std::path::PathBuf::from(p));
+            p.to_string()
         }
         None => {
             let s = state.lock();
             s.doc_paths
-                .get(&document_id)
+                .get(document_id)
                 .map(|p| p.display().to_string())
                 .ok_or("document has no path")?
         }
@@ -274,19 +294,20 @@ pub fn save_document(
     std::fs::write(&final_path, json).map_err(|e| format!("write failed: {e}"))?;
     {
         let mut s = state.lock();
-        if let Some(doc) = s.documents.get_mut(&document_id) {
+        if let Some(doc) = s.documents.get_mut(document_id) {
             doc.path = Some(final_path.clone());
             doc.modified = false;
         }
+        crate::state::remember_recent(&mut s.settings, &final_path);
     }
-    emit_documents(&app, &state);
+    emit_documents(app, state);
     fire_plugin_hook(
-        &state,
-        Some(&plugins),
+        state,
+        plugins,
         "save",
         &serde_json::json!({ "path": final_path }),
     );
-    let info = state.lock().doc_info(&document_id).expect("exists");
+    let info = state.lock().doc_info(document_id).expect("exists");
     Ok(info)
 }
 
@@ -714,6 +735,58 @@ pub fn set_active_layer(
 #[tauri::command]
 pub fn get_settings(state: State<'_, SharedState>) -> Settings {
     state.lock().settings.clone()
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProjectSummary {
+    pub name: String,
+    pub path: String,
+    pub modified: i64,
+    pub size: u64,
+}
+
+#[tauri::command]
+pub fn list_projects(dir: String) -> Vec<ProjectSummary> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_arc = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("arc"))
+            .unwrap_or(false);
+        if !is_arc {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("untitled")
+            .to_string();
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        out.push(ProjectSummary {
+            name,
+            path: path.display().to_string(),
+            modified,
+            size: meta.len(),
+        });
+    }
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
 }
 
 #[tauri::command]

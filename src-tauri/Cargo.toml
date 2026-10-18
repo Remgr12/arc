@@ -21,6 +21,7 @@ tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
 tauri-plugin-opener = { workspace = true }
+tauri-plugin-updater = { workspace = true }
 
 mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"], optional = true }
 

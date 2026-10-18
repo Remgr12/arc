@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modeling — arc docs</title>
+  <meta name="description" content="Modeling tools reference for arc: primitives, sketch tools, select and move, layers, properties editing, undo and redo, and working with .arc documents." />
+  <link rel="canonical" href="https://remgr12.github.io/arc/docs/modeling.html" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta name="theme-color" content="#0b0e14" />
+  <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" />arc<span class="docs-badge">docs</span></a>
+      <nav class="top">
+        <a class="keep" href="../index.html">Home</a>
+        <a class="keep" href="index.html">Docs</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="modeling.html" aria-current="page">Modeling</a>
+        <a href="navigation.html">Navigation</a>
+        <a href="keybinds.html">Keybinds</a>
+        <a href="plugins.html">Plugins</a>
+        <a href="themes.html">Themes</a>
+        <a href="automation.html">Automation</a>
+        <a href="https://github.com/Remgr12/arc" class="gh">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <aside class="toc">
+      <div class="label">Docs</div>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a class="on" href="modeling.html">Modeling</a>
+      <a href="navigation.html">Navigation</a>
+      <a href="keybinds.html">Keybinds</a>
+      <a href="plugins.html">Plugins</a>
+      <a href="themes.html">Themes</a>
+      <a href="automation.html">Automation</a>
+      <div class="label">On this page</div>
+      <a href="#primitives">Primitives</a>
+      <a href="#sketch">Sketch tools</a>
+      <a href="#select-move">Select and move</a>
+      <a href="#layers">Layers</a>
+      <a href="#properties">Properties</a>
+      <a href="#history">Undo and redo</a>
+      <a href="#documents">Documents</a>
+    </aside>
+
+    <main class="page">
+      <h1>Modeling</h1>
+      <p class="subline">
+        Sketch on the ground plane, spin or place profiles like building parts, and edit everything
+        in place. Every step of the way back is kept.
+      </p>
+
+      <section class="doc" id="primitives">
+        <h2>Primitives</h2>
+        <p>
+          Pick a primitive from the palette (or its key) and click a point on the ground plane to
+          place it. Primitives are parametric — their parameters stay editable in the Properties
+          panel afterwards.
+        </p>
+        <table class="tbl">
+          <caption>default parameters</caption>
+          <thead><tr><th>Tool</th><th>Key</th><th>Parameters</th></tr></thead>
+          <tbody>
+            <tr><td>Box</td><td><kbd>B</kbd></td><td>width 60, depth 60, height 20, corner radius 0</td></tr>
+            <tr><td>Sphere</td><td><kbd>Y</kbd></td><td>radius 30, segments 32</td></tr>
+            <tr><td>Cylinder</td><td><kbd>C</kbd></td><td>radius 20, height 40, segments 32</td></tr>
+            <tr><td>Cone</td><td><kbd>O</kbd></td><td>radius 20, height 40, segments 32</td></tr>
+            <tr><td>Torus</td><td><kbd>T</kbd></td><td>radius 30, tube 8, segments 32, tubular segments 16</td></tr>
+            <tr><td>Plane</td><td><kbd>P</kbd></td><td>width 200, depth 200 (a ground plane)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="doc" id="sketch">
+        <h2>Sketch tools</h2>
+        <p>
+          Sketch tools draw on the ground plane with grid snapping
+          (<a href="navigation.html">see Navigation</a>). Line, polyline, dimension, and wall tools
+          collect more than one point before finishing.
+        </p>
+        <table class="tbl">
+          <caption>sketch tools</caption>
+          <thead><tr><th>Tool</th><th>Key</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Circle</td><td><kbd>G</kbd></td><td>Draw a circle outline (radius 40, 48 segments by default).</td></tr>
+            <tr><td>Line</td><td><kbd>L</kbd></td><td>Draw a line between two points.</td></tr>
+            <tr><td>Polyline</td><td><kbd>J</kbd></td><td>Click to add points; double-click to finish.</td></tr>
+            <tr><td>Rectangle</td><td><kbd>R</kbd></td><td>Draw a rectangle outline (80 × 50 by default).</td></tr>
+            <tr><td>Dimension</td><td><kbd>D</kbd></td><td>Annotate the distance between two points.</td></tr>
+            <tr><td>Wall</td><td><kbd>H</kbd></td><td>Draw a wall along a path (10 wide, 80 tall by default); double-click to finish.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="doc" id="select-move">
+        <h2>Select and move</h2>
+        <ul>
+          <li><strong>Select</strong> (<kbd>V</kbd>) — select and inspect entities in the viewport.</li>
+          <li><strong>Move</strong> (<kbd>M</kbd>) — drag entities along the ground plane.</li>
+          <li><strong>Select all</strong> — <span class="mono">Ctrl A</span>; <strong>Duplicate</strong> — <span class="mono">Ctrl D</span>; <strong>Delete selection</strong> — <span class="mono">Delete</span> or <span class="mono">Backspace</span>.</li>
+          <li><strong>Explode selection</strong> — available from the command palette (<span class="mono">Ctrl K</span>); it has no default key.</li>
+          <li>Double-click an entity to zoom the camera to it.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="layers">
+        <h2>Layers</h2>
+        <p>
+          The <em>Project</em> panel has a <em>Layers</em> tab beside the scene outline. Add layers
+          with the <em>+</em> button; each layer has a color, and can be toggled visible and locked.
+          Any entity can override its layer's settings with per-entity visibility, lock, and color.
+        </p>
+      </section>
+
+      <section class="doc" id="properties">
+        <h2>Properties</h2>
+        <p>
+          With something selected, the Properties panel below the Project panel shows its editable
+          parameters — geometry dimensions, transform position, rotation and scale, visibility, and
+          so on. Edit a value and the change applies immediately. Entities without editable
+          parameters say so.
+        </p>
+      </section>
+
+      <section class="doc" id="history">
+        <h2>Undo and redo</h2>
+        <p>
+          Every editing operation is recorded as a reversible command, including changes made by
+          Lua plugins. <span class="mono">Ctrl Z</span> undoes and <span class="mono">Ctrl Shift Z</span>
+          (or <span class="mono">Ctrl Y</span>) redoes; the history is per document.
+        </p>
+      </section>
+
+      <section class="doc" id="documents">
+        <h2>Documents</h2>
+        <p>
+          arc works on several documents at once; each open document gets a tab in the top bar and
+          switching between them is live. Documents carry their undo history with them.
+        </p>
+        <table class="tbl">
+          <caption>file actions</caption>
+          <thead><tr><th>Action</th><th class="keys">Binding</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>New document</td><td class="keys"><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>Opens an empty <span class="mono">Untitled n</span> document.</td></tr>
+            <tr><td>Open…</td><td class="keys"><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Native <span class="mono">.arc</span> files (plain JSON).</td></tr>
+            <tr><td>Save</td><td class="keys"><kbd>Ctrl</kbd> <kbd>S</kbd></td><td>Saves to the document's path; asks for one when the file has none.</td></tr>
+            <tr><td>Save As…</td><td class="keys" aria-label="no default binding">—</td><td>No default binding; use File menu or the command palette.</td></tr>
+            <tr><td>Export model</td><td class="keys"><kbd>Ctrl</kbd> <kbd>E</kbd></td><td><span class="mono">.obj</span> (text OBJ) or <span class="mono">.stl</span> (binary STL).</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The <em>File</em> menu also lists up to five recently opened files. With
+          <em>Reopen last session at launch</em> enabled, up to six recent documents are reopened on
+          startup (most recent last, so it ends up active) — see
+          <a href="getting-started.html">Getting started</a>.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site">
+    <div class="wrap">
+      <img src="assets/icon.svg" alt="" />
+      <div class="who">
+        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon
+      </div>
+      <div class="right">
+        <a href="../index.html">Website</a>
+        <a href="https://github.com/Remgr12/arc">GitHub</a>
+        <a href="https://github.com/Remgr12/arc/releases">Releases</a>
+        <a href="https://github.com/Remgr12/arc/issues">Issues</a>
+      </div>
+      <div class="legal">
+        <small>
+          Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or
+          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
+          Not affiliated with the Arc browser, a product of The Browser Company.
+        </small>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -135,9 +135,17 @@ export function installKeybinds(): () => void {
     if (!binding) return;
 
     if (binding === "escape") {
-      // Escape always closes menus and clears the selection.
       if (st.paletteOpen) st.setPaletteOpen(false);
+      else if (st.drafting || st.tool === "sketch") window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
       else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
+      return;
+    }
+
+    if (st.drafting && (binding === "enter" || binding === "backspace")) {
+      e.preventDefault();
+      window.dispatchEvent(
+        new CustomEvent(binding === "enter" ? "arc-draft-enter" : "arc-draft-backspace"),
+      );
       return;
     }
 

@@ -113,6 +113,7 @@ export class ViewCube {
     for (const label of this.labels) label.style.color = this.theme.text;
   }
 
+  /** Gizmo rect in CSS top-left coordinates of the host. */
   rect(hostW: number, hostH: number): { x: number; y: number; size: number } {
     return { x: hostW - GIZMO_SIZE - GIZMO_MARGIN, y: hostH - GIZMO_MARGIN - GIZMO_SIZE, size: GIZMO_SIZE };
   }
@@ -120,33 +121,38 @@ export class ViewCube {
   /** Render the gizmo into a corner of the framebuffer. */
   render(renderer: THREE.WebGLRenderer, mainCamera: THREE.PerspectiveCamera, hostW: number, hostH: number): void {
     this.cube.quaternion.copy(mainCamera.quaternion).invert();
+    this.cube.updateMatrixWorld();
     const rect = this.rect(hostW, hostH);
 
+    // GL viewport coordinates are bottom-left origin; rect is CSS top-left.
+    const glY = hostH - rect.y - rect.size;
     renderer.setScissorTest(true);
-    renderer.setScissor(rect.x, rect.y, rect.size, rect.size);
-    renderer.setViewport(rect.x, rect.y, rect.size, rect.size);
+    renderer.setScissor(rect.x, glY, rect.size, rect.size);
+    renderer.setViewport(rect.x, glY, rect.size, rect.size);
     renderer.clearDepth();
     renderer.render(this.scene, this.navCam);
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, hostW, hostH);
 
-    this.updateLabels(rect, hostH);
+    this.updateLabels(rect);
   }
 
-  private updateLabels(rect: { x: number; y: number; size: number }, hostH: number): void {
-    const inv = this.cube.quaternion.clone().invert();
+  private updateLabels(rect: { x: number; y: number; size: number }): void {
     for (let i = 0; i < FACES.length; i++) {
       const el = this.labels[i];
-      // Facing factor: 1 = face-on, 0 = edge-on.
-      const facing = FACES[i].normal.clone().applyQuaternion(inv).z;
+      // A cube-local face normal rotated into gizmo world space: its z is the
+      // facing factor (the gizmo camera looks down -Z) and rotating it to
+      // radius 1.55 gives the point above that face's center to project.
+      const world = this._v.copy(FACES[i].normal).applyQuaternion(this.cube.quaternion);
+      const facing = world.z;
       if (facing <= 0.08) {
         el.style.opacity = "0";
         continue;
       }
-      const world = this._v.copy(FACES[i].normal).multiplyScalar(1.55);
+      world.multiplyScalar(1.55);
       world.project(this.navCam);
       const left = rect.x + (world.x * 0.5 + 0.5) * rect.size;
-      const top = hostH - rect.y - rect.size + (0.5 - world.y * 0.5) * rect.size;
+      const top = rect.y + (0.5 - world.y * 0.5) * rect.size;
       el.style.left = `${left}px`;
       el.style.top = `${top}px`;
       el.style.opacity = String(Math.min(1, facing * 1.6));
@@ -189,7 +195,6 @@ export class ViewCube {
     if (this.hover >= 0) this.faceColor(this.hover, false);
     this.hover = face;
     if (face >= 0) this.faceColor(face, true);
-    this.domElement.style.cursor = face >= 0 ? "pointer" : "";
   }
 
   private lastSpherical = new THREE.Spherical();
@@ -224,15 +229,31 @@ export class ViewCube {
       camera.position.copy(pos);
       return true;
     }
-    const face = this.faceAt(event, hostW, hostH);
-    this.setHover(face);
-    return face >= 0;
+    if (!this.pointerInRect(event, hostW, hostH)) {
+      this.setHover(-1);
+      this.domElement.style.cursor = "";
+      return false;
+    }
+    if (this.pressedFace >= 0) {
+      const dragged = Math.hypot(event.clientX - this.pressPos.x, event.clientY - this.pressPos.y);
+      if (dragged > 6) {
+        this.orbiting = true;
+        this.pressedFace = -1;
+        this.lastSpherical.setFromVector3(this._v.copy(camera.position).sub(target));
+        this.domElement.style.cursor = "grabbing";
+        return true;
+      }
+    }
+    this.setHover(this.faceAt(event, hostW, hostH));
+    this.domElement.style.cursor = "pointer";
+    return true;
   }
 
   onPointerUp(event: PointerEvent, hostW: number, hostH: number): boolean {
     if (this.orbiting) {
       this.orbiting = false;
-      this.domElement.style.cursor = this.hover >= 0 ? "pointer" : "";
+      this.pressedFace = -1;
+      this.domElement.style.cursor = this.faceAt(event, hostW, hostH) >= 0 ? "pointer" : "";
       return true;
     }
     if (this.pressedFace === -1) return false;
@@ -243,9 +264,10 @@ export class ViewCube {
     } catch {
       // ignore
     }
-    if (face === this.pressedFace && face >= 0 && moved < 5) {
+    if (face === this.pressedFace && face >= 0 && moved < 6) {
       this.onFocusFace(FACES[face].normal.clone());
     }
+    this.domElement.style.cursor = face >= 0 ? "pointer" : "";
     this.pressedFace = -1;
     return true;
   }

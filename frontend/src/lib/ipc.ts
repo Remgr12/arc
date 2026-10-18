@@ -5,11 +5,13 @@ import type {
   Geometry,
   LayerData,
   PluginInfo,
+  ProjectSummary,
   RayHit,
   SceneData,
   SceneEnvelope,
   Settings,
   Transform,
+  UpdateNotice,
 } from "./types";
 
 export const ipc = {
@@ -17,6 +19,7 @@ export const ipc = {
   getState: (): Promise<AppOverview> => invoke("get_state"),
   getPlugins: (): Promise<PluginInfo[]> => invoke("get_plugins"),
   getSettings: (): Promise<Settings> => invoke("get_settings"),
+  listProjects: (dir: string): Promise<ProjectSummary[]> => invoke("list_projects", { dir }),
   setSettings: (settings: Settings): Promise<Settings> => invoke("set_settings", { settings }),
 
   newDocument: (name?: string): Promise<DocumentInfo> =>
@@ -106,6 +109,10 @@ export const ipc = {
   // export
   exportScene: (documentId: string, path: string, format: string): Promise<string> =>
     invoke("export_scene", { documentId, path, format }),
+
+  // updater
+  checkForUpdates: (): Promise<UpdateNotice> => invoke("check_for_updates"),
+  installUpdate: (): Promise<void> => invoke("install_update"),
 };
 
 export type { LayerData };

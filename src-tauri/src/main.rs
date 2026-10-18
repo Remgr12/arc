@@ -4,11 +4,13 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 mod bridge;
 mod commands;
 mod plugins;
 mod state;
+mod updater;
 
 use arc_core::Document;
 use state::{load_settings, save_settings, SharedState, Settings};
@@ -21,6 +23,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .manage(plugin_state)
         .setup(|app| {
@@ -37,6 +40,24 @@ fn main() {
                 let mut s = shared.lock();
                 s.settings = settings.clone();
                 s.settings_path = Some(settings_path.clone());
+                // Optional session restore: reopen saved documents  (most
+                // recent last, so it ends up active).
+                if settings.reopen_last_session {
+                    let mut opened = 0;
+                    for path in settings.recent_files.iter().rev() {
+                        if opened >= 6 {
+                            break;
+                        }
+                        if !std::path::Path::new(path).exists() {
+                            continue;
+                        }
+                        if commands::open_document_impl(app.handle(), &shared, None, path)
+                            .is_ok()
+                        {
+                            opened += 1;
+                        }
+                    }
+                }
                 // The editor needs an active document to be usable, so create
                 // one on first launch (and whenever none remains).
                 if s.active.is_none() {
@@ -71,11 +92,30 @@ fn main() {
 
             bridge::start(app.handle().clone(), data_dir.join("bridge.json"));
 
+            updater::maybe_check_on_startup(app.handle().clone());
+
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let shared = window.state::<SharedState>();
+                let has_dirty = shared.lock().documents.values().any(|d| d.modified);
+                if has_dirty {
+                    let discard = window
+                        .dialog()
+                        .message("You have unsaved changes. Quit anyway?")
+                        .title("arc")
+                        .kind(MessageDialogKind::Warning)
+                        .buttons(MessageDialogButtons::OkCancelCustom(
+                            "Discard changes".to_string(),
+                            "Cancel".to_string(),
+                        ))
+                        .blocking_show();
+                    if !discard {
+                        api.prevent_close();
+                        return;
+                    }
+                }
                 let (settings, path) = {
                     let s = shared.lock();
                     (s.settings.clone(), s.settings_path.clone())
@@ -88,6 +128,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::get_plugins,
+            commands::list_projects,
             commands::get_settings,
             commands::set_settings,
             commands::new_document,
@@ -117,6 +158,8 @@ fn main() {
             commands::set_plugin_enabled,
             commands::reload_plugins,
             commands::export_scene,
+            updater::check_for_updates,
+            updater::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running arc");

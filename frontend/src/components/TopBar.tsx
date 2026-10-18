@@ -22,6 +22,11 @@ function useOutsideClose(onClose: () => void) {
   return ref;
 }
 
+const recentLabel = (path: string) => {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  return `Open Recent — ${name}`;
+};
+
 export function TopBar() {
   const scene = useArcStore((s) => s.scene);
   const overview = useArcStore((s) => s.overview);
@@ -39,6 +44,7 @@ export function TopBar() {
   const title = scene ? `${scene.name}${dirty ? " •" : ""}` : "arc";
   const docId = overview?.active ?? null;
   const doc = overview?.documents.find((d) => d.id === docId);
+  const recents = (overview?.settings.recent_files ?? []).slice(0, 5);
 
   const fileItem = (label: string, actionId: string, fn: () => void) => (
     <button
@@ -71,6 +77,18 @@ export function TopBar() {
             {fileItem("Open…", "doc:open", actions.openDocument)}
             {fileItem("Save", "doc:save", () => void actions.saveActive())}
             {fileItem("Save As…", "doc:saveAs", () => void actions.saveDocumentAs())}
+            {recents.length > 0 && (
+              <>
+                <div className="my-1 border-t border-base-800" />
+                {recents.map((path) =>
+                  fileItem(
+                    recentLabel(path),
+                    "doc:open",
+                    () => void actions.openRecent(path),
+                  ),
+                )}
+              </>
+            )}
             <div className="my-1 border-t border-base-800" />
             {fileItem("Export OBJ", "doc:export", () => void actions.exportActive("obj"))}
             {fileItem("Export STL", "doc:export", () => void actions.exportActive("stl"))}

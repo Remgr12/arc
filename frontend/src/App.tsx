@@ -3,12 +3,16 @@ import { initEvents } from "./lib/events";
 import { installKeybinds } from "./lib/keybinds";
 import { Viewport } from "./components/Viewport";
 import { TopBar, StatusBar } from "./components/TopBar";
-import { ToolPalette } from "./components/ToolPalette";
+import { FloatingDock } from "./components/FloatingDock";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { UpdateDialog } from "./components/UpdateDialog";
+import { StartupScreen } from "./components/StartupScreen";
+import { Onboarding } from "./components/Onboarding";
 import { actions } from "./lib/actions";
+import { decideStartupFlow } from "./lib/workspace";
 import { useArcStore } from "./lib/store";
 
 export default function App() {
@@ -19,10 +23,20 @@ export default function App() {
       .then((unlisten) => {
         if (cancelled) {
           void unlisten();
-          return;
+          return null;
         }
         unlistenEvents = unlisten;
-        void actions.refresh();
+        return actions.refresh();
+      })
+      .then(() => {
+        if (cancelled) return;
+        try {
+          decideStartupFlow();
+        } catch (bootError) {
+          useArcStore
+            .getState()
+            .setStatusMessage(`Startup failed: ${String(bootError)}`);
+        }
       })
       .catch((error) => {
         useArcStore.getState().setStatusMessage(`Init failed: ${String(error)}`);
@@ -39,7 +53,7 @@ export default function App() {
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
       <TopBar />
       <div className="flex min-h-0 flex-1">
-        <ToolPalette />
+        <FloatingDock />
         <div className="relative min-w-0 flex-1">
           <Viewport />
         </div>
@@ -55,6 +69,9 @@ export default function App() {
       <StatusBar />
       <CommandPalette />
       <SettingsDialog />
+      <UpdateDialog />
+      <StartupScreen />
+      <Onboarding />
     </div>
   );
 }

@@ -15,6 +15,19 @@ pub struct Settings {
     pub show_grid: bool,
     pub show_axes: bool,
     pub enabled_plugins: Vec<String>,
+    /// Recently opened/saved document paths, most recent first.
+    #[serde(default)]
+    pub recent_files: Vec<String>,
+    /// Reopen the documents from `recent_files` on launch.
+    #[serde(default)]
+    pub reopen_last_session: bool,
+    /// Workspace folder the startup screen lists `*.arc` files from.
+    #[serde(default)]
+    pub workspace_dir: Option<String>,
+    /// Unix seconds of the last updater check; auto checks run at most
+    /// every 12 hours.
+    #[serde(default)]
+    pub updater_last_check: Option<i64>,
 }
 
 impl Default for Settings {
@@ -26,8 +39,19 @@ impl Default for Settings {
             show_grid: true,
             show_axes: true,
             enabled_plugins: vec![],
+            recent_files: vec![],
+            reopen_last_session: false,
+            workspace_dir: None,
+            updater_last_check: None,
         }
     }
+}
+
+/// Move `path` to the front of the recently-used list, capped.
+pub fn remember_recent(settings: &mut Settings, path: &str) {
+    settings.recent_files.retain(|p| p != path);
+    settings.recent_files.insert(0, path.to_string());
+    settings.recent_files.truncate(10);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +124,8 @@ pub struct AppOverview {
     pub documents: Vec<DocumentInfo>,
     pub active: Option<String>,
     pub settings: Settings,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updater: Option<crate::updater::UpdateNotice>,
 }
 
 #[derive(Debug, Clone, Serialize)]

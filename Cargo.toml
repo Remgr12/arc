@@ -4,7 +4,7 @@ members = ["crates/arc-core", "crates/arc-mcp", "src-tauri"]
 exclude = ["frontend"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remgr12/arc"
@@ -26,6 +26,7 @@ tauri-build = { version = "2.7", features = [] }
 tauri-plugin-dialog = "2.8"
 tauri-plugin-fs = "2.7"
 tauri-plugin-opener = "2.5"
+tauri-plugin-updater = "2"
 
 bytemuck = "1.23"
 

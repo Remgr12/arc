@@ -64,6 +64,7 @@ export const DEFAULT_BINDINGS: Record<string, Binding[]> = {
   "tool:rectangle": ["r"],
   "tool:dimension": ["d"],
   "tool:wall": ["h"],
+  "tool:sketch": ["s"],
   "doc:new": ["ctrl+n"],
   "doc:open": ["ctrl+o"],
   "doc:save": ["ctrl+s"],

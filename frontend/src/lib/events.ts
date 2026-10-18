@@ -1,11 +1,24 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ipc } from "./ipc";
-import type { AppOverview, SceneData, Settings, PluginInfo } from "./types";
+import type { AppOverview, SceneData, Settings, PluginInfo, UpdateNotice } from "./types";
 import { useArcStore } from "./store";
 
 interface SceneEnvelope {
   documentId: string;
   scene: SceneData;
+}
+
+function applyUpdateNotice(notice: UpdateNotice | null): void {
+  if (!notice) return;
+  const st = useArcStore.getState();
+  if (!notice.available) {
+    st.setUpdateNotice(null);
+    if (notice.notes) st.setStatusMessage(notice.notes);
+    return;
+  }
+  if (notice.version && notice.version === st.updateDismissedVersion) return;
+  if (st.updateNotice?.version === notice.version) return;
+  st.setUpdateNotice(notice);
 }
 
 let refs = 0;
@@ -63,6 +76,9 @@ async function runBoot(): Promise<void> {
       listen<PluginInfo[]>("arc://plugins", (e) => {
         useArcStore.setState({ pluginsList: e.payload });
       }),
+      listen<UpdateNotice>("arc://update", (e) => {
+        applyUpdateNotice(e.payload);
+      }),
     ])),
   );
 
@@ -101,11 +117,13 @@ async function runBoot(): Promise<void> {
     void ipc
       .getState()
       .then((next) => {
-        const key = JSON.stringify(next);
+        const key = JSON.stringify({ ...next, updater: null });
         if (next && key !== lastOverview && state.overview) {
           lastOverview = key;
           useArcStore.getState().setOverview(next);
         }
+        const updater = next?.updater;
+        if (updater?.available) applyUpdateNotice(updater);
       })
       .catch(() => {});
     void ipc
