@@ -106,6 +106,9 @@ function runAction(def: ActionDef): void {
     case "plugins":
       void actions.reloadPlugins();
       return;
+    case "commandLine":
+      actions.openCommandLine();
+      return;
     case "clear":
       if (st.paletteOpen) st.setPaletteOpen(false);
       else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
@@ -136,6 +139,7 @@ export function installKeybinds(): () => void {
 
     if (binding === "escape") {
       if (st.paletteOpen) st.setPaletteOpen(false);
+      else if (st.commandLineOpen) st.setCommandLineOpen(false);
       else if (st.drafting || st.tool === "sketch") window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
       else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
       return;

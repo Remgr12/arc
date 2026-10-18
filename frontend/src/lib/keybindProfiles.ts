@@ -45,6 +45,7 @@ export const ACTION_DEFS: ActionDef[] = [
   { id: "edit:clear", label: "Clear selection / close menus", group: "View" },
   { id: "view:fit", label: "Fit view to selection", group: "View" },
   { id: "app:palette", label: "Command palette", group: "App" },
+  { id: "app:commandLine", label: "Command line", group: "App" },
   { id: "app:settings", label: "Settings", group: "App" },
   { id: "app:plugins", label: "Reload plugins", group: "App" },
 ];
@@ -76,6 +77,7 @@ export const DEFAULT_BINDINGS: Record<string, Binding[]> = {
   "edit:delete": ["delete", "backspace"],
   "view:fit": ["f"],
   "app:palette": ["ctrl+k"],
+  "app:commandLine": ["ctrl+l"],
   "app:settings": ["ctrl,"],
 };
 

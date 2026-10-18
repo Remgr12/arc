@@ -1,5 +1,6 @@
 import { ipc } from "./ipc";
 import { useArcStore } from "./store";
+import { MATERIALS } from "./materials";
 import { DEFAULT_GEOMETRY } from "../data/tools";
 import type { ToolId } from "./types";
 
@@ -163,6 +164,40 @@ export const actions = {
     await ipc.explodeEntities(id, scene.selection, 40);
   }),
 
+  applyMaterial: guard(async (query: string) => {
+    const docId = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene) return;
+    if (scene.selection.length === 0) {
+      useArcStore.getState().setStatusMessage("Select entities to apply a material");
+      return;
+    }
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      useArcStore.getState().setStatusMessage("Usage: material <id or label>");
+      return;
+    }
+    const material =
+      MATERIALS.find((m) => m.id.toLowerCase() === q) ??
+      MATERIALS.find((m) => m.label.toLowerCase() === q) ??
+      MATERIALS.find(
+        (m) => m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q),
+      );
+    if (!material) {
+      useArcStore.getState().setStatusMessage(`No material matching "${query.trim()}"`);
+      return;
+    }
+    for (const id of scene.selection) {
+      await ipc.setEntityMaterial(docId, id, material.id);
+    }
+    useArcStore.getState().setScene(await ipc.getScene(docId));
+    useArcStore
+      .getState()
+      .setStatusMessage(
+        `Applied ${material.label} to ${scene.selection.length} ${scene.selection.length === 1 ? "entity" : "entities"}`,
+      );
+  }),
+
   selectAll: guard(async () => {
     const id = requireDoc();
     const scene = useArcStore.getState().scene;
@@ -222,6 +257,10 @@ export const actions = {
   openPlugins: () => {
     useArcStore.getState().setPluginsOpen(true);
   },
+
+  openCommandLine: guard(async () => {
+    useArcStore.getState().setCommandLineOpen(true);
+  }),
 
   reloadPlugins: guard(async () => {
     const list = await ipc.reloadPlugins();

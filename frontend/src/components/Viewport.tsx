@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { Circle, Minus, RectangleHorizontal, Waypoints } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
@@ -9,6 +10,7 @@ import { ViewCube } from "../lib/viewcube";
 import { DEFAULT_GEOMETRY, MULTI_POINT_TOOLS } from "../data/tools";
 import { MATERIALS } from "../lib/materials";
 import { IconButton } from "./ui";
+import { actions } from "../lib/actions";
 import type { EntityData, Geometry, LayerData, SceneData, SketchShape, ToolId } from "../lib/types";
 
 interface ViewPalette {
@@ -52,6 +54,18 @@ interface DragDraft {
   built: ShapeBuild | null;
 }
 
+interface MarqueeState {
+  x0: number;
+  y0: number;
+  additive: boolean;
+}
+
+interface MenuItem {
+  label: string;
+  run: () => void;
+  disabled?: boolean;
+}
+
 interface ViewportRefs {
   host: HTMLDivElement;
   renderer: THREE.WebGLRenderer;
@@ -60,6 +74,7 @@ interface ViewportRefs {
   sceneRoot: THREE.Scene;
   entityRoot: THREE.Group;
   gridNode: THREE.GridHelper;
+  groundNode: THREE.Mesh;
   axes: THREE.AxesHelper;
   raycaster: THREE.Raycaster;
   draftNode: THREE.LineSegments;
@@ -81,6 +96,12 @@ interface ViewportRefs {
   gizmo: ViewCube;
   viewAnim: ViewAnim | null;
   palette: ViewPalette;
+  marquee: MarqueeState | null;
+  marqueeEl: HTMLDivElement | null;
+  contextMenu: HTMLDivElement | null;
+  contextMenuCloser: (() => void) | null;
+  /** Screen position of an in-flight right-button press (pan-drag suppression). */
+  contextPress: { x: number; y: number } | null;
 }
 
 const DRAG_SHAPES: ReadonlySet<string> = new Set([
@@ -252,6 +273,10 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(host.clientWidth || 800, host.clientHeight || 600);
   renderer.autoClear = false;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.display = "block";
   renderer.domElement.style.touchAction = "none";
   renderer.domElement.style.outline = "none";
@@ -281,11 +306,38 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
   sceneRoot.add(hemi);
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
   dirLight.position.set(600, 1000, 300);
+  dirLight.castShadow = true;
+  const shadow = dirLight.shadow;
+  shadow.camera.left = -600;
+  shadow.camera.right = 600;
+  shadow.camera.top = 600;
+  shadow.camera.bottom = -600;
+  shadow.camera.near = 1;
+  shadow.camera.far = 3000;
+  shadow.mapSize.set(2048, 2048);
+  shadow.bias = -0.0005;
+  shadow.normalBias = 2;
   sceneRoot.add(dirLight);
   sceneRoot.add(new THREE.AmbientLight(0xffffff, 0.22));
 
+  // Subtle PBR environment lighting (low intensity so the theme stays dominant).
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  sceneRoot.environment = pmrem.fromScene(room, 0.04).texture;
+  sceneRoot.environmentIntensity = 0.35;
+  pmrem.dispose();
+  room.dispose();
+
   const entityRoot = new THREE.Group();
   sceneRoot.add(entityRoot);
+
+  const groundNode = new THREE.Mesh(
+    new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2),
+    new THREE.ShadowMaterial({ opacity: 0.18 }),
+  );
+  groundNode.position.y = 0.01;
+  groundNode.receiveShadow = true;
+  sceneRoot.add(groundNode);
 
   const axes = new THREE.AxesHelper(240);
   axes.position.y = 0.2;
@@ -310,6 +362,7 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
     sceneRoot,
     entityRoot,
     gridNode: makeGrid(palette),
+    groundNode,
     axes,
     raycaster: new THREE.Raycaster(),
     draftNode,
@@ -335,6 +388,11 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
     gizmo: null as unknown as ViewCube,
     viewAnim: null,
     palette: viewPalette,
+    marquee: null,
+    marqueeEl: null,
+    contextMenu: null,
+    contextMenuCloser: null,
+    contextPress: null,
   };
 
   ref.gizmo = new ViewCube(renderer.domElement, (normal) => focusPlane(ref, normal), labels);
@@ -510,6 +568,8 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     }
     geometry.computeBoundingSphere();
     obj = new THREE.Mesh(geometry, ref.columnMaterial.clone());
+    obj.castShadow = true;
+    obj.receiveShadow = true;
   }
   // Entry animation metadata; present() and the render loop animate from here.
   obj.userData.spawnAt = performance.now();
@@ -661,6 +721,98 @@ function disposeObject(obj: THREE.Object3D): void {
   });
 }
 
+// ------------------------------------------------------------ context menu
+
+function closeContextMenu(ref: ViewportRefs): void {
+  const closer = ref.contextMenuCloser;
+  ref.contextMenu = null;
+  ref.contextMenuCloser = null;
+  closer?.();
+}
+
+function openContextMenu(ref: ViewportRefs, hostX: number, hostY: number, items: MenuItem[]): void {
+  closeContextMenu(ref);
+  const menu = document.createElement("div");
+  menu.className =
+    "pointer-events-auto absolute z-50 w-48 rounded-md border border-base-300 bg-base-100 py-1 shadow-xl";
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = item.label;
+    button.disabled = item.disabled === true;
+    button.className =
+      "block w-full px-3 py-1.5 text-left text-[12.5px] text-base-700 transition-colors hover:bg-base-200 hover:text-base-800 disabled:pointer-events-none disabled:opacity-40";
+    button.addEventListener("click", () => {
+      closeContextMenu(ref);
+      item.run();
+    });
+    menu.appendChild(button);
+  }
+  ref.host.appendChild(menu);
+  menu.style.left = `${Math.max(4, Math.min(hostX, ref.host.clientWidth - (menu.offsetWidth + 8)))}px`;
+  menu.style.top = `${Math.max(4, Math.min(hostY, ref.host.clientHeight - (menu.offsetHeight + 8)))}px`;
+  ref.contextMenu = menu;
+  // One-shot dismissal on the next pointer press outside the menu.
+  const dismiss = (e: PointerEvent) => {
+    if (!(e.target instanceof Node) || !menu.contains(e.target)) closeContextMenu(ref);
+  };
+  ref.contextMenuCloser = () => {
+    window.removeEventListener("pointerdown", dismiss, true);
+    if (menu.isConnected) menu.remove();
+  };
+  window.addEventListener("pointerdown", dismiss, true);
+}
+
+function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
+  event.preventDefault();
+  // A right-drag was orbit/pan navigation, not a click: just suppress the menu.
+  const press = ref.contextPress;
+  ref.contextPress = null;
+  if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 6) return;
+  const scene = useArcStore.getState().scene;
+  const docId = activeDoc();
+  if (!scene || !docId) {
+    closeContextMenu(ref);
+    return;
+  }
+  const hitId = pickEntityAt(ref, localPoint(event));
+  const hostRect = ref.host.getBoundingClientRect();
+  const x = event.clientX - hostRect.left;
+  const y = event.clientY - hostRect.top;
+  if (hitId) {
+    // Right-clicking an unselected entity selects it so menu actions act on it.
+    if (!scene.selection.includes(hitId)) void ipc.setSelection(docId, [hitId], hitId);
+    // Booleans act on the active selection; account for the implicit single pick.
+    const selectedCount = scene.selection.includes(hitId) ? scene.selection.length : 1;
+    openContextMenu(ref, x, y, [
+      { label: "Delete", run: () => void actions.deleteSelection() },
+      { label: "Duplicate", run: () => void actions.duplicateSelection() },
+      { label: "Fit view", run: () => actions.fitView() },
+      { label: "Boolean union", disabled: selectedCount < 2, run: () => void actions.booleanApply("union") },
+      {
+        label: "Boolean difference",
+        disabled: selectedCount < 2,
+        run: () => void actions.booleanApply("difference"),
+      },
+      {
+        label: "Boolean intersection",
+        disabled: selectedCount < 2,
+        run: () => void actions.booleanApply("intersection"),
+      },
+      {
+        label: "Materials…",
+        run: () => window.dispatchEvent(new CustomEvent("arc-materials-toggle", { detail: true })),
+      },
+    ]);
+    return;
+  }
+  openContextMenu(ref, x, y, [
+    { label: "Fit view", run: () => actions.fitView() },
+    { label: "Undo", run: () => void actions.undo() },
+    { label: "Redo", run: () => void actions.redo() },
+  ]);
+}
+
 // -------------------------------------------------------------- interaction
 
 function localPoint(event: PointerEvent | MouseEvent): { x: number; y: number } {
@@ -695,6 +847,118 @@ function snapCoord(value: number, gridSize: number, enabled: boolean): number {
   return enabled ? Math.round(value / gridSize) * gridSize : value;
 }
 
+// --------------------------------------------------------------- marquee
+
+function startMarquee(ref: ViewportRefs, event: PointerEvent): void {
+  const hostRect = ref.host.getBoundingClientRect();
+  ref.marquee = {
+    x0: event.clientX - hostRect.left,
+    y0: event.clientY - hostRect.top,
+    additive: event.shiftKey,
+  };
+  const accent = ref.palette.selection;
+  const el = document.createElement("div");
+  el.style.position = "absolute";
+  el.style.zIndex = "40";
+  el.style.pointerEvents = "none";
+  el.style.display = "none";
+  el.style.border = `1px solid #${accent.getHexString()}`;
+  el.style.backgroundColor = `rgba(${Math.round(accent.r * 255)}, ${Math.round(accent.g * 255)}, ${Math.round(accent.b * 255)}, 0.12)`;
+  el.style.borderRadius = "1px";
+  ref.host.appendChild(el);
+  ref.marqueeEl = el;
+  try {
+    ref.renderer.domElement.setPointerCapture(event.pointerId);
+  } catch {
+    // ignore
+  }
+}
+
+function moveMarquee(ref: ViewportRefs, event: PointerEvent): void {
+  const marquee = ref.marquee;
+  const el = ref.marqueeEl;
+  if (!marquee || !el) return;
+  const hostRect = ref.host.getBoundingClientRect();
+  const x = event.clientX - hostRect.left;
+  const y = event.clientY - hostRect.top;
+  el.style.display = "block";
+  el.style.left = `${Math.min(marquee.x0, x)}px`;
+  el.style.top = `${Math.min(marquee.y0, y)}px`;
+  el.style.width = `${Math.abs(x - marquee.x0)}px`;
+  el.style.height = `${Math.abs(y - marquee.y0)}px`;
+}
+
+function cancelMarquee(ref: ViewportRefs): void {
+  if (ref.marqueeEl) {
+    ref.marqueeEl.remove();
+    ref.marqueeEl = null;
+  }
+  ref.marquee = null;
+}
+
+function finishMarquee(ref: ViewportRefs, event: PointerEvent): void {
+  const marquee = ref.marquee;
+  const el = ref.marqueeEl;
+  cancelMarquee(ref);
+  if (!marquee) return;
+  try {
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  } catch {
+    // pointer may already be released
+  }
+  if (el === null) return;
+  const hostRect = ref.host.getBoundingClientRect();
+  const x1 = Math.min(marquee.x0, event.clientX - hostRect.left);
+  const y1 = Math.min(marquee.y0, event.clientY - hostRect.top);
+  const x2 = Math.max(marquee.x0, event.clientX - hostRect.left);
+  const y2 = Math.max(marquee.y0, event.clientY - hostRect.top);
+
+  // Tiny drag: plain click in empty space keeps the existing deselect behavior.
+  if (x2 - x1 < 4 && y2 - y1 < 4) {
+    if (!marquee.additive) void ipc.setSelection(activeDoc(), [], null);
+    return;
+  }
+
+  const scene = useArcStore.getState().scene;
+  if (!scene) return;
+  const corners = Array.from({ length: 8 }, () => new THREE.Vector3());
+  const ids = marquee.additive ? [...scene.selection] : [];
+  for (const [entityId, obj] of ref.objects) {
+    if (!obj.visible) continue;
+    _bbox.setFromObject(obj);
+    if (_bbox.isEmpty()) continue;
+    // Skip anything behind the camera; projection is unreliable there.
+    const center = _bbox.getCenter(new THREE.Vector3());
+    const depth = center.clone().project(ref.camera);
+    if (depth.z > 1 || depth.z < -1) continue;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    corners[0].set(_bbox.max.x, _bbox.max.y, _bbox.max.z);
+    corners[1].set(_bbox.max.x, _bbox.max.y, _bbox.min.z);
+    corners[2].set(_bbox.max.x, _bbox.min.y, _bbox.max.z);
+    corners[3].set(_bbox.max.x, _bbox.min.y, _bbox.min.z);
+    corners[4].set(_bbox.min.x, _bbox.max.y, _bbox.max.z);
+    corners[5].set(_bbox.min.x, _bbox.max.y, _bbox.min.z);
+    corners[6].set(_bbox.min.x, _bbox.min.y, _bbox.max.z);
+    corners[7].set(_bbox.min.x, _bbox.min.y, _bbox.min.z);
+    for (const corner of corners) {
+      corner.project(ref.camera);
+      const sx = (corner.x * 0.5 + 0.5) * hostRect.width;
+      const sy = (-corner.y * 0.5 + 0.5) * hostRect.height;
+      if (sx < minX) minX = sx;
+      if (sy < minY) minY = sy;
+      if (sx > maxX) maxX = sx;
+      if (sy > maxY) maxY = sy;
+    }
+    if (maxX < x1 || minX > x2 || maxY < y1 || minY > y2) continue;
+    if (!ids.includes(entityId)) ids.push(entityId);
+  }
+  void ipc.setSelection(activeDoc(), ids, ids[ids.length - 1] ?? null);
+  useArcStore.getState().setStatusMessage(`${ids.length} selected`);
+}
+
 function attachHandlers(ref: ViewportRefs): () => void {
   const el = ref.renderer.domElement;
 
@@ -711,10 +975,18 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.dragging = null;
       ref.dragMoved = false;
     }
+    if (ref.marquee) {
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      cancelMarquee(ref);
+    }
     clearDraftState(ref);
   };
   const dbl = (event: MouseEvent) => onDoubleClick(ref, event);
-  const ctx = (event: Event) => event.preventDefault();
+  const ctx = (event: MouseEvent) => onContextMenu(ref, event);
   const wheel = () => {
     ref.viewAnim = null;
   };
@@ -791,6 +1063,9 @@ function activeDoc(): string {
 
 function onPointerDown(ref: ViewportRefs, event: PointerEvent): void {
   ref.viewAnim = null;
+  if (event.button === 2) {
+    ref.contextPress = { x: event.clientX, y: event.clientY };
+  }
   if (event.button === 0) {
     const store = useArcStore.getState();
     if (ref.gizmo.onPointerDown(event, ref.host.clientWidth, ref.host.clientHeight, ref.controls.target, ref.camera)) {
@@ -835,7 +1110,11 @@ function onPointerDown(ref: ViewportRefs, event: PointerEvent): void {
       }
       return;
     }
-    if (!event.shiftKey) void ipc.setSelection(docId, [], null);
+    // Empty space: begin a marquee selection instead of deselecting outright.
+    if (ref.dragging || ref.dragDraft || ref.gizmo.hitTest(event, ref.host.clientWidth, ref.host.clientHeight)) {
+      return;
+    }
+    startMarquee(ref, event);
     return;
   }
 
@@ -967,6 +1246,11 @@ function onPointerMove(ref: ViewportRefs, event: PointerEvent): void {
     return;
   }
 
+  if (ref.marquee) {
+    moveMarquee(ref, event);
+    return;
+  }
+
   // gizmo interaction (hover) only when not dragging an entity
   if (ref.gizmo.onPointerMove(event, ref.host.clientWidth, ref.host.clientHeight, ref.controls.target, ref.camera)) {
     if (store.hoverEntity) store.setHoverEntity(null);
@@ -1006,6 +1290,11 @@ function onPointerMove(ref: ViewportRefs, event: PointerEvent): void {
 }
 
 function onPointerUp(ref: ViewportRefs, event: PointerEvent): void {
+  if (ref.marquee) {
+    finishMarquee(ref, event);
+    return;
+  }
+
   if (ref.dragging) {
     if (ref.dragMoved) {
       const entity = useArcStore.getState().scene?.entities.find((e) => e.id === ref.dragging?.id);
@@ -1393,6 +1682,15 @@ function disposeViewport(ref: ViewportRefs): void {
   ref.gizmo.dispose();
   for (const obj of ref.objects.values()) disposeObject(obj);
   ref.objects.clear();
+  cancelMarquee(ref);
+  closeContextMenu(ref);
+  const groundMaterial = ref.groundNode.material as THREE.Material;
+  ref.groundNode.geometry.dispose();
+  groundMaterial.dispose();
+  ref.sceneRoot.remove(ref.groundNode);
+  const environment = ref.sceneRoot.environment as THREE.Texture | null;
+  ref.sceneRoot.environment = null;
+  environment?.dispose();
   ref.controls.dispose();
   ref.renderer.dispose();
   ref.renderer.domElement.remove();

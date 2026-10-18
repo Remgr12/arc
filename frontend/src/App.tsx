@@ -16,6 +16,7 @@ import { decideStartupFlow } from "./lib/workspace";
 import { useArcStore } from "./lib/store";
 
 import { useMaterialsPanelMount } from "./components/MaterialsPanel";
+import { CommandLine } from "./components/CommandLine";
 
 export default function App() {
   const materialsMount = useMaterialsPanelMount();
@@ -70,6 +71,7 @@ export default function App() {
         </aside>
       </div>
       <StatusBar />
+      <CommandLine />
       <CommandPalette />
       <SettingsDialog />
       <UpdateDialog />
