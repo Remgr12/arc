@@ -19,6 +19,7 @@ interface ArcState {
   settings: Settings | null;
   pluginsList: PluginInfo[];
   paletteOpen: boolean;
+  commandLineOpen: boolean;
   settingsOpen: boolean;
   pluginsOpen: boolean;
   materialsOpen: boolean;
@@ -40,6 +41,7 @@ interface ArcState {
   setDrafting: (drafting: boolean) => void;
   updateSettings: (settings: Settings) => void;
   setPaletteOpen: (open: boolean) => void;
+  setCommandLineOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setPluginsOpen: (open: boolean) => void;
   setMaterialsOpen: (open: boolean) => void;
@@ -63,6 +65,7 @@ export const useArcStore = create<ArcState>((set) => ({
   settings: null,
   pluginsList: [],
   paletteOpen: false,
+  commandLineOpen: false,
   settingsOpen: false,
   pluginsOpen: false,
   materialsOpen: false,
@@ -88,6 +91,7 @@ export const useArcStore = create<ArcState>((set) => ({
       overview: st.overview ? { ...st.overview, settings } : st.overview,
     })),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+  setCommandLineOpen: (open) => set({ commandLineOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   setPluginsOpen: (open) => set({ pluginsOpen: open }),
   setMaterialsOpen: (open) => set({ materialsOpen: open }),
