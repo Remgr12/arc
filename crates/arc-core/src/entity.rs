@@ -173,6 +173,9 @@ impl Geometry {
             Geometry::Revolve { .. } => "revolve",
             Geometry::Sweep { .. } => "sweep",
             Geometry::Loft { .. } => "loft",
+            Geometry::NurbsSurface { .. } => "nurbs_surface",
+            Geometry::NurbsLoft { .. } => "nurbs_loft",
+            Geometry::NurbsSweep { .. } => "nurbs_sweep",
             Geometry::Wall { .. } => "wall",
             Geometry::Stair { .. } => "stair",
             Geometry::Slab { .. } => "slab",
@@ -203,7 +206,10 @@ impl Geometry {
             Geometry::Extrude { .. }
             | Geometry::Revolve { .. }
             | Geometry::Sweep { .. }
-            | Geometry::Loft { .. } => GeometryCategory::Solid,
+            | Geometry::Loft { .. }
+            | Geometry::NurbsSurface { .. }
+            | Geometry::NurbsLoft { .. }
+            | Geometry::NurbsSweep { .. } => GeometryCategory::Solid,
             Geometry::Wall { .. }
             | Geometry::Stair { .. }
             | Geometry::Slab { .. }

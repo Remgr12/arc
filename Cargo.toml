@@ -20,15 +20,16 @@ nalgebra = { version = "0.35", features = ["serde-serialize"] }
 parking_lot = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
 
-tauri = "2.12"
+ tauri = "2.12"
 tauri-build = { version = "2.7", features = [] }
 tauri-plugin-dialog = "2.8"
 tauri-plugin-fs = "2.7"
 tauri-plugin-opener = "2.5"
 tauri-plugin-updater = "2"
 
-bytemuck = "1.23"
+ bytemuck = "1.23"
 
 [workspace.lints.rust]
 unused_imports = "warn"

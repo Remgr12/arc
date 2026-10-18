@@ -269,7 +269,7 @@ jobs:
             *) echo "unexpected tag $TAG"; exit 1 ;;
           esac
           FILES=(dist/*.msi dist/*.exe dist/*.AppImage dist/*.deb dist/*.rpm
-                 dist/*.dmg dist/*.app.tar.gz dist/flatpak/*.flatpak dist/*.sig)
+                 dist/*.dmg dist/*.app dist/flatpak/*.flatpak dist/*.sig)
 
           # tauri-action creates a draft for the tag; drafts never resolve by
           # tag lookup, so find it by listing releases.
@@ -333,10 +333,10 @@ jobs:
                       "url": f"{base}/{win}",
                   }
                   break
-          for mac in (pick("*.app.tar.gz"),):
+          for mac in (pick("*.app"),):
               if mac and sig_of(mac):
                   for key in ("darwin-aarch64", "darwin-x86_64"):
-                      platforms[key] = {"artifactName": mac, "signature": sig_of(mac), "url": f"{base}/{mac}"}
+                      platforms[key] = {"artifactName": mac, "signature": sig_of(mac), "url": f"{base}/{mac}"
           linux = pick("*.AppImage")
           if linux and sig_of(linux):
               platforms["linux-x86_64"] = {"artifactName": linux, "signature": sig_of(linux), "url": f"{base}/{linux}"}
