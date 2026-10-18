@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "arc-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "arc-core",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "arc-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "nalgebra",
@@ -93,7 +93,7 @@ dependencies = [
 
 [[package]]
 name = "arc-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
 ]
