@@ -73,6 +73,9 @@ interface ViewportRefs {
   dragPreview: THREE.Object3D | null;
   lastTool: ToolId | null;
   lastCommitAt: number;
+  lastScene: SceneData | null;
+  lastHover: string | null;
+  lastCursorAt: number;
   disposed: boolean;
   gizmo: ViewCube;
   viewAnim: ViewAnim | null;
@@ -324,6 +327,9 @@ function createViewport(host: HTMLDivElement, labels: HTMLElement): ViewportRefs
     dragPreview: null,
     lastTool: null,
     lastCommitAt: 0,
+    lastScene: null,
+    lastHover: null,
+    lastCursorAt: 0,
     disposed: false,
     gizmo: null as unknown as ViewCube,
     viewAnim: null,
@@ -417,7 +423,24 @@ function focusPlane(ref: ViewportRefs, normal: THREE.Vector3): void {
 function syncSceneToThree(ref: ViewportRefs): void {
   const state = useArcStore.getState();
   const scene = state.scene;
-  if (scene) rebuildEntities(ref, scene);
+  const hoverChanged = state.hoverEntity !== ref.lastHover;
+  const sceneChanged = scene !== ref.lastScene;
+
+  if (sceneChanged) {
+    ref.lastScene = scene;
+    if (scene) rebuildEntities(ref, scene);
+  } else if (hoverChanged && scene) {
+    // Targeted update: only re-present the entities whose hover changed.
+    const layers = new Map(scene.layers.map((l) => [l.id, l]));
+    for (const id of [ref.lastHover, state.hoverEntity]) {
+      if (!id) continue;
+      const obj = ref.objects.get(id);
+      const entity = scene.entities.find((e) => e.id === id);
+      if (obj && entity) present(ref, obj, entity, layers, scene);
+    }
+  }
+  ref.lastHover = state.hoverEntity;
+
   const settings = state.settings;
   ref.gridNode.visible = settings?.show_grid ?? true;
   ref.axes.visible = settings?.show_axes ?? true;
@@ -960,8 +983,13 @@ function onPointerMove(ref: ViewportRefs, event: PointerEvent): void {
   if (store.tool === "select" || store.tool === "move") {
     const hovered = pickEntityAt(ref, point);
     if (hovered !== store.hoverEntity) store.setHoverEntity(hovered);
-    const world = pointOnHorizontalPlane(rayAt(ref, point), 0);
-    if (world) store.setCursorWorld([world.x, 0, world.z]);
+    // Throttle the coordinate readout; the TopBar re-renders otherwise.
+    const now = performance.now();
+    if (now - ref.lastCursorAt > 80) {
+      ref.lastCursorAt = now;
+      const world = pointOnHorizontalPlane(rayAt(ref, point), 0);
+      if (world) store.setCursorWorld([world.x, 0, world.z]);
+    }
   }
 }
 
