@@ -23,6 +23,11 @@ arc is a multi-platform 3D modeling application built around a mesh-based geomet
 - **Primitive modeling** - box, sphere, cylinder, cone, torus, and plane primitives with editable parameters
 - **Sketch tools** - circle, line, polyline, rectangle, dimension, and wall drawing on the ground plane with grid snapping
 - **Solid generation** - extrude, revolve, sweep, and loft profiles into solids
+- **NURBS surfaces** - tensor-product NURBS with rational evaluation, exact derivatives, knot insertion, and loft/sweep surface generation
+- **Parametric constraints** - equality, distance, and inequality constraints between entity parameters with a propagation solver
+- **Annotations** - linear, angular, and radial dimensions with styles, units, arrowheads, and render-ready geometry
+- **Assemblies** - component hierarchies with quaternion-correct transform composition, explode, and duplicate
+- **Sheet metal** - bend allowance and deduction math, flat pattern generation, and bend sequence suggestions
 - **Architecture tools** - walls, stairs, slabs, roofs, columns, beams, doors, and windows
 - **Layers** - visibility, locking, colors, and per-entity overrides
 - **Themes** - built-in color themes, plus import/export of custom themes from simple JSON color files
@@ -30,7 +35,7 @@ arc is a multi-platform 3D modeling application built around a mesh-based geomet
 - **Undo and redo** - full command history with every editing operation
 - **Multi-document** - work on several documents at once with live switching
 - **Plugin system** - extend functionality with Lua scripts
-- **File formats** - native `.arc` (JSON) documents plus OBJ and binary STL export
+- **File formats** - native `.arc` (JSON) documents; import STL (binary/ASCII), OBJ, and DXF; export OBJ, binary/ASCII STL, and glTF 2.0
 - **Cross-platform** - native desktop apps for Windows, macOS, and Linux
 
 ## Technology Stack
@@ -53,8 +58,10 @@ arc/
 ├── assets/                # Brand assets: logo + icon SVG sources, social banner
 ├── Cargo.toml             # Rust workspace configuration
 ├── crates/
-│   └── arc-core/          # Geometry kernel: mesh generation, entity and document model,
-│                          #   layers, selection, history, winding, raycast picking
+│   └── arc-core/          # Geometry kernel: mesh generation, NURBS, constraints,
+│                          #   annotations, assemblies, sheet metal, file formats,
+│                          #   entity and document model, layers, selection,
+│                          #   history, winding, raycast picking
 ├── src-tauri/             # Tauri application
 │   ├── src/               # Commands, app state, plugin runtime
 │   ├── plugins/           # Lua plugin directory
