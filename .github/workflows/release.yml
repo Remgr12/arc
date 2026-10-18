@@ -72,7 +72,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'arc ${{ github.ref_name }}'
+          releaseName: '${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
@@ -139,7 +139,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'arc ${{ github.ref_name }}'
+          releaseName: '${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
@@ -225,7 +225,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'arc ${{ github.ref_name }}'
+          releaseName: '${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version.'
           releaseDraft: true
           prerelease: false
@@ -306,7 +306,7 @@ jobs:
             done
           else
             echo "no draft for $TAG; creating a release instead"
-            gh release create "$TAG" "${FILES[@]}" --title "arc $TAG" \
+            gh release create "$TAG" "${FILES[@]}" --title "$TAG" \
               --latest --generate-notes
             DRAFT_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id')
           fi
