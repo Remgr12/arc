@@ -18,8 +18,6 @@
 
 arc is a multi-platform 3D modeling application built around a mesh-based geometry kernel written in Rust. It features a modern and intuitive interface for general design, architecture, and interior design workflows.
 
-The logo plays on the name: two concentric 270° rings, each missing one quadrant. The outer ring's gap faces north-east, the inner ring's gap sits diametrically opposite, facing south-west (the 270–360° and 90–180° spans, measured clockwise from east). Geometry constants live in `assets/logo.svg` and `scripts/gen_icons.py`.
-
 ## Features
 
 - **Primitive modeling** - box, sphere, cylinder, cone, torus, and plane primitives with editable parameters
@@ -137,13 +135,7 @@ All raster art (app icons, `.ico`, `.icns`, Flatpak hicolor set, web favicons, s
 python3 scripts/gen_icons.py   # requires Pillow
 ```
 
-## Credits
-
-arc is created and led by **Zsombor Simon**, the project's owner and lead developer. Contributions from the community are welcome and credited.
-
 ## License
-
-Copyright (c) 2026 Zsombor Simon.
 
 Dual-licensed under MIT or Apache-2.0, at your option:
 
