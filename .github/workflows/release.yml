@@ -279,14 +279,21 @@ jobs:
             exit 0
           fi
 
-          # Draft releases have no tag object; upload assets against the
-          # draft's upload_url directly.
           UPLD=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
             --jq '.upload_url' | sed 's/{.*$//')
+          # tauri-action may already have uploaded most assets to the draft;
+          # only upload what is missing, then publish the draft.
+          EXISTING=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+            --jq '[.assets[].name] | join("\n")')
           for f in "${FILES[@]}"; do
-            echo "uploading $f"
-            gh api --method POST "$UPLD?name=$(basename "$f")" \
-              --input "$f" --retry 3 >/dev/null \
+            name=$(basename "$f")
+            if grep -qx "$name" <<<"$EXISTING"; then
+              echo "already in draft: $name"
+              continue
+            fi
+            echo "uploading $name"
+            gh api --method POST "$UPLD?name=$name" \
+              --input "$f" >/dev/null \
               -H "Content-Type: application/octet-stream"
           done
 
