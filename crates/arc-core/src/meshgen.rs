@@ -83,7 +83,7 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
         }
         Geometry::Dimension { start, end } => gen_dimension(&mut mb, *start, *end),
         Geometry::ImportedMesh { positions, indices } => {
-            gen_imported_mesh(&mut mb, positions, indices)
+            gen_imported_mesh(&mut mb, positions, indices)?
         }
         Geometry::NurbsSurface { control_points, u_degree, v_degree, u_knots, v_knots } => {
             gen_nurbs_surface(&mut mb, control_points, *u_degree, *v_degree, u_knots, v_knots)?
