@@ -82,6 +82,9 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             gen_window(&mut mb, *width, *height, *depth, *panes_x, *panes_y)
         }
         Geometry::Dimension { start, end } => gen_dimension(&mut mb, *start, *end),
+        Geometry::ImportedMesh { positions, indices } => {
+            gen_imported_mesh(&mut mb, positions, indices)
+        }
         Geometry::NurbsSurface { control_points, u_degree, v_degree, u_knots, v_knots } => {
             gen_nurbs_surface(&mut mb, control_points, *u_degree, *v_degree, u_knots, v_knots)?
         }
@@ -96,6 +99,26 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/// Emit an imported triangle soup directly (indices reference positions).
+fn gen_imported_mesh(mb: &mut MeshBuilder, positions: &[[f64; 3]], indices: &[u32]) -> Result<(), String> {
+    for tri in indices.chunks(3) {
+        if tri.len() != 3 {
+            continue;
+        }
+        let (a, b, c) = (
+            positions.get(tri[0] as usize),
+            positions.get(tri[1] as usize),
+            positions.get(tri[2] as usize),
+        );
+        let (Some(a), Some(b), Some(c)) = (a, b, c) else {
+            continue;
+        };
+        let n = crate::mesh::tri_normal(*a, *b, *c);
+        mb.push_tri(*a, *b, *c, n);
+    }
+    Ok(())
+}
 
 /// Emit a closed axis-aligned cuboid from corners min/max.
 fn emit_cuboid(mb: &mut MeshBuilder, min: [f64; 3], max: [f64; 3]) {

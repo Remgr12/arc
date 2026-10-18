@@ -131,6 +131,7 @@ impl Document {
             Geometry::NurbsSurface { .. } => "NURBS Surface",
             Geometry::NurbsLoft { .. } => "NURBS Loft",
             Geometry::NurbsSweep { .. } => "NURBS Sweep",
+            Geometry::ImportedMesh { .. } => "Imported Mesh",
             Geometry::Extrude { .. } => "Extrude",
             Geometry::Revolve { .. } => "Revolve",
             Geometry::Sweep { .. } => "Sweep",

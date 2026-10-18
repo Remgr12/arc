@@ -149,6 +149,13 @@ pub enum Geometry {
     /// Dimension between two points (rendered as line + arrows + label).
     Dimension { start: [f64; 3], end: [f64; 3] },
 
+    // --- imported mesh data ---
+    /// Triangle soup imported from STL/OBJ (positions + triangle indices).
+    ImportedMesh {
+        positions: Vec<[f64; 3]>,
+        indices: Vec<u32>,
+    },
+
     // --- NURBS ---
     /// Tensor-product NURBS surface. Rows index U, columns index V;
     /// each control point is homogeneous [x, y, z, weight].
@@ -204,6 +211,7 @@ impl Geometry {
             Geometry::NurbsSurface { .. } => "nurbs_surface",
             Geometry::NurbsLoft { .. } => "nurbs_loft",
             Geometry::NurbsSweep { .. } => "nurbs_sweep",
+            Geometry::ImportedMesh { .. } => "imported_mesh",
             Geometry::Wall { .. } => "wall",
             Geometry::Stair { .. } => "stair",
             Geometry::Slab { .. } => "slab",
@@ -247,6 +255,7 @@ impl Geometry {
             | Geometry::Door { .. }
             | Geometry::Window { .. } => GeometryCategory::Architecture,
             Geometry::Dimension { .. } => GeometryCategory::Annotation,
+            Geometry::ImportedMesh { .. } => GeometryCategory::Solid,
         }
     }
 
