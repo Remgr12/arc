@@ -183,7 +183,6 @@ export function StatusBar() {
       <span>
         {scene ? `${scene.entities.length} entities · ${selectionCount} selected` : ""}
       </span>
-      <span>three.js · arc-core</span>
     </footer>
   );
 }

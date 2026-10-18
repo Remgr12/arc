@@ -345,7 +345,7 @@ jobs:
           for mac in (pick("*.app.tar.gz"),):
               if mac and sig_of(mac):
                   for key in ("darwin-aarch64", "darwin-x86_64"):
-                      platforms[key] = {"artifactName": mac, "signature": sig_of(mac), "url": f"{base}/{mac}"
+                      platforms[key] = {"artifactName": mac, "signature": sig_of(mac), "url": f"{base}/{mac}"}
           linux = pick("*.AppImage")
           if linux and sig_of(linux):
               platforms["linux-x86_64"] = {"artifactName": linux, "signature": sig_of(linux), "url": f"{base}/{linux}"}
