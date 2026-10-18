@@ -73,19 +73,8 @@ export function SettingsDialog() {
       <div className="mt-4 flex items-center gap-2.5 border-t border-base-300 pt-3">
         <Logo size={16} />
         <div className="flex flex-col leading-tight">
-          <span className="text-[11px] font-semibold text-base-700">arc</span>
-          <span className="text-[10px] text-base-500">
-            dual-licensed under MIT OR Apache-2.0
-          </span>
+          <span className="text-[11px] font-semibold text-base-700 lowercase tracking-wide">arc</span>
         </div>
-        <a
-          href="https://remgr12.github.io/arc/"
-          target="_blank"
-          rel="noreferrer"
-          className="ml-auto text-[10px] text-base-500 underline-offset-2 hover:text-base-300 hover:underline"
-        >
-          website
-        </a>
       </div>
     </Modal>
   );

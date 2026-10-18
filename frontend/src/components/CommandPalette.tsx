@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
+import { bindingHint } from "../lib/keybinds";
 import { TOOLS } from "../data/tools";
 import { Modal, TextField } from "./ui";
 import type { LucideIcon } from "lucide-react";
@@ -29,7 +30,7 @@ export function CommandPalette() {
       list.push({
         id: `tool:${tool.id}`,
         label: tool.label,
-        hint: "Tool",
+        hint: bindingHint(`tool:${tool.id}`) ?? "Tool",
         run: () => actions.setTool(tool.id),
         icon: tool.icon,
       });
@@ -85,7 +86,7 @@ export function CommandPalette() {
         <TextField
           value={query}
           onChange={setQuery}
-          placeholder="Type a command…"
+          placeholder="Type a command …"
           className="text-[14px]"
         />
         <div className="flex flex-col">

@@ -15,14 +15,14 @@ export function Logo({ size = 18 }: { size?: number }) {
         </linearGradient>
       </defs>
       <path
-        d="M256 88 A168 168 0 1 0 424 256"
+        d="M256 96 A160 160 0 1 0 416 256"
         fill="none"
         stroke={RING_OUTER}
         strokeWidth="48"
         strokeLinecap="round"
       />
       <path
-        d="M256 340 A84 84 0 1 1 172 256"
+        d="M184 256 A72 72 0 1 1 256 328"
         fill="none"
         stroke={RING_INNER}
         strokeWidth="48"

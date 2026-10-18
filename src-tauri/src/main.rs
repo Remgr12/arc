@@ -14,7 +14,7 @@ use state::{load_settings, save_settings, SharedState, Settings};
 
 fn main() {
     let app_state: SharedState = Arc::new(Mutex::new(state::AppState::new()));
-    let plugin_state: Arc<plugins::PluginLock> = Arc::new(Mutex::new(plugins::PluginRuntime::default()));
+    let plugin_state: plugins::PluginLock = Mutex::new(plugins::PluginRuntime::default());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -63,7 +63,7 @@ fn main() {
 
             #[cfg(feature = "lua")]
             {
-                let plugins = app.state::<Arc<plugins::PluginLock>>();
+                let plugins = app.state::<plugins::PluginLock>();
                 plugins.lock().dirs = dirs;
                 plugins.lock().reload(&shared, &app.handle().clone());
             }

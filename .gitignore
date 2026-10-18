@@ -34,3 +34,11 @@ flatpak/payload/
 flatpak/build-dir/
 flatpak/repo/
 flatpak/.flatpak-builder/
+
+# LLM/assistant files
+AGENT*.md
+CLAUDE*.md
+RTK*.md
+.rtk/
+SESSION-STATUS.md
+

@@ -157,8 +157,11 @@ impl Document {
         if entity.name.is_empty() {
             entity.name = self.allocate_name(&entity.kind);
         }
+        let buffer = meshgen::generate(&entity.kind).ok().map(Arc::new);
         self.entities.insert(id, entity);
-        self.mesh_cache.remove(&id);
+        if let Some(buffer) = buffer {
+            self.mesh_cache.insert(id, buffer);
+        }
         self.touch();
         (id, Ok(()))
     }

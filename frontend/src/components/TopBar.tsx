@@ -38,6 +38,7 @@ export function TopBar() {
   const dirty = scene?.modified ?? false;
   const title = scene ? `${scene.name}${dirty ? " •" : ""}` : "arc";
   const docId = overview?.active ?? null;
+  const doc = overview?.documents.find((d) => d.id === docId);
 
   const fileItem = (label: string, actionId: string, fn: () => void) => (
     <button
@@ -99,7 +100,9 @@ export function TopBar() {
       />
 
       <div className="flex-1 truncate text-center text-xs text-base-400">
-        {docId ? `${title}${scene?.path ? `: ${scene.path}` : ""}` : "No document open"}
+        {docId
+          ? `${doc ? `${doc.name}${doc.dirty ? " •" : ""}` : title}${scene?.path ? `: ${scene.path}` : ""}`
+          : "No document open"}
       </div>
 
       <IconButton
