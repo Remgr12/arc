@@ -7,6 +7,7 @@ use crate::state::{
     SharedState, TransformUpdate,
 };
 use arc_core::annotation::{Annotation, AnnotationKind, DimensionGeometry};
+use arc_core::entity::CsgOperation;
 use arc_core::constraints::{Constraint, ConstraintExpression, ConstraintType, GeometryParameter};
 use arc_core::formats::{Format, TriangleSoup};
 use arc_core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
@@ -880,6 +881,10 @@ pub fn export_scene(
                 &merged_world_mesh(doc),
                 &doc.name,
             )?),
+            "step" | "stp" => bytes_of_text(&arc_core::formats::export_step_iso_10303(
+                &merged_world_mesh(doc),
+                &doc.name,
+            )),
             other => return Err(format!("unsupported format: {other}")),
         }
     };
@@ -1007,6 +1012,7 @@ fn format_name(format: Format) -> &'static str {
         Format::StlAscii => "stl_ascii",
         Format::Dxf => "dxf",
         Format::Gltf => "gltf",
+        Format::Step => "step",
     }
 }
 
@@ -1050,6 +1056,7 @@ pub fn import_file(
         Some("stl_ascii") => Format::StlAscii,
         Some("dxf") => Format::Dxf,
         Some("gltf") => return Err("gltf import is not supported".into()),
+        Some("step") | Some("stp") => Format::Step,
         Some(other) => return Err(format!("unsupported import format: {other}")),
         None => {
             let detected = Format::detect(&path)
@@ -1150,6 +1157,20 @@ pub fn import_file(
                     Transform::at(first[0], first[1], first[2]),
                 ));
             }
+        }
+        Format::Step => {
+            let text = String::from_utf8_lossy(&bytes);
+            let mesh = arc_core::formats::parse_step(&text)?;
+            let soup = TriangleSoup::from_triangles(mesh.indices.iter().map(|tri| {
+                let [a, b, c] = *tri;
+                [
+                    mesh.positions[a as usize],
+                    mesh.positions[b as usize],
+                    mesh.positions[c as usize],
+                ]
+            }));
+            let (name, kind, transform) = soup_entity("STEP mesh", soup)?;
+            new_entities.push((name, kind, transform));
         }
         Format::Gltf => unreachable!("rejected above"),
     }
@@ -1354,4 +1375,104 @@ pub fn solve_constraints(
         }
     }
     Ok(violations)
+}
+
+// ------------------------------------------------------------ materials + CSG
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MaterialLibraryEntry {
+    pub id: String,
+    pub label: String,
+    pub color: [f64; 3],
+    pub roughness: f64,
+    pub metalness: f64,
+}
+
+#[tauri::command]
+pub fn get_material_library() -> Vec<MaterialLibraryEntry> {
+    const ENTRIES: &[(&str, &str, [f64; 3], f64, f64)] = &[
+        ("steel", "Steel", [0.659, 0.678, 0.710], 0.35, 0.9),
+        ("aluminum", "Aluminum", [0.784, 0.800, 0.824], 0.4, 0.85),
+        ("brushed_metal", "Brushed metal", [0.690, 0.710, 0.737], 0.25, 0.85),
+        ("copper", "Copper", [0.722, 0.451, 0.200], 0.4, 0.9),
+        ("plastic_white", "Plastic white", [0.949, 0.949, 0.949], 0.7, 0.0),
+        ("plastic_black", "Plastic black", [0.165, 0.165, 0.180], 0.6, 0.05),
+        ("glass", "Glass", [0.812, 0.910, 0.937], 0.1, 0.0),
+        ("rubber", "Rubber", [0.227, 0.227, 0.227], 0.95, 0.0),
+        ("wood_oak", "Wood oak", [0.690, 0.545, 0.341], 0.8, 0.0),
+        ("concrete", "Concrete", [0.604, 0.604, 0.573], 0.95, 0.0),
+        ("chrome", "Chrome", [0.910, 0.914, 0.925], 0.15, 1.0),
+        ("gold", "Gold", [0.831, 0.686, 0.216], 0.3, 1.0),
+    ];
+    ENTRIES
+        .iter()
+        .map(|(id, label, color, roughness, metalness)| MaterialLibraryEntry {
+            id: id.to_string(),
+            label: label.to_string(),
+            color: *color,
+            roughness: *roughness,
+            metalness: *metalness,
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn set_entity_material(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    entity_id: String,
+    material: Option<String>,
+) -> Result<(), String> {
+    let id = parse_one(&entity_id)?;
+    doc_mut(&state, &document_id, "Material", |d| {
+        d.set_material(&id, material)
+    })?;
+    emit_scene(&app, &state, &document_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn csg_apply(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    operation: String,
+    first_id: String,
+    second_id: String,
+) -> Result<CreateEntityOut, String> {
+    let op: CsgOperation = serde_json::from_value(Json::String(operation.clone()))
+        .map_err(|_| format!("unknown CSG operation: {operation} (use union, difference, intersection)"))?;
+    let first = parse_one(&first_id)?;
+    let second = parse_one(&second_id)?;
+    let (first_kind, second_kind) = doc_ref(&state, &document_id, |d| {
+        let a = d.get(&first).map(|e| e.kind.clone());
+        let b = d.get(&second).map(|e| e.kind.clone());
+        (a, b)
+    })?;
+    let first_kind = first_kind.ok_or("first entity not found")?;
+    let second_kind = second_kind.ok_or("second entity not found")?;
+    for (label, kind) in [("first", &first_kind), ("second", &second_kind)] {
+        if !kind.has_triangles() {
+            return Err(format!("{label} entity has no solid geometry to boolean"));
+        }
+    }
+    let geometry = Geometry::Csg {
+        operation: op,
+        first: Box::new(first_kind),
+        second: Box::new(second_kind),
+    };
+    let json = serde_json::to_value(&geometry).map_err(|e| format!("serialize: {e}"))?;
+    let label = match op {
+        CsgOperation::Union => "Union",
+        CsgOperation::Difference => "Difference",
+        CsgOperation::Intersection => "Intersection",
+    };
+    let id = helpers_add_entity(&app, &state, &document_id, &json, Some(label))?;
+    let entity_id = parse_one(&id)?;
+    let name = doc_ref(&state, &document_id, |d| {
+        d.get(&entity_id).map(|e| e.name.clone())
+    })?
+    .unwrap_or_default();
+    Ok(CreateEntityOut { id, name })
 }

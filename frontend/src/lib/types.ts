@@ -46,6 +46,7 @@ export interface EntityData {
   triPositions?: number[] | null;
   triNormals?: number[] | null;
   lines?: number[] | null;
+  material?: string | null;
 }
 
 export interface LayerData {

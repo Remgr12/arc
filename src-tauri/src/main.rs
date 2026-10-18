@@ -166,6 +166,9 @@ fn main() {
             commands::annotation_geometry,
             commands::constraint_add,
             commands::solve_constraints,
+            commands::get_material_library,
+            commands::set_entity_material,
+            commands::csg_apply,
             updater::check_for_updates,
             updater::install_update,
         ])

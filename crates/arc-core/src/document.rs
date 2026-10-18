@@ -226,6 +226,13 @@ impl Document {
         }
     }
 
+    pub fn set_material(&mut self, id: &EntityId, material: Option<String>) {
+        if let Some(e) = self.entities.get_mut(id) {
+            e.material = material;
+            self.touch();
+        }
+    }
+
     pub fn set_visible(&mut self, id: &EntityId, visible: bool) {
         if let Some(e) = self.entities.get_mut(id) {
             e.visible = visible;
@@ -699,7 +706,7 @@ impl Document {
                     color: entity.color.map(|c| [c.r, c.g, c.b, c.a]),
                     transform: entity.transform,
                     geometry: entity.kind.clone(),
-                    material: None,
+                    material: entity.material.clone(),
                 },
                 tri_positions,
                 tri_normals,

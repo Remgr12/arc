@@ -71,6 +71,7 @@ export const EXPORT_FORMATS: { id: string; label: string; ext: string }[] = [
   { id: "stl", label: "Export STL", ext: "stl" },
   { id: "stl_ascii", label: "Export STL (ASCII)", ext: "stl" },
   { id: "gltf", label: "Export glTF", ext: "gltf" },
+  { id: "step", label: "Export STEP", ext: "step" },
 ];
 
 /** Two-point sketch tools collect points before sending geometry. */

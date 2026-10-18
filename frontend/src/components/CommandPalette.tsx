@@ -52,7 +52,19 @@ export function CommandPalette() {
       { label: "Delete selection", hint: "Edit", run: () => void actions.deleteSelection() },
       { label: "Explode selection", hint: "Edit", run: () => void actions.explodeSelection() },
       { label: "Select all", hint: "Edit", run: () => void actions.selectAll() },
+      { label: "Boolean union", hint: "Solid · first two selected", run: () => void actions.booleanApply("union") },
+      { label: "Boolean subtract", hint: "Solid · first two selected", run: () => void actions.booleanApply("difference") },
+      { label: "Boolean intersect", hint: "Solid · first two selected", run: () => void actions.booleanApply("intersection") },
       { label: "Fit view", hint: "View", run: () => actions.fitView() },
+      {
+        label: "Materials library",
+        hint: "View",
+        run: () => {
+          const st = useArcStore.getState();
+          st.setMaterialsOpen(true);
+          window.dispatchEvent(new CustomEvent("arc-materials-toggle", { detail: true }));
+        },
+      },
       { label: "Add layer", hint: "Layers", run: () => void actions.addLayer() },
       { label: "Settings…", hint: "App", run: () => actions.openSettings() },
       { label: "Reload plugins", hint: "App", run: () => void actions.reloadPlugins() },

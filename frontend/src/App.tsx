@@ -15,7 +15,10 @@ import { actions } from "./lib/actions";
 import { decideStartupFlow } from "./lib/workspace";
 import { useArcStore } from "./lib/store";
 
+import { useMaterialsPanelMount } from "./components/MaterialsPanel";
+
 export default function App() {
+  const materialsMount = useMaterialsPanelMount();
   useEffect(() => {
     let cancelled = false;
     let unlistenEvents: (() => void) | null = null;
@@ -72,6 +75,7 @@ export default function App() {
       <UpdateDialog />
       <StartupScreen />
       <Onboarding />
+      {materialsMount}
     </div>
   );
 }

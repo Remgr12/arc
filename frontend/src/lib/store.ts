@@ -21,6 +21,7 @@ interface ArcState {
   paletteOpen: boolean;
   settingsOpen: boolean;
   pluginsOpen: boolean;
+  materialsOpen: boolean;
   startupOpen: boolean;
   onboardingOpen: boolean;
   workspaceFolder: string | null;
@@ -41,6 +42,7 @@ interface ArcState {
   setPaletteOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setPluginsOpen: (open: boolean) => void;
+  setMaterialsOpen: (open: boolean) => void;
   setStartupOpen: (open: boolean) => void;
   setOnboardingOpen: (open: boolean) => void;
   setWorkspaceFolder: (folder: string | null) => void;
@@ -63,6 +65,7 @@ export const useArcStore = create<ArcState>((set) => ({
   paletteOpen: false,
   settingsOpen: false,
   pluginsOpen: false,
+  materialsOpen: false,
   startupOpen: true,
   onboardingOpen: false,
   workspaceFolder: null,
@@ -87,6 +90,7 @@ export const useArcStore = create<ArcState>((set) => ({
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   setPluginsOpen: (open) => set({ pluginsOpen: open }),
+  setMaterialsOpen: (open) => set({ materialsOpen: open }),
   setStartupOpen: (open) => set({ startupOpen: open }),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
   setWorkspaceFolder: (folder) => set({ workspaceFolder: folder }),

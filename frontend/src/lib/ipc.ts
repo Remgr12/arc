@@ -114,11 +114,30 @@ export const ipc = {
   exportScene: (documentId: string, path: string, format: string): Promise<string> =>
     invoke("export_scene", { documentId, path, format }),
 
+  // CSG booleans
+  csgApply: (
+    documentId: string,
+    operation: "union" | "difference" | "intersection",
+    firstId: string,
+    secondId: string,
+  ): Promise<{ id: string; name: string }> =>
+    invoke("csg_apply", {
+      documentId,
+      operation,
+      firstId,
+      secondId,
+    }),
+
   // sheet metal
   sheetmetalMaterials: (): Promise<SheetMetalMaterial[]> =>
     invoke("sheetmetal_materials"),
   sheetmetalFlatPattern: (spec: unknown): Promise<SheetMetalFlatPattern> =>
     invoke("sheetmetal_flat_pattern", { spec }),
+
+  // materials
+  setEntityMaterial: (documentId: string, entityId: string, material: string | null): Promise<void> =>
+    invoke("set_entity_material", { documentId, entityId, material }),
+  getMaterialLibrary: (): Promise<MaterialLibraryEntry[]> => invoke("get_material_library"),
 
   // updater
   checkForUpdates: (): Promise<UpdateNotice> => invoke("check_for_updates"),
@@ -135,6 +154,14 @@ export interface SheetMetalMaterial {
   thickness_mm: number;
   k_factor: number;
   min_bend_radius_mm: number;
+}
+
+export interface MaterialLibraryEntry {
+  id: string;
+  label: string;
+  color: [number, number, number];
+  roughness: number;
+  metalness: number;
 }
 
 export interface SheetMetalBendLine {

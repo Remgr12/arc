@@ -7,6 +7,7 @@ import { useArcStore } from "../lib/store";
 import { useThemeStore, viewportPalette, type ViewportPalette } from "../lib/themes";
 import { ViewCube } from "../lib/viewcube";
 import { DEFAULT_GEOMETRY, MULTI_POINT_TOOLS } from "../data/tools";
+import { MATERIALS } from "../lib/materials";
 import { IconButton } from "./ui";
 import type { EntityData, Geometry, LayerData, SceneData, SketchShape, ToolId } from "../lib/types";
 
@@ -529,6 +530,7 @@ function present(
   const color = entityColor(entity, layers);
   const colorHex = color.getHex();
   const visible = entity.visible && layerVisible(layer);
+  const material = MATERIALS.find((m) => m.id === entity.material) ?? null;
 
   // Cheap diff: skip material/transform churn when nothing changed.
   const pos = entity.transform.position;
@@ -541,6 +543,7 @@ function present(
         hovered: boolean;
         locked: boolean;
         visible: boolean;
+        material: string | null;
         pos: [number, number, number];
         rot: [number, number, number, number];
         scl: [number, number, number];
@@ -553,6 +556,7 @@ function present(
     cache.hovered !== hovered ||
     cache.locked !== entity.locked ||
     cache.visible !== visible ||
+    cache.material !== entity.material ||
     cache.pos[0] !== pos[0] ||
     cache.pos[1] !== pos[1] ||
     cache.pos[2] !== pos[2] ||
@@ -575,6 +579,7 @@ function present(
     hovered,
     locked: entity.locked,
     visible,
+    material: entity.material ?? null,
     pos: [...pos] as [number, number, number],
     rot: [...rot] as [number, number, number, number],
     scl: [...scl] as [number, number, number],
@@ -596,9 +601,16 @@ function present(
   if (mesh.isMesh) {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.copy(color);
+    if (material) {
+      mat.roughness = material.roughness;
+      mat.metalness = material.metalness;
+    } else {
+      mat.roughness = 0.5;
+      mat.metalness = 0.05;
+    }
     if (entity.locked) mat.opacity = 0.55;
-    else mat.opacity = 1.0;
-    mat.transparent = entity.locked;
+    else mat.opacity = material?.transparent ? 0.55 : 1.0;
+    mat.transparent = entity.locked || !!material?.transparent;
     mat.emissive.copy(selected ? ref.palette.selection : hovered ? ref.palette.hover : BLACK);
     mat.emissiveIntensity = selected ? 0.45 : hovered ? 0.16 : 0;
   } else if ((obj as THREE.Line).isLine) {

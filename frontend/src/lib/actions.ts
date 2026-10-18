@@ -20,6 +20,29 @@ function requireDoc(): string {
 }
 
 export const actions = {
+  booleanApply: guard(async (operation: "union" | "difference" | "intersection") => {
+    const docId = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene) return;
+    const [first, second] = scene.selection;
+    if (!first || !second) {
+      useArcStore.getState().setStatusMessage("Select exactly two solid entities to combine");
+      return;
+    }
+    try {
+      const result = await ipc.csgApply(docId, operation, first, second);
+      const overview = await ipc.getState();
+      useArcStore.getState().setOverview(overview);
+      useArcStore.getState().setScene(await ipc.getScene(docId));
+      await ipc.setSelection(docId, [result.id], result.id);
+      useArcStore
+        .getState()
+        .setStatusMessage(`${operation[0].toUpperCase()}${operation.slice(1)} created`);
+    } catch (error) {
+      useArcStore.getState().setStatusMessage(`Boolean failed: ${String(error)}`);
+    }
+  }),
+
   refresh: guard(async () => {
     const overview = await ipc.getState();
     useArcStore.getState().setOverview(overview);

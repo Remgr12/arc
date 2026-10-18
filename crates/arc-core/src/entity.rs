@@ -391,6 +391,8 @@ pub struct Entity {
     pub color: Option<Color>,
     pub transform: Transform,
     pub kind: Geometry,
+    /// Optional material key from the materials library (e.g. "steel").
+    pub material: Option<String>,
 }
 
 impl Entity {
@@ -404,6 +406,7 @@ impl Entity {
             color: None,
             transform: Transform::default(),
             kind,
+            material: None,
         }
     }
 }
