@@ -617,6 +617,7 @@ fn dist_mut(hit: &RayHit) -> f64 {
 
 /// Entity snapshot for the frontend (with mesh arrays).
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SceneEntity {
     #[serde(flatten)]
     pub data: EntityData,
@@ -635,6 +636,7 @@ pub struct LayerData {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SceneData {
     pub version: u64,
     pub name: String,

@@ -7,6 +7,7 @@ import type {
   PluginInfo,
   RayHit,
   SceneData,
+  SceneEnvelope,
   Settings,
   Transform,
 } from "./types";
@@ -27,7 +28,8 @@ export const ipc = {
   setActiveDocument: (id: string): Promise<void> => invoke("set_active_document", { id }),
 
   // scene
-  getScene: (documentId: string): Promise<SceneData> => invoke("get_scene", { documentId }),
+  getScene: (documentId: string): Promise<SceneData> =>
+    invoke<SceneEnvelope>("get_scene", { documentId }).then((envelope) => envelope.scene),
 
   // entities
   createEntity: (documentId: string, geometry: Geometry, name?: string) =>

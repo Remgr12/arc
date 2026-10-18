@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
+mod bridge;
 mod commands;
 mod plugins;
 mod state;
@@ -67,6 +68,8 @@ fn main() {
                 plugins.lock().dirs = dirs;
                 plugins.lock().reload(&shared, &app.handle().clone());
             }
+
+            bridge::start(app.handle().clone(), data_dir.join("bridge.json"));
 
             Ok(())
         })

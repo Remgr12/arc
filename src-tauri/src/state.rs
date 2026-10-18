@@ -103,6 +103,7 @@ pub struct AppOverview {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SceneEnvelope {
     pub document_id: String,
     pub scene: SceneData,
