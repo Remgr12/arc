@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/truck-core", "crates/arc-mcp", "src-tauri"]
+members = ["crates/truck-core", "src-tauri"]
 exclude = ["frontend"]
 
 [workspace.package]
