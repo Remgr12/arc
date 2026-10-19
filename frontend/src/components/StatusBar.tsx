@@ -28,46 +28,46 @@ export function StatusBar() {
     : null;
 
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-base-300 bg-base-100 px-3">
-      <span className="min-w-0 flex-1 truncate text-[11px] text-base-600">{statusMessage}</span>
+    <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-base-200 bg-base-50 px-4">
+      <span className="min-w-0 flex-1 truncate text-[12px] text-base-700">{statusMessage}</span>
 
-      <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-base-500" title="Cursor position">
+      <span className="hidden sm:block shrink-0 font-mono text-[11.5px] tabular-nums text-base-600" title="Cursor position">
         X {fmt(cursorWorld[0])}  Z {fmt(cursorWorld[2])}
       </span>
 
-      <span className="h-3.5 w-px bg-base-300" />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          title="Show grid"
+          disabled={!settings}
+          onClick={() => toggleSetting("show_grid")}
+          className={cn(
+            "flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] transition-colors disabled:pointer-events-none disabled:opacity-30",
+            settings?.show_grid ? "text-accent-600 bg-accent-500/10" : "text-base-600 hover:bg-base-200 hover:text-base-800",
+          )}
+        >
+          <Grid3x3 size={14} strokeWidth={1.75} />
+          {gridLabel && <span className="font-mono">{gridLabel}</span>}
+        </button>
 
-      <button
-        type="button"
-        title="Show grid"
-        disabled={!settings}
-        onClick={() => toggleSetting("show_grid")}
-        className={cn(
-          "flex h-5 shrink-0 items-center gap-1 rounded px-1 text-[10.5px] transition-colors disabled:pointer-events-none disabled:opacity-30",
-          settings?.show_grid ? "text-accent-500" : "text-base-500 hover:bg-base-200 hover:text-base-700",
-        )}
-      >
-        <Grid3x3 size={12} strokeWidth={1.75} />
-        {gridLabel && <span className="font-mono">{gridLabel}</span>}
-      </button>
+        <button
+          type="button"
+          title="Snap to grid"
+          disabled={!settings}
+          onClick={() => toggleSetting("snap_enabled")}
+          className={cn(
+            "flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] transition-colors disabled:pointer-events-none disabled:opacity-30",
+            settings?.snap_enabled ? "text-accent-600 bg-accent-500/10" : "text-base-600 hover:bg-base-200 hover:text-base-800",
+          )}
+        >
+          <Magnet size={14} strokeWidth={1.75} />
+          Snap
+        </button>
+      </div>
 
-      <button
-        type="button"
-        title="Snap to grid"
-        disabled={!settings}
-        onClick={() => toggleSetting("snap_enabled")}
-        className={cn(
-          "flex h-5 shrink-0 items-center gap-1 rounded px-1 text-[10.5px] transition-colors disabled:pointer-events-none disabled:opacity-30",
-          settings?.snap_enabled ? "text-accent-500" : "text-base-500 hover:bg-base-200 hover:text-base-700",
-        )}
-      >
-        <Magnet size={12} strokeWidth={1.75} />
-        Snap
-      </button>
+      <span className="h-5 w-px bg-base-200" />
 
-      <span className="h-3.5 w-px bg-base-300" />
-
-      <span className="shrink-0 text-[10.5px] tabular-nums text-base-500">
+      <span className="shrink-0 text-[11.5px] tabular-nums text-base-600">
         {scene ? `${scene.entities.length} items · ${selectionCount} selected` : "no document"}
       </span>
     </footer>

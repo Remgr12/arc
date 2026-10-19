@@ -12,6 +12,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { StartupScreen } from "./components/StartupScreen";
 import { Onboarding } from "./components/Onboarding";
+import { Dock } from "./components/Dock";
 import { actions } from "./lib/actions";
 import { decideStartupFlow } from "./lib/workspace";
 import { useArcStore } from "./lib/store";
@@ -62,11 +63,11 @@ export default function App() {
         <div className="relative min-w-0 flex-1">
           <Viewport />
         </div>
-        <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-300 bg-base-100">
+        <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-200 bg-base-100">
           <div className="min-h-0 flex-1">
             <ProjectPanel />
           </div>
-          <div className="h-[300px] shrink-0 border-t border-base-300">
+          <div className="h-[300px] shrink-0 border-t border-base-200">
             <PropertiesPanel />
           </div>
         </aside>
@@ -79,6 +80,7 @@ export default function App() {
       <StartupScreen />
       <Onboarding />
       {materialsMount}
+      <Dock />
     </div>
   );
 }

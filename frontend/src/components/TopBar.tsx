@@ -239,47 +239,56 @@ export function TopBar({ children }: { children?: ReactNode }) {
   ];
 
   return (
-    <header className="relative flex h-9 shrink-0 items-center gap-0.5 border-b border-base-300 bg-base-100 pr-1.5 pl-2">
-      <div className="mr-1 flex items-center text-accent-500">
-        <Logo size={17} />
+    <header className="relative flex h-9 shrink-0 items-center gap-1 border-b border-base-200 bg-base-50 px-3">
+      <div className="flex items-center gap-1.5">
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-500/10 text-accent-600">
+          <Logo size={16} />
+        </div>
+        <span className="text-[13px] font-semibold text-base-800">arc</span>
       </div>
 
-      <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
-      <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
-      <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
+      <div className="ml-4 flex items-center gap-1">
+        <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
+        <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
+        <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
+      </div>
 
       <div
-        className="pointer-events-none absolute left-1/2 top-0 flex h-full -translate-x-1/2 items-center px-4"
+        className="mx-auto hidden min-w-0 max-w-[300px] truncate text-[12px] font-medium text-base-600 sm:block"
         title={scene?.path ?? undefined}
       >
-        <span className="max-w-[320px] truncate text-[12px] font-medium text-base-500">{docTitle}</span>
+        {docTitle}
       </div>
 
-      <div className="ml-auto flex items-center gap-0.5">{children}
+      <div className="ml-auto flex items-center gap-1.5">{children}
         <IconButton
-          icon={<Undo2 size={15} strokeWidth={1.75} />}
+          icon={<Undo2 size={16} strokeWidth={1.75} />}
           title={`Undo${bindingHint("edit:undo") ? ` (${bindingHint("edit:undo")})` : ""}`}
           disabled={!scene?.canUndo}
           onClick={() => void actions.undo()}
+          className="text-base-600 hover:bg-base-200"
         />
         <IconButton
-          icon={<Redo2 size={15} strokeWidth={1.75} />}
+          icon={<Redo2 size={16} strokeWidth={1.75} />}
           title={`Redo${bindingHint("edit:redo") ? ` (${bindingHint("edit:redo")})` : ""}`}
           disabled={!scene?.canRedo}
           onClick={() => void actions.redo()}
+          className="text-base-600 hover:bg-base-200"
         />
 
-        <div className="mx-1 h-4 w-px bg-base-300" />
+        <div className="h-5 w-px bg-base-200" />
 
         <IconButton
-          icon={<Command size={15} strokeWidth={1.75} />}
+          icon={<Command size={16} strokeWidth={1.75} />}
           title={`Command palette${bindingHint("app:palette") ? ` (${bindingHint("app:palette")})` : ""}`}
           onClick={() => useArcStore.getState().setPaletteOpen(true)}
+          className="text-base-600 hover:bg-base-200"
         />
         <IconButton
-          icon={<Settings size={15} strokeWidth={1.75} />}
+          icon={<Settings size={16} strokeWidth={1.75} />}
           title={`Settings${bindingHint("app:settings") ? ` (${bindingHint("app:settings")})` : ""}`}
           onClick={actions.openSettings}
+          className="text-base-600 hover:bg-base-200"
         />
       </div>
     </header>
