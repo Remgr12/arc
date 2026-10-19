@@ -17,10 +17,10 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("flex flex-col gap-1", className)}>
+    <section className={cn("flex flex-col gap-2", className)}>
       {title && (
-        <div className="flex items-baseline justify-between pb-1">
-          <h3 className="text-[11px] font-medium text-base-400">{title}</h3>
+        <div className="flex items-baseline justify-between pb-1.5">
+          <h3 className="text-[11px] font-semibold text-base-700">{title}</h3>
           {hint && <span className="text-[10px] text-base-500">{hint}</span>}
         </div>
       )}
@@ -77,8 +77,8 @@ export function PropertiesPanel() {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <PanelHeader title="Properties" />
-        <div className="flex flex-1 items-start px-3 pt-2">
-          <p className="text-[11.5px] leading-4 text-base-500">
+        <div className="flex flex-1 items-start px-3 pt-3">
+          <p className="text-[12px] leading-relaxed text-base-500">
             Select an item to inspect it. Shift-click to build a multiple selection.
           </p>
         </div>
@@ -98,10 +98,10 @@ export function PropertiesPanel() {
 
 function PanelHeader({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-8 shrink-0 items-center justify-between border-b border-base-300 px-3">
-      <span className="text-[11.5px] font-medium text-base-700">{title}</span>
+    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-50 px-3">
+      <span className="text-[12px] font-semibold text-base-800">{title}</span>
       {hint && (
-        <span className="rounded bg-base-200 px-1.5 py-px font-mono text-[10px] text-base-500">{hint}</span>
+        <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{hint}</span>
       )}
     </div>
   );
@@ -126,11 +126,11 @@ function EntityForm({
   };
 
   return (
-    <div className="flex flex-col pt-2">
+    <div className="flex flex-col pt-3">
       <Section>
         <Row label="Name">
           <TextField
-            className="h-6"
+            className="h-7"
             value={entity.name}
             onCommit={(name) =>
               void ipc.setEntityProps(docId, entity.id, { name }).catch(() => undefined)
@@ -139,7 +139,7 @@ function EntityForm({
         </Row>
         <Row label="Layer">
           <SelectField
-            className="h-6 text-[11.5px]"
+            className="h-7 text-[12px]"
             value={entity.layer}
             options={(scene?.layers ?? []).map((l) => ({ value: l.id, label: l.name }))}
             onChange={(layerId) =>
@@ -148,7 +148,7 @@ function EntityForm({
           />
         </Row>
         <Row label="Color">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <input
               type="color"
               value={toHex(entity.color ?? [0.62, 0.62, 0.65, 1]).slice(0, 7)}
@@ -162,12 +162,12 @@ function EntityForm({
                 ];
                 void ipc.setEntityProps(docId, entity.id, { color }).catch(() => undefined);
               }}
-              className="h-5 w-8 cursor-pointer rounded border border-base-400 bg-base-200"
+              className="h-6 w-9 cursor-pointer rounded-md border border-base-300 bg-base-200"
             />
             {entity.color && (
               <button
                 type="button"
-                className="rounded px-1 py-0.5 text-[10.5px] text-base-600 transition-colors hover:bg-base-200 hover:text-base-700"
+                className="rounded px-1.5 py-1 text-[11px] text-base-600 transition-colors hover:bg-base-200 hover:text-base-700"
                 onClick={() => void ipc.setEntityProps(docId, entity.id, { color: null })}
               >
                 Use layer color
@@ -177,7 +177,7 @@ function EntityForm({
         </Row>
       </Section>
 
-      <Section title="Position" className="mt-3 border-t border-base-300 pt-2">
+      <Section title="Position" className="mt-4 border-t border-base-200 pt-3">
         <AxisFields
           values={t.position}
           onCommit={(axis, value) => {
@@ -188,7 +188,7 @@ function EntityForm({
         />
       </Section>
 
-      <Section title="Rotation" hint="degrees" className="mt-3 border-t border-base-300 pt-2">
+      <Section title="Rotation" hint="degrees" className="mt-4 border-t border-base-200 pt-3">
         <AxisFields
           values={[euler.x, euler.y, euler.z]}
           onCommit={(axis, value) => {
@@ -199,7 +199,7 @@ function EntityForm({
         />
       </Section>
 
-      <Section title="Scale" className="mt-3 border-t border-base-300 pt-2">
+      <Section title="Scale" className="mt-4 border-t border-base-200 pt-3">
         <AxisFields
           values={t.scale}
           onCommit={(axis, value) => {
@@ -212,22 +212,22 @@ function EntityForm({
 
       <Section
         title="Geometry"
-        className="mt-3 border-t border-base-300 pt-2"
+        className="mt-4 border-t border-base-200 pt-3"
       >
         <GeometryForm docId={docId} entity={entity} />
       </Section>
 
-      <div className="mt-4 border-t border-base-300 pt-2.5 pb-1">
+      <div className="mt-5 border-t border-base-200 pt-3 pb-1">
         <button
           type="button"
-          className="flex h-6 w-full items-center justify-center gap-1.5 rounded-md border border-base-300 text-[11.5px] text-base-600 transition-colors hover:border-danger-500/50 hover:bg-danger-600/15 hover:text-danger-500"
+          className="flex h-7 w-full items-center justify-center gap-2 rounded-md border border-base-300 text-[12px] text-base-600 transition-colors hover:border-danger-500/50 hover:bg-danger-600/15 hover:text-danger-500"
           onClick={() =>
             void ipc.deleteEntities(docId, [entity.id]).then(() =>
               ipc.setSelection(docId, [], null),
             )
           }
         >
-          <Trash2 size={12} strokeWidth={1.75} /> Delete
+          <Trash2 size={14} strokeWidth={1.75} /> Delete
         </button>
       </div>
     </div>

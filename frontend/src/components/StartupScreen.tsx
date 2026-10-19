@@ -133,35 +133,37 @@ export function StartupScreen() {
   if (!open || !settingsReady) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-base-50">
-      <div className="flex h-[540px] w-[820px] overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl">
-        <div className="flex w-[240px] shrink-0 flex-col border-r border-base-300 bg-base-150 p-5">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-base-50 backdrop-blur-sm">
+      <div className="flex h-[540px] w-[820px] overflow-hidden rounded-xl border border-base-200 bg-base-100 shadow-xl">
+        <div className="flex w-[240px] shrink-0 flex-col border-r border-base-200 bg-base-50 p-5">
           <div className="flex items-center gap-3">
-            <Logo size={34} />
-            <span className="text-[22px] font-semibold tracking-tight text-base-800">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/10 text-accent-600">
+              <Logo size={28} />
+            </div>
+            <span className="text-[20px] font-semibold tracking-tight text-base-900">
               arc
             </span>
           </div>
-          <span className="mt-3 text-[11.5px] leading-relaxed text-base-600">
+          <span className="mt-3 text-[13px] leading-relaxed text-base-600">
             A lightweight CAD workspace. Pick a project below or start something
             new.
           </span>
-          <div className="mt-5 flex flex-col gap-1.5">
+          <div className="mt-5 flex flex-col gap-2">
             <Button variant="primary" onClick={() => setNaming("")}>
-              <Plus size={14} /> New project
+              <Plus size={16} /> New project
             </Button>
             <Button variant="ghost" onClick={() => void openOther()}>
-              <FolderOpen size={14} /> Open other…
+              <FolderOpen size={16} /> Open other…
             </Button>
             {folder && (
               <span
-                className="truncate rounded bg-base-100 px-2 py-1 font-mono text-[10.5px] text-base-600"
+                className="truncate rounded bg-base-100 px-2 py-1.5 font-mono text-[11.5px] text-base-600"
                 title={folder}
               >
                 {folder}
               </span>
             )}
-            <div className="mt-auto flex flex-col gap-1.5">
+            <div className="mt-auto flex flex-col gap-2">
               <Button variant="ghost" onClick={() => void changeFolder()}>
                 Change folder…
               </Button>
@@ -172,20 +174,21 @@ export function StartupScreen() {
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-300 px-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-base-600">
+          <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 px-3">
+            <span className="text-[11.5px] font-semibold uppercase tracking-wide text-base-600">
               Projects
             </span>
             <IconButton
-              icon={<RefreshCw size={13} />}
+              icon={<RefreshCw size={14} />}
               onClick={() => setSort({ ...DEFAULT_SORT })}
               title="Reset sort"
+              className="hover:bg-base-200"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-base-100">
-                <tr className="border-b border-base-300">
+                <tr className="border-b border-base-200">
                   <SortHeader
                     label="Name"
                     active={sort.key === "name"}
@@ -211,7 +214,7 @@ export function StartupScreen() {
                   <tr>
                     <td
                       colSpan={3}
-                      className="px-3 py-8 text-center text-[12.5px] text-base-500"
+                      className="px-3 py-8 text-center text-[13px] text-base-500"
                     >
                       Loading projects…
                     </td>
@@ -219,12 +222,12 @@ export function StartupScreen() {
                 ) : sorted.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="px-3 py-8 text-center">
-                      <div className="text-[12.5px] text-base-500">
+                      <div className="text-[13px] text-base-500">
                         No projects in this folder yet.
                       </div>
-                      <div className="mt-3">
+                      <div className="mt-4">
                         <Button variant="primary" onClick={() => setNaming("")}>
-                          <Plus size={14} /> New project
+                          <Plus size={16} /> New project
                         </Button>
                       </div>
                     </td>
@@ -235,17 +238,17 @@ export function StartupScreen() {
                       key={project.path}
                       onClick={() => void openProject(project)}
                       className={cn(
-                        "cursor-pointer border-b border-base-200 text-[12.5px] text-base-700 transition-colors hover:bg-base-150",
+                        "cursor-pointer border-b border-base-100 text-[13px] text-base-700 transition-colors hover:bg-base-100",
                         opening === project.path && "opacity-60",
                       )}
                     >
-                      <td className="truncate px-3 py-2 font-medium text-base-800">
+                      <td className="truncate px-3 py-2 font-medium text-base-900">
                         {project.name}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[11.5px] text-base-600">
+                      <td className="px-3 py-2 font-mono text-[12px] text-base-600">
                         {formatDate(project.modified)}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[11.5px] text-base-600">
+                      <td className="px-3 py-2 font-mono text-[12px] text-base-600">
                         {formatSize(project.size)}
                       </td>
                     </tr>
@@ -262,7 +265,7 @@ export function StartupScreen() {
         title="New project"
         width="w-[380px]"
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <TextField
             value={naming ?? ""}
             onChange={(value) => setNaming(value)}
@@ -304,14 +307,14 @@ function SortHeader({
         type="button"
         onClick={onClick}
         className={cn(
-          "inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
-          active ? "text-accent-600" : "text-base-600 hover:text-base-800",
+          "inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-wide transition-colors",
+          active ? "text-accent-600" : "text-base-600 hover:text-base-900",
         )}
       >
         {label}
         {active && (
-          <span className="text-[10px]">
-            {dir === 1 ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+          <span className="text-[11px]">
+            {dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
           </span>
         )}
       </button>

@@ -30,6 +30,9 @@ interface ArcState {
   selectionVersion: number;
   statusMessage: string;
   cursorWorld: [number, number, number];
+  dashboardTransition: boolean;
+  viewportReady: boolean;
+  activeToolCategory: string;
 
   setOverview: (o: AppOverview) => void;
   setScene: (scene: SceneData) => void;
@@ -50,6 +53,9 @@ interface ArcState {
   setHoverEntity: (id: string | null) => void;
   setStatusMessage: (msg: string) => void;
   setCursorWorld: (c: [number, number, number]) => void;
+  setDashboardTransition: (transition: boolean) => void;
+  setViewportReady: (ready: boolean) => void;
+  setActiveToolCategory: (category: string) => void;
 }
 
 export const useArcStore = create<ArcState>((set) => ({
@@ -74,6 +80,9 @@ export const useArcStore = create<ArcState>((set) => ({
   selectionVersion: 0,
   statusMessage: "Ready",
   cursorWorld: [0, 0, 0],
+  dashboardTransition: false,
+  viewportReady: false,
+  activeToolCategory: "all",
 
   setOverview: (o) => set({ overview: o, settings: o.settings }),
   setScene: (scene) => set({ scene, sceneVersion: scene.version }),
@@ -98,4 +107,7 @@ export const useArcStore = create<ArcState>((set) => ({
   setHoverEntity: (id) => set({ hoverEntity: id }),
   setStatusMessage: (msg) => set({ statusMessage: msg }),
   setCursorWorld: (c) => set({ cursorWorld: c }),
+  setDashboardTransition: (transition) => set({ dashboardTransition: transition }),
+  setViewportReady: (ready) => set({ viewportReady: ready }),
+  setActiveToolCategory: (category) => set({ activeToolCategory: category }),
 }));

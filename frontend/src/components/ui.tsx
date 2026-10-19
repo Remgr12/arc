@@ -32,13 +32,13 @@ export function Button({
   type?: "button" | "submit";
 }) {
   const base =
-    "inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
+    "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-40";
   const variants = {
     default:
-      "bg-base-300 text-base-700 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] hover:bg-base-400 hover:text-base-800",
-    ghost: "bg-transparent text-base-600 hover:bg-base-300 hover:text-base-800",
-    primary: "bg-accent-600 text-white hover:bg-accent-500",
-    danger: "bg-danger-600/80 text-white hover:bg-danger-600",
+      "bg-base-200 text-base-700 border border-base-300 hover:bg-base-300 hover:text-base-800 shadow-sm",
+    ghost: "bg-transparent text-base-600 hover:bg-base-200 hover:text-base-800",
+    primary: "bg-accent-500 text-white hover:bg-accent-600 shadow-sm hover:shadow",
+    danger: "bg-danger-500 text-white hover:bg-danger-600 shadow-sm hover:shadow",
   };
   return (
     <button
@@ -70,7 +70,7 @@ export function IconButton({
   className?: string;
   size?: "sm" | "md";
 }) {
-  const dim = size === "sm" ? "h-6 w-6" : "h-7 w-7";
+  const dim = size === "sm" ? "h-7 w-7" : "h-8 w-8";
   return (
     <button
       type="button"
@@ -78,9 +78,9 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center rounded-md text-base-600 transition-colors hover:bg-base-300 hover:text-base-800 disabled:pointer-events-none disabled:opacity-30",
+        "inline-flex items-center justify-center rounded-lg text-base-600 transition-all duration-200 hover:bg-base-200 hover:text-base-800 disabled:pointer-events-none disabled:opacity-30",
         dim,
-        active && "bg-accent-600 text-white hover:bg-accent-500",
+        active && "bg-accent-500/10 text-accent-600",
         className,
       )}
     >
@@ -162,8 +162,8 @@ export function TextField({
       }}
       onPointerDown={(e) => e.stopPropagation()}
       className={cn(
-        "h-7 w-full min-w-0 rounded-md border border-base-400 bg-base-200 px-2 text-[12px] text-base-800 outline-none transition-colors placeholder:text-base-500 focus:border-accent-500",
-        mono && "font-mono text-[11.5px]",
+        "h-8 w-full min-w-0 rounded-lg border border-base-300 bg-base-100 px-3 text-[12px] text-base-800 outline-none transition-all placeholder:text-base-500 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20",
+        mono && "font-mono text-[12px]",
         className,
       )}
     />
@@ -246,12 +246,12 @@ export function NumField({
         onFocus={(e) => e.currentTarget.select()}
         data-step={step}
         className={cn(
-          "h-7 w-full min-w-0 cursor-ew-resize rounded-md border border-base-400 bg-base-200 px-2 text-right font-mono text-[11.5px] text-base-800 outline-none transition-colors focus:cursor-text focus:border-accent-500",
+          "h-8 w-full min-w-0 cursor-ew-resize rounded-lg border border-base-300 bg-base-100 px-3 text-right font-mono text-[12px] text-base-800 outline-none transition-all focus:cursor-text focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20",
           className,
         )}
       />
       {suffix && (
-        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-base-500">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-base-500">
           {suffix}
         </span>
       )}
@@ -280,7 +280,7 @@ export function SelectField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "h-7 w-full rounded-md border border-base-400 bg-base-200 px-1.5 text-[12px] text-base-800 outline-none transition-colors focus:border-accent-500",
+        "h-8 w-full rounded-lg border border-base-300 bg-base-100 px-3 text-[12px] text-base-800 outline-none transition-all focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20",
         className,
       )}
     >
@@ -429,11 +429,11 @@ export function Panel({
   bodyClassName?: string;
 }) {
   return (
-    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-base-200 bg-base-50", className)}>
       {title && (
-        <div className="flex h-8 shrink-0 items-center justify-between px-3">
-          <span className="text-[11px] font-medium text-base-600">{title}</span>
-          <div className="flex items-center gap-0.5">{actions}</div>
+        <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-100 px-3">
+          <span className="text-[12px] font-semibold text-base-800">{title}</span>
+          <div className="flex items-center gap-1.5">{actions}</div>
         </div>
       )}
       <div className={cn("min-h-0 flex-1 overflow-auto", bodyClassName)}>{children}</div>
@@ -469,22 +469,22 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 pt-[14vh] backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         className={cn(
-          "flex max-h-[72vh] flex-col overflow-hidden rounded-xl border border-base-400 bg-base-100 shadow-[0_24px_70px_-12px_rgba(0,0,0,0.65)]",
+          "flex max-h-[80vh] flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl",
           width,
         )}
       >
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-300 px-3.5">
-          <span className="text-[13px] font-medium text-base-800">{title}</span>
-          <IconButton icon={<X size={14} />} onClick={onClose} title="Close" size="sm" />
+        <div className="flex h-11 shrink-0 items-center justify-between border-b border-base-200 px-4">
+          <span className="text-[13px] font-semibold text-base-900">{title}</span>
+          <IconButton icon={<X size={16} />} onClick={onClose} title="Close" size="sm" className="hover:bg-base-200" />
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-3.5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
       </div>
     </div>
   );
@@ -492,13 +492,13 @@ export function Modal({
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[72px_1fr] items-center gap-2 py-0.5">
-      <span className="truncate text-[11px] text-base-600">{label}</span>
+    <div className="grid grid-cols-[80px_1fr] items-center gap-3 py-1.5">
+      <span className="truncate text-[11.5px] font-medium text-base-700">{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
   );
 }
 
 export function Divider({ className }: { className?: string }) {
-  return <div className={cn("h-px w-full bg-base-300/70", className)} />;
+  return <div className={cn("h-px w-full bg-base-200/70", className)} />;
 }

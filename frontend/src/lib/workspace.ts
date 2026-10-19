@@ -36,13 +36,31 @@ export function decideStartupFlow(): void {
   const prefs = loadWorkspacePrefs();
   const folder = prefs?.folder ?? st.settings?.workspace_dir ?? null;
   st.setWorkspaceFolder(folder);
+  
+  // Prevent UI flash: ensure smooth transition when restoring session
+  st.setDashboardTransition(false);
+  
   if (!folder) {
     st.setStartupOpen(false);
     st.setOnboardingOpen(true);
+    st.setDashboardTransition(true);
     return;
   }
   const overview = st.overview;
   const active = overview?.documents.find((d) => d.id === overview.active);
   const restored = Boolean(overview?.settings.reopen_last_session && active?.path);
-  if (restored) st.setStartupOpen(false);
+  
+  if (restored) {
+    // Smooth transition: hide startup immediately and show dashboard
+    st.setStartupOpen(false);
+    st.setDashboardTransition(true);
+    // Ensure viewport is ready before showing dashboard
+    requestAnimationFrame(() => {
+      st.setViewportReady(true);
+    });
+  } else {
+    st.setStartupOpen(false);
+    st.setOnboardingOpen(true);
+    st.setDashboardTransition(true);
+  }
 }

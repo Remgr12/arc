@@ -264,15 +264,15 @@ export function ProjectPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-base-300 px-2.5">
-        <div className="flex items-center gap-3">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-50 px-3">
+        <div className="flex items-center gap-2">
           {(["items", "layers"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
               className={cn(
-                "-mb-px border-b-2 border-transparent pt-px text-[11.5px] transition-colors",
+                "-mb-px border-b-2 border-transparent px-2 py-0.5 text-[12px] font-medium transition-colors",
                 mode === m ? "border-accent-500 text-base-800" : "text-base-600 hover:text-base-700",
               )}
             >
@@ -281,21 +281,22 @@ export function ProjectPanel() {
           ))}
         </div>
         <IconButton
-          icon={<Plus size={13} strokeWidth={1.75} />}
+          icon={<Plus size={14} strokeWidth={1.75} />}
           title={mode === "layers" ? "Add layer" : "New document"}
           disabled={mode === "layers" && docId === ""}
           size="sm"
           onClick={addLayerOrDoc}
+          className="hover:bg-base-200"
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div>
           <SectionLabel>Documents</SectionLabel>
           {documents.length === 0 ? (
-            <div className="px-1.5 text-[12px] text-base-500">No documents open.</div>
+            <div className="px-2 text-[12px] text-base-500">No documents open.</div>
           ) : (
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               {documents.map((d) => (
                 <DocumentRow key={d.id} doc={d} active={overview?.active === d.id} />
               ))}
@@ -304,22 +305,22 @@ export function ProjectPanel() {
         </div>
 
         {mode === "items" ? (
-          <div className="mt-1 flex min-h-0 flex-col">
+          <div className="mt-3 flex min-h-0 flex-col">
             <SectionLabel>Items</SectionLabel>
             {!scene || scene.entities.length === 0 ? (
-              <div className="px-1.5 text-[12px] text-base-500">
+              <div className="px-2 text-[12px] text-base-500">
                 Nothing here yet. Pick a tool and click in the viewport.
               </div>
             ) : (
               grouped.map((group) => (
                 <div key={group.category}>
-                  <div className="mt-1.5 flex items-baseline justify-between px-1.5 pb-0.5 first:mt-0">
-                    <span className="text-[10.5px] font-medium text-base-500">
+                  <div className="mt-2.5 flex items-baseline justify-between px-2 pb-0.5 first:mt-0">
+                    <span className="text-[11px] font-medium text-base-500">
                       {CATEGORY_LABELS[group.category]}
                     </span>
                     <span className="text-[10px] tabular-nums text-base-500/70">{group.entities.length}</span>
                   </div>
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-1">
                     {group.entities.map((entity) => (
                       <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
                     ))}
@@ -329,12 +330,12 @@ export function ProjectPanel() {
             )}
           </div>
         ) : (
-          <div className="mt-1 flex min-h-0 flex-col">
+          <div className="mt-3 flex min-h-0 flex-col">
             <SectionLabel>Layers</SectionLabel>
             {!scene || scene.layers.length === 0 ? (
-              <div className="px-1.5 text-[12px] text-base-500">No layers.</div>
+              <div className="px-2 text-[12px] text-base-500">No layers.</div>
             ) : (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-1">
                 {scene.layers.map((layer) => (
                   <LayerRow
                     key={layer.id}
