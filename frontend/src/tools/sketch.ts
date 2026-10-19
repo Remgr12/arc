@@ -164,7 +164,13 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       ctx.showMeasure(`${lenLabel(from, constrained)} · ${angleLabel(from, constrained)}`, ctx.screenPoint(event));
     },
     onPointerUp(event, ctx) {
-      if (!state.anchor || !state.dragged) return;
+      if (!state.anchor || !state.dragged) {
+        // Click without drag: clear the press so the next mousemove does not
+        // flip `dragged` on right before a real pointerdown.
+        state.press = null;
+        state.dragged = false;
+        return;
+      }
       const raw = ctx.planePoint(event, 0);
       if (!raw) {
         ctx.releasePointer(event);
