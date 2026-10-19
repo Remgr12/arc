@@ -12,8 +12,8 @@ mod plugins;
 mod state;
 mod updater;
 
-use arc_core::Document;
 use state::{load_settings, save_settings, SharedState, Settings};
+
 
 fn main() {
     let app_state: SharedState = Arc::new(Mutex::new(state::AppState::new()));
@@ -27,6 +27,10 @@ fn main() {
         .manage(app_state)
         .manage(plugin_state)
         .setup(|app| {
+            // Initialize bridge
+            let mut bridge = bridge::ArcCoreBridge::new();
+            app.manage(bridge);
+            
             // Settings file lives in the app data dir.
             let data_dir = app
                 .path()
