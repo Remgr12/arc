@@ -140,12 +140,12 @@ export function installKeybinds(): () => void {
     if (binding === "escape") {
       if (st.paletteOpen) st.setPaletteOpen(false);
       else if (st.commandLineOpen) st.setCommandLineOpen(false);
-      else if (st.drafting || st.tool === "sketch") window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
+      else if (st.drafting || st.tool !== "select") window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
       else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
       return;
     }
 
-    if (st.drafting && (binding === "enter" || binding === "backspace")) {
+    if (st.tool !== "select" && (binding === "enter" || binding === "backspace")) {
       e.preventDefault();
       window.dispatchEvent(
         new CustomEvent(binding === "enter" ? "arc-draft-enter" : "arc-draft-backspace"),

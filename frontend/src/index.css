@@ -4,23 +4,32 @@
   --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 
-  --color-base-50: oklch(0.145 0 0);
-  --color-base-100: oklch(0.185 0 0);
-  --color-base-150: oklch(0.208 0 0);
-  --color-base-200: oklch(0.235 0 0);
-  --color-base-300: oklch(0.275 0 0);
-  --color-base-400: oklch(0.34 0 0);
-  --color-base-500: oklch(0.45 0 0);
-  --color-base-600: oklch(0.62 0 0);
-  --color-base-700: oklch(0.78 0 0);
-  --color-base-800: oklch(0.93 0 0);
+  /* Cool graphite scale, darkest → lightest. Slight blue cast keeps the UI
+     from reading as "pure gray template" while staying neutral. */
+  --color-base-50: oklch(0.155 0.004 265);
+  --color-base-100: oklch(0.195 0.004 265);
+  --color-base-150: oklch(0.22 0.005 265);
+  --color-base-200: oklch(0.245 0.005 265);
+  --color-base-300: oklch(0.29 0.006 265);
+  --color-base-400: oklch(0.36 0.006 265);
+  --color-base-500: oklch(0.48 0.007 265);
+  --color-base-600: oklch(0.66 0.006 265);
+  --color-base-700: oklch(0.82 0.005 265);
+  --color-base-800: oklch(0.94 0.003 265);
 
-  --color-accent-500: oklch(0.72 0.14 232);
-  --color-accent-600: oklch(0.66 0.15 232);
-  --color-accent-700: oklch(0.58 0.14 232);
+  --color-accent-400: oklch(0.74 0.14 255);
+  --color-accent-500: oklch(0.68 0.16 255);
+  --color-accent-600: oklch(0.61 0.17 255);
+  --color-accent-700: oklch(0.53 0.16 255);
+  --color-accent-800: oklch(0.45 0.13 255);
+
+  --color-danger-500: oklch(0.64 0.19 25);
+  --color-danger-600: oklch(0.56 0.19 25);
+  --color-warn-500: oklch(0.8 0.14 85);
 
   --radius-sm: 4px;
   --radius-md: 6px;
+  --radius-lg: 10px;
 }
 
 html,
@@ -33,16 +42,18 @@ body,
 body {
   margin: 0;
   background-color: var(--color-base-50);
-  color: var(--color-base-800);
+  color: var(--color-base-700);
   font-family: var(--font-sans);
+  font-size: 12px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   user-select: none;
   cursor: default;
 }
 
 ::selection {
-  background: var(--color-accent-500);
-  color: var(--color-base-50);
+  background: color-mix(in oklch, var(--color-accent-500) 70%, transparent);
+  color: var(--color-base-800);
 }
 
 *::-webkit-scrollbar {
@@ -52,9 +63,12 @@ body {
 *::-webkit-scrollbar-thumb {
   background: var(--color-base-400);
   border-radius: 8px;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 *::-webkit-scrollbar-thumb:hover {
   background: var(--color-base-500);
+  background-clip: content-box;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
@@ -79,4 +93,9 @@ button {
 
 .panel-focus-ring {
   outline: 1px solid var(--color-accent-500);
+}
+
+/* Hairline separators that stay visible on dark graphite. */
+.hairline-b {
+  box-shadow: inset 0 -1px 0 0 color-mix(in oklch, white 7%, transparent);
 }

@@ -4,7 +4,6 @@ import type {
   PluginInfo,
   SceneData,
   Settings,
-  SketchShape,
   ToolId,
   UpdateNotice,
 } from "./types";
@@ -14,7 +13,6 @@ interface ArcState {
   scene: SceneData | null;
   sceneVersion: number;
   tool: ToolId;
-  sketchShape: SketchShape;
   drafting: boolean;
   settings: Settings | null;
   pluginsList: PluginInfo[];
@@ -37,7 +35,6 @@ interface ArcState {
   setScene: (scene: SceneData) => void;
   setPlugins: (plugins: PluginInfo[]) => void;
   setTool: (tool: ToolId) => void;
-  setSketchShape: (shape: SketchShape) => void;
   setDrafting: (drafting: boolean) => void;
   updateSettings: (settings: Settings) => void;
   setPaletteOpen: (open: boolean) => void;
@@ -60,7 +57,6 @@ export const useArcStore = create<ArcState>((set) => ({
   scene: null,
   sceneVersion: 0,
   tool: "select",
-  sketchShape: "line",
   drafting: false,
   settings: null,
   pluginsList: [],
@@ -83,7 +79,6 @@ export const useArcStore = create<ArcState>((set) => ({
   setScene: (scene) => set({ scene, sceneVersion: scene.version }),
   setPlugins: (pluginsList) => set({ pluginsList }),
   setTool: (tool) => set({ tool }),
-  setSketchShape: (sketchShape) => set({ sketchShape }),
   setDrafting: (drafting) => set({ drafting }),
   updateSettings: (settings) =>
     set((st) => ({

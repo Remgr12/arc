@@ -1,0 +1,605 @@
+import * as THREE from "three";
+import type { EntityData, ToolId } from "../lib/types";
+import type { ToolContext, ToolHandler } from "./types";
+import { chainFromEntity, resampleLoop, type Chain } from "./geometry2d";
+
+// ---------------------------------------------------------------------------
+// Solid modeling tools in the Shapr3D style: pick a sketch profile, then
+// interactively shape the solid. All tools reuse sketch entities via
+// chainFromEntity and emit kernel `extrude` / `revolve` / `sweep` / `loft`
+// geometry payloads.
+//
+// Kernel notes (crates/arc-core/src/meshgen.rs):
+//   Extrude  recenters the polygon to its vertex mean and extrudes
+//            -height/2..+height/2 around the local origin, so world position
+//            is (mean, height/2, mean) with the polygon passed relative.
+//   Revolve  lathes an (radius, height) profile about the LOCAL Y axis; the
+//            entity transform carries the axis orientation.
+//   Sweep    path points are used as-is (world coords, identity transform).
+//   Loft     sections are used as-is and must share equal vertex counts.
+// ---------------------------------------------------------------------------
+
+const EPS = 1e-6;
+
+interface PickedChain {
+  chain: Chain;
+  entity: EntityData;
+}
+
+// ----------------------------------------------------------------- helpers
+
+function formatNum(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+/** Extract the polyline under the cursor from a sketch entity. */
+function pickChain(event: PointerEvent | MouseEvent, ctx: ToolContext): PickedChain | null {
+  const id = ctx.pickEntity(event);
+  if (!id) return null;
+  const entity = ctx.entityById(id);
+  if (!entity) return null;
+  const chain = chainFromEntity(entity, ctx.objectFor(id));
+  if (!chain || chain.points.length < 2) return null;
+  return { chain, entity };
+}
+
+/** Cursor height above `base` using a camera-facing vertical plane. */
+function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: THREE.Vector3): number {
+  const forward = new THREE.Vector3();
+  ctx.camera.getWorldDirection(forward);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
+  forward.normalize();
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, base);
+  const out = new THREE.Vector3();
+  const hit = ctx.rayAt(event).intersectPlane(plane, out);
+  return hit ? Math.max(1, out.y) : 20;
+}
+
+/** Camera ray ∩ plane; null when the ray is parallel or misses. */
+function rayPlaneHit(ctx: ToolContext, event: PointerEvent | MouseEvent, plane: THREE.Plane): THREE.Vector3 | null {
+  const out = new THREE.Vector3();
+  return ctx.rayAt(event).intersectPlane(plane, out) ? out : null;
+}
+
+/** Vertical plane through a segment; fallback for 2-point line profiles. */
+function planeThroughSegment(a: THREE.Vector3, b: THREE.Vector3): THREE.Plane | null {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  if (dir.lengthSq() < EPS) return null;
+  dir.normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+  let n = new THREE.Vector3().crossVectors(dir, up);
+  if (n.lengthSq() < EPS) n = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(1, 0, 0));
+  if (n.lengthSq() < EPS) return null;
+  return new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), a);
+}
+
+/** General plane containing a polyline (first non-collinear triple). */
+function planeThroughPoints(pts: THREE.Vector3[]): THREE.Plane | null {
+  for (let i = 2; i < pts.length; i++) {
+    const normal = new THREE.Vector3()
+      .subVectors(pts[1], pts[0])
+      .cross(new THREE.Vector3().subVectors(pts[i], pts[0]));
+    if (normal.lengthSq() > EPS) {
+      normal.normalize();
+      return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pts[0]);
+    }
+  }
+  return planeThroughSegment(pts[0], pts[pts.length - 1]);
+}
+
+/** Map world points into the frame of an axis (origin, unit direction). */
+function axisFrame(points: THREE.Vector3[], origin: THREE.Vector3, direction: THREE.Vector3): [number, number][] {
+  return points.map((q) => {
+    const v = q.clone().sub(origin);
+    const along = v.dot(direction);
+    v.addScaledVector(direction, -along);
+    return [v.length(), along] as [number, number];
+  });
+}
+
+function polylineCoordinates(points: THREE.Vector3[]): [number, number, number][] {
+  return points.map((p) => [p.x, p.y, p.z] as [number, number, number]);
+}
+
+// Managed "draft" preview. Only one solid tool is active at a time, so a
+// module-level tracker is safe; disposals compensate for any preview slots
+// the viewport does not clear.
+let draft: THREE.Object3D | null = null;
+
+function clearDraft(ctx: ToolContext): void {
+  if (draft) {
+    draft.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else if (mat) mat.dispose();
+    });
+    draft = null;
+  }
+  ctx.clearPreview("draft");
+}
+
+function showDraft(obj: THREE.Object3D, ctx: ToolContext): void {
+  clearDraft(ctx);
+  draft = obj;
+  ctx.setPreview(obj, "draft");
+}
+
+function previewMaterial(ctx: ToolContext): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    transparent: true,
+    opacity: 0.6,
+    roughness: 0.55,
+    metalness: 0.05,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  mat.color.copy(ctx.palette.hover);
+  return mat;
+}
+
+// ----------------------------------------------------------------- extrude
+
+interface ExtrudeDraft {
+  points: THREE.Vector3[];
+  centroid: THREE.Vector3;
+}
+
+let ext: ExtrudeDraft | null = null;
+
+function startExtrude(chain: Chain, ctx: ToolContext): void {
+  const points = chain.points.map((p) => p.clone());
+  let cx = 0;
+  let cz = 0;
+  for (const p of points) {
+    cx += p.x;
+    cz += p.z;
+  }
+  cx /= points.length;
+  cz /= points.length;
+  ext = { points, centroid: new THREE.Vector3(cx, 0, cz) };
+  ctx.setStatus("Move up · click to set height");
+}
+
+function commitExtrude(event: PointerEvent, ctx: ToolContext): void {
+  const d = ext;
+  if (!d) return;
+  const h = cursorHeight(ctx, event, d.centroid);
+  const polygon = d.points.map(
+    (p) => [p.x - d.centroid.x, p.z - d.centroid.z] as [number, number],
+  );
+  void ctx.createEntity(
+    { type: "extrude", polygon, height: h },
+    [d.centroid.x, h / 2, d.centroid.z],
+  );
+  ext = null;
+  clearDraft(ctx);
+  ctx.showMeasure(null);
+  ctx.setStatus(`Extruded H ${formatNum(h)} · pick another closed profile`);
+}
+
+export const extrudeTool: ToolHandler = {
+  id: "extrude" as ToolId,
+  cursor: "crosshair",
+  onActivate(ctx) {
+    ext = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+    ctx.setStatus(this.hint!(ctx));
+  },
+  onDeactivate(ctx) {
+    ext = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+  },
+  hasActivity: () => ext !== null,
+  onPointerDown(event, ctx) {
+    if (!ext) {
+      const picked = pickChain(event, ctx);
+      if (!picked) {
+        ctx.setStatus("No sketch under cursor · click a closed profile");
+        return true;
+      }
+      if (!picked.chain.closed) {
+        ctx.setStatus("Profile must be closed");
+        return true;
+      }
+      startExtrude(picked.chain, ctx);
+      return true;
+    }
+    commitExtrude(event, ctx);
+    return true;
+  },
+  onPointerMove(event, ctx) {
+    const d = ext;
+    if (!d) {
+      ctx.showMeasure(null);
+      return;
+    }
+    const h = cursorHeight(ctx, event, d.centroid);
+    const shape = new THREE.Shape(
+      d.points.map((p) => new THREE.Vector2(p.x - d.centroid.x, -(p.z - d.centroid.z))),
+    );
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); // +Z (extrusion) → +Y; shape XY → world XZ
+    const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+    mesh.position.set(d.centroid.x, 0, d.centroid.z);
+    mesh.renderOrder = 997;
+    mesh.frustumCulled = false;
+    showDraft(mesh, ctx);
+    ctx.showMeasure(`H ${formatNum(h)}`, ctx.screenPoint(event));
+  },
+  onCancel(ctx) {
+    if (ext) {
+      ext = null;
+      clearDraft(ctx);
+      ctx.showMeasure(null);
+      ctx.setStatus("Extrude cancelled · pick a closed profile");
+    }
+  },
+  hint: () => "Extrude · click a closed sketch profile, then click to set height",
+};
+
+// ----------------------------------------------------------------- revolve
+
+interface RevolveDraft {
+  profile: THREE.Vector3[];
+  plane: THREE.Plane;
+  p1: THREE.Vector3 | null;
+  axis: THREE.Vector3 | null;
+  startX: number;
+  angle: number;
+}
+
+let rev: RevolveDraft | null = null;
+
+function frameQuat(axis: THREE.Vector3): THREE.Quaternion {
+  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+}
+
+function latheProfile(points: [number, number][]): [number, number][] {
+  // Sort so the lathe profile runs bottom → top along the axis.
+  return [...points].sort((a, b) => a[1] - b[1]);
+}
+
+function revolvePreview(d: RevolveDraft, event: PointerEvent, ctx: ToolContext): void {
+  const p1 = d.p1;
+  const axis = d.axis;
+  if (!p1 || !axis) return;
+  const profile = latheProfile(axisFrame(d.profile, p1, axis));
+  const geo = new THREE.LatheGeometry(
+    profile.map(([r, t]) => new THREE.Vector2(r, t)),
+    32,
+    0,
+    (d.angle * Math.PI) / 180,
+  );
+  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+  mesh.position.copy(p1);
+  mesh.quaternion.copy(frameQuat(axis));
+  mesh.renderOrder = 997;
+  mesh.frustumCulled = false;
+  showDraft(mesh, ctx);
+  ctx.showMeasure(`∠${formatNum(d.angle)}°`, ctx.screenPoint(event));
+}
+
+function commitRevolve(ctx: ToolContext): void {
+  const d = rev;
+  if (!d) return;
+  const p1 = d.p1;
+  const axis = d.axis;
+  if (!p1 || !axis) return;
+  const profile = latheProfile(axisFrame(d.profile, p1, axis));
+  const quat = frameQuat(axis);
+  const position: [number, number, number] = [p1.x, p1.y, p1.z];
+  const rotation: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
+  void ctx
+    .createEntity(
+      { type: "revolve", profile, steps: 64, angle_deg: d.angle },
+      position,
+    )
+    .then((id) => {
+      if (id) {
+        void ctx.setTransform(
+          id,
+          { position, rotation, scale: [1, 1, 1] },
+          true,
+        );
+      }
+    });
+  rev = null;
+  clearDraft(ctx);
+  ctx.showMeasure(null);
+}
+
+export const revolveTool: ToolHandler = {
+  id: "revolve" as ToolId,
+  cursor: "crosshair",
+  onActivate(ctx) {
+    rev = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+    ctx.setStatus(this.hint!(ctx));
+  },
+  onDeactivate(ctx) {
+    rev = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+  },
+  hasActivity: () => rev !== null,
+  onPointerDown(event, ctx) {
+    if (!rev) {
+      const picked = pickChain(event, ctx);
+      if (!picked) {
+        ctx.setStatus("No sketch under cursor · click an open profile");
+        return true;
+      }
+      if (picked.chain.closed) {
+        ctx.setStatus("Profile must be open · revolve needs an open chain");
+        return true;
+      }
+      const plane = planeThroughPoints(picked.chain.points);
+      if (!plane) {
+        ctx.setStatus("Degenerate profile");
+        return true;
+      }
+      rev = { profile: picked.chain.points.map((p) => p.clone()), plane, p1: null, axis: null, startX: 0, angle: 120 };
+      ctx.setStatus("Click the first point on the revolve axis");
+      return true;
+    }
+    if (!rev.p1) {
+      const hit = rayPlaneHit(ctx, event, rev.plane);
+      if (!hit) return true;
+      rev.p1 = ctx.snap(hit).point.clone();
+      ctx.setStatus("Click the second point on the revolve axis");
+      return true;
+    }
+    if (!rev.axis) {
+      const hit = rayPlaneHit(ctx, event, rev.plane);
+      if (!hit) return true;
+      const p2 = ctx.snap(hit).point;
+      const dir = new THREE.Vector3().subVectors(p2, rev.p1);
+      if (dir.length() < 1e-4) {
+        ctx.setStatus("Axis points are too close · click further apart");
+        return true;
+      }
+      dir.normalize();
+      rev.axis = dir;
+      rev.startX = event.clientX;
+      ctx.setStatus("Drag to set the sweep angle · click to commit");
+      return true;
+    }
+    // Phase 3: click commits.
+    commitRevolve(ctx);
+    ctx.setStatus("Revolved · pick another open profile");
+    return true;
+  },
+  onPointerMove(event, ctx) {
+    const d = rev;
+    if (!d || !d.axis) {
+      if (!d) ctx.showMeasure(null);
+      return;
+    }
+    const dx = event.clientX - d.startX;
+    d.angle = Math.max(10, Math.min(360, 360 * (dx / 300)));
+    revolvePreview(d, event, ctx);
+  },
+  onCancel(ctx) {
+    const d = rev;
+    if (!d) return;
+    if (d.axis) {
+      d.axis = null; // back to re-picking the second axis point
+      clearDraft(ctx);
+      ctx.showMeasure(null);
+      ctx.setStatus("Angle cancelled · click the second axis point again");
+    } else if (d.p1) {
+      d.p1 = null;
+      ctx.setStatus("Click the first point on the revolve axis");
+    } else {
+      rev = null;
+      clearDraft(ctx);
+      ctx.setStatus("Revolve cancelled · pick an open profile");
+    }
+  },
+  hint: () => "Revolve · click an open profile, two axis points, then drag the angle",
+};
+
+// ------------------------------------------------------------------- sweep
+
+let sweepPath: THREE.Vector3[] | null = null;
+let sweepRadius = 1;
+
+function sweepLength(path: THREE.Vector3[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) total += path[i].distanceTo(path[i - 1]);
+  return total;
+}
+
+function commitSweep(ctx: ToolContext): void {
+  const path = sweepPath;
+  if (!path) return;
+  void ctx.createEntity(
+    { type: "sweep", path: polylineCoordinates(path), radius: sweepRadius, sides: 16 },
+    [0, 0, 0],
+  );
+  sweepPath = null;
+  clearDraft(ctx);
+  ctx.showMeasure(null);
+  ctx.setStatus(`Swept R ${formatNum(sweepRadius)} · pick another open path`);
+}
+
+export const sweepTool: ToolHandler = {
+  id: "sweep" as ToolId,
+  cursor: "crosshair",
+  onActivate(ctx) {
+    sweepPath = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+    ctx.setStatus(this.hint!(ctx));
+  },
+  onDeactivate(ctx) {
+    sweepPath = null;
+    clearDraft(ctx);
+    ctx.showMeasure(null);
+  },
+  hasActivity: () => sweepPath !== null && sweepPath.length >= 2,
+  onPointerDown(event, ctx) {
+    if (!sweepPath) {
+      const picked = pickChain(event, ctx);
+      if (!picked) {
+        ctx.setStatus("No sketch under cursor · click an open path");
+        return true;
+      }
+      if (picked.chain.closed) {
+        ctx.setStatus("Path must be open · sweep needs an open chain");
+        return true;
+      }
+      sweepPath = picked.chain.points.map((p) => p.clone());
+      sweepRadius = 1;
+      ctx.setStatus("Move to size the tube · click to commit · Esc re-picks");
+      return true;
+    }
+    commitSweep(ctx);
+    return true;
+  },
+  onPointerMove(event, ctx) {
+    const path = sweepPath;
+    if (!path || path.length < 2) {
+      ctx.showMeasure(null);
+      return;
+    }
+    const cursor = ctx.planePoint(event, path[0].y);
+    if (!cursor) return;
+    const maxRadius = Math.max(1, sweepLength(path) / 3);
+    sweepRadius = Math.max(1, Math.min(maxRadius, cursor.distanceTo(path[0])));
+    const curve = new THREE.CatmullRomCurve3(path, false, "centripetal");
+    const geo = new THREE.TubeGeometry(curve, 64, sweepRadius, 16, false);
+    const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+    mesh.renderOrder = 997;
+    mesh.frustumCulled = false;
+    showDraft(mesh, ctx);
+    ctx.showMeasure(`R ${formatNum(sweepRadius)}`, ctx.screenPoint(event));
+  },
+  onCancel(ctx) {
+    if (sweepPath) {
+      sweepPath = null;
+      clearDraft(ctx);
+      ctx.showMeasure(null);
+      ctx.setStatus("Sweep cancelled · pick an open path");
+    }
+  },
+  hint: () => "Sweep · click an open path, then move to size the tube radius",
+};
+
+// -------------------------------------------------------------------- loft
+
+let loftSections: THREE.Vector3[][] = [];
+
+function ribbonGeometry(sections: THREE.Vector3[][]): THREE.BufferGeometry | null {
+  if (sections.length < 2) return null;
+  const positions: number[] = [];
+  for (let r = 0; r < sections.length - 1; r++) {
+    const lower = sections[r];
+    const upper = sections[r + 1];
+    const n = Math.min(lower.length, upper.length);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const a = lower[i];
+      const b = lower[j];
+      const c = upper[j];
+      const dd = upper[i];
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      positions.push(a.x, a.y, a.z, c.x, c.y, c.z, dd.x, dd.y, dd.z);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return geo;
+}
+
+function loftPreview(ctx: ToolContext): void {
+  const geo = ribbonGeometry(loftSections);
+  if (!geo) {
+    clearDraft(ctx);
+    return;
+  }
+  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+  mesh.renderOrder = 997;
+  mesh.frustumCulled = false;
+  showDraft(mesh, ctx);
+}
+
+function resetLoft(ctx: ToolContext): void {
+  loftSections = [];
+  clearDraft(ctx);
+  ctx.showMeasure(null);
+}
+
+function commitLoft(ctx: ToolContext): void {
+  if (loftSections.length < 2) {
+    ctx.setStatus("Loft needs at least 2 profiles · Enter to finish when ready");
+    return;
+  }
+  const sections = loftSections.map((s) => polylineCoordinates(s));
+  void ctx.createEntity({ type: "loft", sections }, [0, 0, 0]);
+  resetLoft(ctx);
+  ctx.setStatus(`Loft created (${sections.length} sections)`);
+}
+
+export const loftTool: ToolHandler = {
+  id: "loft" as ToolId,
+  cursor: "crosshair",
+  onActivate(ctx) {
+    resetLoft(ctx);
+    ctx.setStatus(this.hint!(ctx));
+  },
+  onDeactivate(ctx) {
+    resetLoft(ctx);
+  },
+  hasActivity: () => loftSections.length > 0,
+  onPointerDown(event, ctx) {
+    const picked = pickChain(event, ctx);
+    if (!picked) return false;
+    if (!picked.chain.closed) {
+      ctx.setStatus("Profile must be closed");
+      return true;
+    }
+    loftSections.push(resampleLoop(picked.chain.points, 64));
+    loftPreview(ctx);
+    ctx.setStatus(
+      loftSections.length < 2
+        ? `Loft · ${loftSections.length} profile · pick the next (64 rings)`
+        : `Loft · ${loftSections.length} profiles · Enter to finish`,
+    );
+    return true;
+  },
+  onPointerMove(_event, ctx) {
+    if (loftSections.length === 0) ctx.showMeasure(null);
+  },
+  onEnter(ctx) {
+    if (loftSections.length >= 2) {
+      commitLoft(ctx);
+      return true;
+    }
+    return false;
+  },
+  onCancel(ctx) {
+    if (loftSections.length > 0) {
+      resetLoft(ctx);
+      ctx.setStatus("Loft cancelled · click a closed profile");
+    }
+  },
+  onBackspace(ctx) {
+    if (loftSections.length > 0) {
+      loftSections.pop();
+      loftPreview(ctx);
+      ctx.setStatus(
+        loftSections.length === 0
+          ? "Loft · click a closed profile"
+          : `Loft · ${loftSections.length} profile${loftSections.length > 1 ? "s" : ""} · pick the next or Enter to finish`,
+      );
+    }
+  },
+  hint: () => "Loft · click 2+ closed profiles in order · Enter finishes",
+};

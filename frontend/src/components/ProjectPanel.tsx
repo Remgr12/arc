@@ -1,253 +1,20 @@
 import { useState } from "react";
-import { Eye, EyeOff, Layers, Lock, LockOpen, Plus, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2, X } from "lucide-react";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
-import { Button, IconButton, Panel } from "./ui";
+import { cn, IconButton } from "./ui";
+import type { EntityData, GeometryCategory, LayerData } from "../lib/types";
 
-/** Left panel: open documents, entity outline, layers. */
-export function ProjectPanel() {
-  const overview = useArcStore((s) => s.overview);
-  const scene = useArcStore((s) => s.scene);
-  const [tab, setTab] = useState<"scene" | "layers">("scene");
-  const docId = overview?.active ?? "";
+const CATEGORIES: GeometryCategory[] = ["primitive", "sketch", "solid", "architecture", "annotation"];
 
-  const documentRow = (d: { id: string; name: string; dirty: boolean; path: string | null }) => {
-    const active = overview?.active === d.id;
-    return (
-      <div
-        key={d.id}
-        className={`group flex h-7 items-center gap-1 rounded-md px-1.5 text-[12.5px] ${
-          active ? "bg-base-200 text-base-800" : "text-base-600 hover:bg-base-200"
-        }`}
-      >
-        <button
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-          onClick={() => actions.switchDocument(d.id)}
-        >
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? "bg-accent-500" : "bg-base-400"}`} />
-          <span className="truncate">{d.name}</span>
-          {d.dirty && <span className="shrink-0 text-[10px] text-accent-500">•</span>}
-        </button>
-        <IconButton
-          icon={<X size={12} />}
-          title="Close document"
-          className="opacity-0 group-hover:opacity-100"
-          onClick={() => void ipc.closeDocument(d.id).catch(() => undefined)}
-        />
-      </div>
-    );
-  };
-
-  return (
-    <Panel
-      title={tab === "scene" ? "Project" : "Layers"}
-      className="border-b border-base-300"
-      actions={
-        <>
-          <IconButton
-            icon={<Layers size={13} />}
-            title={tab === "scene" ? "Show layers" : "Show scene"}
-            onClick={() => setTab(tab === "scene" ? "layers" : "scene")}
-          />
-          {tab === "layers" ? (
-            <IconButton
-              icon={<Plus size={13} />}
-              title="Add layer"
-              disabled={docId === ""}
-              onClick={() => void actions.addLayer()}
-            />
-          ) : (
-            <IconButton
-              icon={<Plus size={13} />}
-              title="New document"
-              onClick={() => void actions.newDocument()}
-            />
-          )}
-        </>
-      }
-    >
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div>
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-            Documents
-          </div>
-          {(overview?.documents ?? []).length === 0 ? (
-            <div className="px-1 text-[12px] text-base-500">No documents. Create one to start.</div>
-          ) : (
-            <div className="flex flex-col gap-0.5">{(overview?.documents ?? []).map(documentRow)}</div>
-          )}
-        </div>
-
-        {tab === "scene" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-              Entities
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {!scene || scene.entities.length === 0 ? (
-                <div className="px-1 text-[12px] text-base-500">
-                  Nothing here yet. Pick a tool and click in the viewport.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-0.5">
-                  {scene.entities.map((entity) => {
-                    const selected = scene.selection.includes(entity.id);
-                    const layer = scene.layers.find((l) => l.id === entity.layer);
-                    const hidden = !entity.visible || (layer ? !layer.visible : false);
-                    return (
-                      <div
-                        key={entity.id}
-                        className={`group flex h-6 items-center gap-1 rounded px-1.5 text-[12px] ${
-                          scene.primary === entity.id
-                            ? "bg-accent-600/20 text-base-800"
-                            : selected
-                              ? "bg-base-200 text-base-800"
-                              : "text-base-600 hover:bg-base-200"
-                        }`}
-                      >
-                        <button
-                          className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                          onClick={() => {
-                            void ipc
-                              .setSelection(docId, selected ? scene.selection : [entity.id], entity.id)
-                              .catch(() => undefined);
-                          }}
-                          onDoubleClick={() => actions.focusEntity(entity.id)}
-                        >
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-sm"
-                            style={{
-                              backgroundColor: toCss(
-                                entity.color ?? layer?.color ?? [0.62, 0.62, 0.65, 1],
-                              ),
-                            }}
-                          />
-                          <span className="truncate">{entity.name}</span>
-                          {entity.locked && <Lock size={9} className="shrink-0 text-base-500" />}
-                          {hidden && <EyeOff size={10} className="shrink-0 text-base-500" />}
-                        </button>
-                        <IconButton
-                          icon={entity.visible ? <Eye size={11} /> : <EyeOff size={11} />}
-                          title={entity.visible ? "Hide" : "Show"}
-                          className="opacity-0 group-hover:opacity-100"
-                          onClick={() =>
-                            void ipc
-                              .setEntityProps(docId, entity.id, { visible: !entity.visible })
-                              .catch(() => undefined)
-                          }
-                        />
-                        <IconButton
-                          icon={entity.locked ? <Lock size={11} /> : <LockOpen size={11} />}
-                          title={entity.locked ? "Unlock" : "Lock"}
-                          className="opacity-0 group-hover:opacity-100"
-                          onClick={() =>
-                            void ipc
-                              .setEntityProps(docId, entity.id, { locked: !entity.locked })
-                              .catch(() => undefined)
-                          }
-                        />
-                        <IconButton
-                          icon={<Trash2 size={11} />}
-                          title="Delete"
-                          className="opacity-0 group-hover:opacity-100"
-                          onClick={() => void ipc.deleteEntities(docId, [entity.id]).catch(() => undefined)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <LayersBody />
-        )}
-      </div>
-    </Panel>
-  );
-}
-
-function LayersBody() {
-  const docId = useArcStore((s) => s.overview?.active ?? "");
-  const scene = useArcStore((s) => s.scene);
-  const layers = scene?.layers ?? [];
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-        Layers
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-        {layers.map((layer) => {
-          const active = scene?.activeLayer === layer.id;
-          const count = scene?.entities.filter((e) => e.layer === layer.id).length ?? 0;
-          return (
-            <div
-              key={layer.id}
-              className={`group flex h-7 items-center gap-1 rounded px-1.5 text-[12px] ${
-                active ? "bg-base-200 text-base-800" : "text-base-600 hover:bg-base-200"
-              }`}
-            >
-              <button
-                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                title="Set active layer"
-                onClick={() => void ipc.setActiveLayer(docId, layer.id).catch(() => undefined)}
-              >
-                <input
-                  type="color"
-                  value={toCss(layer.color).slice(0, 7)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const hex = e.target.value;
-                    const color: [number, number, number, number] = [
-                      parseInt(hex.slice(1, 3), 16) / 255,
-                      parseInt(hex.slice(3, 5), 16) / 255,
-                      parseInt(hex.slice(5, 7), 16) / 255,
-                      layer.color[3],
-                    ];
-                    void ipc.setLayerColor(docId, layer.id, color).catch(() => undefined);
-                  }}
-                  className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border border-base-400"
-                />
-                <span className="truncate">{layer.name}</span>
-                <span className="shrink-0 text-[10px] text-base-500">{count}</span>
-              </button>
-              <IconButton
-                icon={layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                title={layer.visible ? "Hide layer" : "Show layer"}
-                onClick={() =>
-                  void ipc.setLayerVisible(docId, layer.id, !layer.visible).catch(() => undefined)
-                }
-              />
-              <IconButton
-                icon={layer.locked ? <Lock size={12} /> : <LockOpen size={12} />}
-                title={layer.locked ? "Unlock layer" : "Lock layer"}
-                onClick={() =>
-                  void ipc.setLayerLocked(docId, layer.id, !layer.locked).catch(() => undefined)
-                }
-              />
-              {layers.length > 1 && (
-                <IconButton
-                  icon={<Trash2 size={12} />}
-                  title="Delete layer"
-                  className="opacity-0 group-hover:opacity-100"
-                  onClick={() => void ipc.deleteLayer(docId, layer.id).catch(() => undefined)}
-                />
-              )}
-            </div>
-          );
-        })}
-        {layers.length === 0 && (
-          <div className="px-1 text-[12px] text-base-500">No layers.</div>
-        )}
-      </div>
-      <Button className="mt-2" onClick={() => void actions.addLayer()}>
-        <Plus size={13} /> Add layer
-      </Button>
-    </div>
-  );
-}
+const CATEGORY_LABELS: Record<GeometryCategory, string> = {
+  primitive: "Primitives",
+  sketch: "Sketches",
+  solid: "Solids",
+  architecture: "Architecture",
+  annotation: "Annotations",
+};
 
 function toCss(color: [number, number, number, number]): string {
   const hex = (v: number) =>
@@ -255,4 +22,335 @@ function toCss(color: [number, number, number, number]): string {
       .toString(16)
       .padStart(2, "0");
   return `#${hex(color[0])}${hex(color[1])}${hex(color[2])}`;
+}
+
+function DocumentRow({
+  doc,
+  active,
+}: {
+  doc: { id: string; name: string; dirty: boolean; path: string | null };
+  active: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex h-6 items-center gap-1.5 rounded px-1.5",
+        active ? "bg-base-200" : "hover:bg-base-200",
+      )}
+    >
+      <button
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        onClick={() => actions.switchDocument(doc.id)}
+      >
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            active ? "bg-accent-500" : "bg-base-400",
+          )}
+        />
+        <span className={cn("truncate text-[12px]", active ? "text-base-800" : "text-base-600")}>
+          {doc.name}
+        </span>
+        {doc.dirty && <span className="shrink-0 text-[10px] text-accent-500">•</span>}
+      </button>
+      <IconButton
+        icon={<X size={11} strokeWidth={1.75} />}
+        title="Close document"
+        size="sm"
+        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        onClick={() => void ipc.closeDocument(doc.id).catch(() => undefined)}
+      />
+    </div>
+  );
+}
+
+function EntityRow({
+  entity,
+  docId,
+  scene,
+}: {
+  entity: EntityData;
+  docId: string;
+  scene: NonNullable<ReturnType<typeof useArcStore.getState>["scene"]>;
+}) {
+  const selected = scene.selection.includes(entity.id);
+  const primary = scene.primary === entity.id;
+  const layer = scene.layers.find((l) => l.id === entity.layer);
+  const hidden = !entity.visible || (layer ? !layer.visible : false);
+
+  return (
+    <div
+      className={cn(
+        "group flex h-6 items-center gap-1.5 rounded px-1.5",
+        primary
+          ? "bg-accent-700/30 text-base-800"
+          : selected
+            ? "bg-base-200 text-base-800"
+            : "text-base-600 hover:bg-base-200",
+      )}
+    >
+      <button
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        onClick={() =>
+          void ipc
+            .setSelection(docId, selected ? scene.selection : [entity.id], entity.id)
+            .catch(() => undefined)
+        }
+        onDoubleClick={() => actions.focusEntity(entity.id)}
+      >
+        <span
+          className="h-2 w-2 shrink-0 rounded-sm"
+          style={{ backgroundColor: toCss(entity.color ?? layer?.color ?? [0.62, 0.62, 0.65, 1]) }}
+        />
+        <span className="truncate text-[12px]">{entity.name}</span>
+        {entity.locked && <Lock size={9} strokeWidth={1.75} className="shrink-0 text-base-500" />}
+        {hidden && <EyeOff size={10} strokeWidth={1.75} className="shrink-0 text-base-500" />}
+      </button>
+      <IconButton
+        icon={entity.visible ? <Eye size={11} strokeWidth={1.75} /> : <EyeOff size={11} strokeWidth={1.75} />}
+        title={entity.visible ? "Hide" : "Show"}
+        size="sm"
+        className={cn("h-4.5 w-4.5", entity.visible ? "opacity-0 group-hover:opacity-100" : "opacity-70")}
+        onClick={() =>
+          void ipc
+            .setEntityProps(docId, entity.id, { visible: !entity.visible })
+            .catch(() => undefined)
+        }
+      />
+      <IconButton
+        icon={entity.locked ? <Lock size={11} strokeWidth={1.75} /> : <LockOpen size={11} strokeWidth={1.75} />}
+        title={entity.locked ? "Unlock" : "Lock"}
+        size="sm"
+        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        onClick={() =>
+          void ipc
+            .setEntityProps(docId, entity.id, { locked: !entity.locked })
+            .catch(() => undefined)
+        }
+      />
+      <IconButton
+        icon={<Trash2 size={11} strokeWidth={1.75} />}
+        title="Delete"
+        size="sm"
+        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        onClick={() => void ipc.deleteEntities(docId, [entity.id]).catch(() => undefined)}
+      />
+    </div>
+  );
+}
+
+function LayerRow({
+  layer,
+  docId,
+  active,
+  count,
+  canDelete,
+  onRename,
+}: {
+  layer: LayerData;
+  docId: string;
+  active: boolean;
+  count: number;
+  canDelete: boolean;
+  onRename: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div
+      className={cn(
+        "group flex h-6 items-center gap-1.5 rounded px-1.5",
+        active ? "bg-base-200" : "hover:bg-base-200",
+      )}
+    >
+      <input
+        type="color"
+        value={toCss(layer.color).slice(0, 7)}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const hex = e.target.value;
+          const color: [number, number, number, number] = [
+            parseInt(hex.slice(1, 3), 16) / 255,
+            parseInt(hex.slice(3, 5), 16) / 255,
+            parseInt(hex.slice(5, 7), 16) / 255,
+            layer.color[3],
+          ];
+          void ipc.setLayerColor(docId, layer.id, color).catch(() => undefined);
+        }}
+        title="Layer color"
+        className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border border-base-400"
+      />
+      {editing ? (
+        <input
+          autoFocus
+          defaultValue={layer.name}
+          spellCheck={false}
+          onBlur={(e) => {
+            setEditing(false);
+            const name = e.target.value.trim();
+            if (name && name !== layer.name) onRename(name);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              e.currentTarget.value = layer.name;
+              e.currentTarget.blur();
+            }
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="min-w-0 flex-1 rounded border border-accent-500 bg-base-200 px-1 text-[12px] text-base-800 outline-none"
+        />
+      ) : (
+        <button
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          title="Set active layer (double-click to rename)"
+          onClick={() => void ipc.setActiveLayer(docId, layer.id).catch(() => undefined)}
+          onDoubleClick={() => setEditing(true)}
+        >
+          <span className={cn("truncate text-[12px]", active ? "text-base-800" : "text-base-600")}>
+            {layer.name}
+          </span>
+          <span className="shrink-0 text-[10px] tabular-nums text-base-500">{count}</span>
+        </button>
+      )}
+      <IconButton
+        icon={layer.visible ? <Eye size={11} strokeWidth={1.75} /> : <EyeOff size={11} strokeWidth={1.75} />}
+        title={layer.visible ? "Hide layer" : "Show layer"}
+        size="sm"
+        className={cn("h-4.5 w-4.5", layer.visible ? "opacity-0 group-hover:opacity-100" : "opacity-70")}
+        onClick={() => void ipc.setLayerVisible(docId, layer.id, !layer.visible).catch(() => undefined)}
+      />
+      <IconButton
+        icon={layer.locked ? <Lock size={11} strokeWidth={1.75} /> : <LockOpen size={11} strokeWidth={1.75} />}
+        title={layer.locked ? "Unlock layer" : "Lock layer"}
+        size="sm"
+        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        onClick={() => void ipc.setLayerLocked(docId, layer.id, !layer.locked).catch(() => undefined)}
+      />
+      {canDelete && (
+        <IconButton
+          icon={<Trash2 size={11} strokeWidth={1.75} />}
+          title="Delete layer"
+          size="sm"
+          className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+          onClick={() => void ipc.deleteLayer(docId, layer.id).catch(() => undefined)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <div className="px-1.5 pb-0.5 pt-2 text-[10.5px] font-medium text-base-500 first:pt-0">{children}</div>
+  );
+}
+
+/** Right panel: open documents plus an item outline (or layer list) with visibility toggles. */
+export function ProjectPanel() {
+  const overview = useArcStore((s) => s.overview);
+  const scene = useArcStore((s) => s.scene);
+  const [mode, setMode] = useState<"items" | "layers">("items");
+  const docId = overview?.active ?? "";
+  const documents = overview?.documents ?? [];
+
+  const grouped = CATEGORIES.map((category) => ({
+    category,
+    entities: (scene?.entities ?? []).filter((e) => e.category === category),
+  })).filter((g) => g.entities.length > 0);
+
+  const addLayerOrDoc = () => (mode === "layers" ? void actions.addLayer() : void actions.newDocument());
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-8 shrink-0 items-center justify-between border-b border-base-300 px-2.5">
+        <div className="flex items-center gap-3">
+          {(["items", "layers"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={cn(
+                "-mb-px border-b-2 border-transparent pt-px text-[11.5px] transition-colors",
+                mode === m ? "border-accent-500 text-base-800" : "text-base-600 hover:text-base-700",
+              )}
+            >
+              {m === "items" ? "Items" : "Layers"}
+            </button>
+          ))}
+        </div>
+        <IconButton
+          icon={<Plus size={13} strokeWidth={1.75} />}
+          title={mode === "layers" ? "Add layer" : "New document"}
+          disabled={mode === "layers" && docId === ""}
+          size="sm"
+          onClick={addLayerOrDoc}
+        />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
+        <div>
+          <SectionLabel>Documents</SectionLabel>
+          {documents.length === 0 ? (
+            <div className="px-1.5 text-[12px] text-base-500">No documents open.</div>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {documents.map((d) => (
+                <DocumentRow key={d.id} doc={d} active={overview?.active === d.id} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {mode === "items" ? (
+          <div className="mt-1 flex min-h-0 flex-col">
+            <SectionLabel>Items</SectionLabel>
+            {!scene || scene.entities.length === 0 ? (
+              <div className="px-1.5 text-[12px] text-base-500">
+                Nothing here yet. Pick a tool and click in the viewport.
+              </div>
+            ) : (
+              grouped.map((group) => (
+                <div key={group.category}>
+                  <div className="mt-1.5 flex items-baseline justify-between px-1.5 pb-0.5 first:mt-0">
+                    <span className="text-[10.5px] font-medium text-base-500">
+                      {CATEGORY_LABELS[group.category]}
+                    </span>
+                    <span className="text-[10px] tabular-nums text-base-500/70">{group.entities.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {group.entities.map((entity) => (
+                      <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="mt-1 flex min-h-0 flex-col">
+            <SectionLabel>Layers</SectionLabel>
+            {!scene || scene.layers.length === 0 ? (
+              <div className="px-1.5 text-[12px] text-base-500">No layers.</div>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {scene.layers.map((layer) => (
+                  <LayerRow
+                    key={layer.id}
+                    layer={layer}
+                    docId={docId}
+                    active={scene.activeLayer === layer.id}
+                    count={scene.entities.filter((e) => e.layer === layer.id).length}
+                    canDelete={scene.layers.length > 1}
+                    onRename={(name) => void ipc.renameLayer(docId, layer.id, name).catch(() => undefined)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

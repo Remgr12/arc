@@ -3,7 +3,68 @@ import { Trash2 } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
 import type { EntityData, Geometry, SceneData } from "../lib/types";
-import { Button, NumField, Panel, Row, SelectField, TextField } from "./ui";
+import { cn, NumField, Row, SelectField, TextField } from "./ui";
+
+function Section({
+  title,
+  hint,
+  children,
+  className,
+}: {
+  title?: string;
+  hint?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("flex flex-col gap-1", className)}>
+      {title && (
+        <div className="flex items-baseline justify-between pb-1">
+          <h3 className="text-[11px] font-medium text-base-400">{title}</h3>
+          {hint && <span className="text-[10px] text-base-500">{hint}</span>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+const AXIS = [
+  { label: "X", color: "text-[#e5715f]" },
+  { label: "Y", color: "text-[#8fbf5a]" },
+  { label: "Z", color: "text-[#5a94e5]" },
+];
+
+/** Three number fields with tiny axis letters, for position / rotation / scale. */
+function AxisFields({
+  values,
+  onCommit,
+}: {
+  values: [number, number, number];
+  onCommit: (index: 0 | 1 | 2, value: number) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {AXIS.map((axis, i) => (
+        <div key={axis.label} className="relative">
+          <span
+            className={cn(
+              "pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 font-mono text-[10px]",
+              axis.color,
+            )}
+          >
+            {axis.label}
+          </span>
+          <NumField
+            value={values[i]}
+            className="pl-4"
+            onCommit={(value) => onCommit(i as 0 | 1 | 2, value)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** Right panel: properties of the primary selected entity. */
 export function PropertiesPanel() {
@@ -14,18 +75,35 @@ export function PropertiesPanel() {
 
   if (!entity) {
     return (
-      <Panel title="Properties">
-        <div className="px-1 text-[12px] text-base-500">
-          Select an entity to inspect it. Shift-click to build a multi-selection.
+      <div className="flex h-full min-h-0 flex-col">
+        <PanelHeader title="Properties" />
+        <div className="flex flex-1 items-start px-3 pt-2">
+          <p className="text-[11.5px] leading-4 text-base-500">
+            Select an item to inspect it. Shift-click to build a multiple selection.
+          </p>
         </div>
-      </Panel>
+      </div>
     );
   }
 
   return (
-    <Panel title="Properties">
-      <EntityForm docId={docId} entity={entity} scene={scene} />
-    </Panel>
+    <div className="flex h-full min-h-0 flex-col">
+      <PanelHeader title="Properties" hint={entity.kind} />
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+        <EntityForm docId={docId} entity={entity} scene={scene} />
+      </div>
+    </div>
+  );
+}
+
+function PanelHeader({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex h-8 shrink-0 items-center justify-between border-b border-base-300 px-3">
+      <span className="text-[11.5px] font-medium text-base-700">{title}</span>
+      {hint && (
+        <span className="rounded bg-base-200 px-1.5 py-px font-mono text-[10px] text-base-500">{hint}</span>
+      )}
+    </div>
   );
 }
 
@@ -48,95 +126,109 @@ function EntityForm({
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <Row label="Name">
-        <TextField
-          value={entity.name}
-          onCommit={(name) =>
-            void ipc.setEntityProps(docId, entity.id, { name }).catch(() => undefined)
-          }
-        />
-      </Row>
-      <Row label="Layer">
-        <SelectField
-          value={entity.layer}
-          options={(scene?.layers ?? []).map((l) => ({ value: l.id, label: l.name }))}
-          onChange={(layerId) =>
-            void ipc.setEntityProps(docId, entity.id, { layerId }).catch(() => undefined)
-          }
-        />
-      </Row>
-      <Row label="Color">
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={toHex(entity.color ?? [0.62, 0.62, 0.65, 1]).slice(0, 7)}
-            onChange={(e) => {
-              const hex = e.target.value;
-              const color: [number, number, number, number] = [
-                parseInt(hex.slice(1, 3), 16) / 255,
-                parseInt(hex.slice(3, 5), 16) / 255,
-                parseInt(hex.slice(5, 7), 16) / 255,
-                entity.color?.[3] ?? 1,
-              ];
-              void ipc.setEntityProps(docId, entity.id, { color }).catch(() => undefined);
-            }}
-            className="h-7 w-10 cursor-pointer rounded border border-base-400 bg-base-100"
+    <div className="flex flex-col pt-2">
+      <Section>
+        <Row label="Name">
+          <TextField
+            className="h-6"
+            value={entity.name}
+            onCommit={(name) =>
+              void ipc.setEntityProps(docId, entity.id, { name }).catch(() => undefined)
+            }
           />
-          {entity.color && (
-            <Button
-              variant="ghost"
-              onClick={() => void ipc.setEntityProps(docId, entity.id, { color: null })}
-            >
-              Use layer color
-            </Button>
-          )}
-        </div>
-      </Row>
+        </Row>
+        <Row label="Layer">
+          <SelectField
+            className="h-6 text-[11.5px]"
+            value={entity.layer}
+            options={(scene?.layers ?? []).map((l) => ({ value: l.id, label: l.name }))}
+            onChange={(layerId) =>
+              void ipc.setEntityProps(docId, entity.id, { layerId }).catch(() => undefined)
+            }
+          />
+        </Row>
+        <Row label="Color">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="color"
+              value={toHex(entity.color ?? [0.62, 0.62, 0.65, 1]).slice(0, 7)}
+              onChange={(e) => {
+                const hex = e.target.value;
+                const color: [number, number, number, number] = [
+                  parseInt(hex.slice(1, 3), 16) / 255,
+                  parseInt(hex.slice(3, 5), 16) / 255,
+                  parseInt(hex.slice(5, 7), 16) / 255,
+                  entity.color?.[3] ?? 1,
+                ];
+                void ipc.setEntityProps(docId, entity.id, { color }).catch(() => undefined);
+              }}
+              className="h-5 w-8 cursor-pointer rounded border border-base-400 bg-base-200"
+            />
+            {entity.color && (
+              <button
+                type="button"
+                className="rounded px-1 py-0.5 text-[10.5px] text-base-600 transition-colors hover:bg-base-200 hover:text-base-700"
+                onClick={() => void ipc.setEntityProps(docId, entity.id, { color: null })}
+              >
+                Use layer color
+              </button>
+            )}
+          </div>
+        </Row>
+      </Section>
 
-      <div className="mt-1 border-t border-base-300 pt-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-        Position
-      </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        <NumField value={t.position[0]} onCommit={(x) => patchTransform({ position: [x, t.position[1], t.position[2]] })} />
-        <NumField value={t.position[1]} onCommit={(y) => patchTransform({ position: [t.position[0], y, t.position[2]] })} />
-        <NumField value={t.position[2]} onCommit={(z) => patchTransform({ position: [t.position[0], t.position[1], z] })} />
-      </div>
+      <Section title="Position" className="mt-3 border-t border-base-300 pt-2">
+        <AxisFields
+          values={t.position}
+          onCommit={(axis, value) => {
+            const next = [...t.position] as [number, number, number];
+            next[axis] = value;
+            patchTransform({ position: next });
+          }}
+        />
+      </Section>
 
-      <div className="mt-1 border-t border-base-300 pt-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-        Rotation (deg)
-      </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        <NumField value={euler.x} onCommit={(x) => setEuler(x, euler.y, euler.z, patchTransform)} />
-        <NumField value={euler.y} onCommit={(y) => setEuler(euler.x, y, euler.z, patchTransform)} />
-        <NumField value={euler.z} onCommit={(z) => setEuler(euler.x, euler.y, z, patchTransform)} />
-      </div>
+      <Section title="Rotation" hint="degrees" className="mt-3 border-t border-base-300 pt-2">
+        <AxisFields
+          values={[euler.x, euler.y, euler.z]}
+          onCommit={(axis, value) => {
+            const next = [euler.x, euler.y, euler.z];
+            next[axis] = value;
+            setEuler(next[0], next[1], next[2], patchTransform);
+          }}
+        />
+      </Section>
 
-      <div className="mt-1 border-t border-base-300 pt-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-        Scale
-      </div>
-      <div className="grid grid-cols-3 gap-1.5">
-        <NumField value={t.scale[0]} onCommit={(x) => patchTransform({ scale: [x, t.scale[1], t.scale[2]] })} />
-        <NumField value={t.scale[1]} onCommit={(y) => patchTransform({ scale: [t.scale[0], y, t.scale[2]] })} />
-        <NumField value={t.scale[2]} onCommit={(z) => patchTransform({ scale: [t.scale[0], t.scale[1], z] })} />
-      </div>
+      <Section title="Scale" className="mt-3 border-t border-base-300 pt-2">
+        <AxisFields
+          values={t.scale}
+          onCommit={(axis, value) => {
+            const next = [...t.scale] as [number, number, number];
+            next[axis] = value;
+            patchTransform({ scale: next });
+          }}
+        />
+      </Section>
 
-      <div className="mt-1 border-t border-base-300 pt-1 text-[10px] font-semibold uppercase tracking-wide text-base-500">
-        Geometry ({entity.kind})
-      </div>
-      <GeometryForm docId={docId} entity={entity} />
+      <Section
+        title="Geometry"
+        className="mt-3 border-t border-base-300 pt-2"
+      >
+        <GeometryForm docId={docId} entity={entity} />
+      </Section>
 
-      <div className="mt-2 flex gap-2">
-        <Button
-          variant="danger"
+      <div className="mt-4 border-t border-base-300 pt-2.5 pb-1">
+        <button
+          type="button"
+          className="flex h-6 w-full items-center justify-center gap-1.5 rounded-md border border-base-300 text-[11.5px] text-base-600 transition-colors hover:border-danger-500/50 hover:bg-danger-600/15 hover:text-danger-500"
           onClick={() =>
             void ipc.deleteEntities(docId, [entity.id]).then(() =>
               ipc.setSelection(docId, [], null),
             )
           }
         >
-          <Trash2 size={13} /> Delete
-        </Button>
+          <Trash2 size={12} strokeWidth={1.75} /> Delete
+        </button>
       </div>
     </div>
   );
@@ -156,10 +248,11 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 py-0.5">
       {numericKeys.map((key) => (
         <Row key={key} label={humanize(key)}>
           <NumField
+            className="h-6"
             value={geometry[key] as number}
             onCommit={(value) => update({ [key]: value })}
           />
@@ -168,6 +261,7 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
       {pointKeys.map((key) => (
         <Row key={key} label={humanize(key)}>
           <TextField
+            className="h-6"
             mono
             value={JSON.stringify(geometry[key])}
             onCommit={(text) => {
@@ -177,7 +271,8 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
               } catch {
                 // keep previous value on bad input
               }
-            }}
+            }
+            }
           />
         </Row>
       ))}
@@ -208,8 +303,10 @@ function validPoints(v: unknown): boolean {
   );
 }
 
+/** Sentence-case label for a snake_case geometry key. */
 function humanize(key: string): string {
-  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const words = key.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function toHex(color: [number, number, number, number]): string {

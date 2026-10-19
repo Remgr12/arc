@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { initEvents } from "./lib/events";
 import { installKeybinds } from "./lib/keybinds";
 import { Viewport } from "./components/Viewport";
-import { TopBar, StatusBar } from "./components/TopBar";
-import { FloatingDock } from "./components/FloatingDock";
+import { TopBar } from "./components/TopBar";
+import { StatusBar } from "./components/StatusBar";
+import { ToolRail } from "./components/ToolRail";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { CommandPalette } from "./components/CommandPalette";
@@ -57,12 +58,12 @@ export default function App() {
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
       <TopBar />
       <div className="flex min-h-0 flex-1">
-        <FloatingDock />
+        <ToolRail />
         <div className="relative min-w-0 flex-1">
           <Viewport />
         </div>
-        <aside className="flex w-72 shrink-0 flex-col border-l border-base-300 bg-base-100">
-          <div className="min-h-0 flex-1 overflow-hidden">
+        <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-300 bg-base-100">
+          <div className="min-h-0 flex-1">
             <ProjectPanel />
           </div>
           <div className="h-[300px] shrink-0 border-t border-base-300">

@@ -9,17 +9,27 @@ export type ToolId =
   | "cone"
   | "torus"
   | "plane"
-  | "circle"
   | "line"
   | "polyline"
   | "rectangle"
+  | "circle"
+  | "arc"
+  | "polygon"
   | "dimension"
   | "wall"
+  | "offset"
+  | "trim"
+  | "extend"
+  | "fillet"
+  | "mirror"
+  | "extrude"
+  | "revolve"
+  | "sweep"
+  | "loft"
+  /** Legacy sketch meta-tool; maps to polyline. */
   | "sketch";
 
-export type SketchShape = "line" | "polyline" | "rectangle" | "circle";
-
-export type GeometryCategory = "Primitive" | "Sketch" | "Solid" | "Architecture" | "Annotation";
+export type GeometryCategory = "primitive" | "sketch" | "solid" | "architecture" | "annotation";
 
 export type Geometry = {
   type: string;
