@@ -42,7 +42,7 @@ arc is a multi-platform 3D modeling application built around a mesh-based geomet
 
 | Layer | Technology |
 |-------|-----------|
-| Kernel | Rust (`crates/arc-core`) - mesh generation, raycast picking, documents, history |
+| Kernel | Rust (`crates/truck-core`) - mesh generation, raycast picking, documents, history |
 | Backend | Rust + Tauri 2 |
 | Frontend | React 19 + TypeScript 7 + Vite 8 |
 | Styling | Tailwind CSS 4 |
@@ -58,7 +58,7 @@ arc/
 ├── assets/                # Brand assets: logo + icon SVG sources, social banner
 ├── Cargo.toml             # Rust workspace configuration
 ├── crates/
-│   └── arc-core/          # Geometry kernel: mesh generation, NURBS, constraints,
+│   └── truck-core/          # Geometry kernel: mesh generation, NURBS, constraints,
 │                          #   annotations, assemblies, sheet metal, file formats,
 │                          #   entity and document model, layers, selection,
 │                          #   history, winding, raycast picking
