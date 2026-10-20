@@ -7,7 +7,6 @@ repository = { workspace = true }
 authors = { workspace = true }
 
 [dependencies]
-truck-core = { path = "../crates/truck-core" }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -17,7 +16,21 @@ parking_lot = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-/** = { workspace = true }
+nalgebra = { workspace = true }
+
+# richosjp/truck kernel (vendored upstream in ../crates/truck)
+truck-modeling = { path = "../crates/truck/truck-modeling" }
+truck-shapeops = { path = "../crates/truck/truck-shapeops" }
+truck-stepio = { path = "../crates/truck/truck-stepio" }
+truck-meshalgo = { path = "../crates/truck/truck-meshalgo" }
+truck-polymesh = { path = "../crates/truck/truck-polymesh" }
+truck-geometry = { path = "../crates/truck/truck-geometry" }
+truck-topology = { path = "../crates/truck/truck-topology" }
+truck-base = { path = "../crates/truck/truck-base" }
+truck-geotrait = { path = "../crates/truck/truck-geotrait" }
+cgmath = "0.18"
+
+tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
 tauri-plugin-opener = { workspace = true }

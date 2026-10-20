@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Automation — arc docs</title>
+  <meta name="description" content="The local automation bridge of arc: a localhost JSON command server that shares the editor's command surface, the bridge.json handshake, the stdio MCP client, and example scripts." />
+  <link rel="canonical" href="https://remgr12.github.io/arc/docs/automation.html" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta name="theme-color" content="#0b0e14" />
+  <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" />arc<span class="docs-badge">docs</span></a>
+      <nav class="top">
+        <a class="keep" href="../index.html">Home</a>
+        <a class="keep" href="index.html">Docs</a>
+        <a href="getting-started.html">Getting started</a>
+        <a href="modeling.html">Modeling</a>
+        <a href="navigation.html">Navigation</a>
+        <a href="keybinds.html">Keybinds</a>
+        <a href="plugins.html">Plugins</a>
+        <a href="themes.html">Themes</a>
+        <a href="automation.html" aria-current="page">Automation</a>
+        <a href="https://github.com/Remgr12/arc" class="gh">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <aside class="toc">
+      <div class="label">Docs</div>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="modeling.html">Modeling</a>
+      <a href="navigation.html">Navigation</a>
+      <a href="keybinds.html">Keybinds</a>
+      <a href="plugins.html">Plugins</a>
+      <a href="themes.html">Themes</a>
+      <a class="on" href="automation.html">Automation</a>
+      <div class="label">On this page</div>
+      <a href="#overview">The bridge</a>
+      <a href="#handshake">bridge.json and auth</a>
+      <a href="#protocol">Protocol</a>
+      <a href="#commands">Commands</a>
+      <a href="#mcp">MCP client</a>
+      <a href="#raw">Raw socket example</a>
+    </aside>
+
+    <main class="page">
+      <h1>Automation</h1>
+      <p class="subline">
+        arc embeds a small <strong>local automation bridge</strong>: a localhost-only TCP server that
+        exposes the same command surface the user interface drives, so external tools — scripts,
+        agents, editors — can inspect and edit the document model while every change behaves as if
+        it had been made by hand in the app.
+      </p>
+
+      <section class="doc" id="overview">
+        <h2>The bridge</h2>
+        <p>
+          When arc starts, it binds a TCP server on <span class="mono">127.0.0.1</span> (first port
+          from <span class="mono">3987</span>, trying up to six addresses if yours is busy) and
+          dispatches requests onto the same internal command layer behind the Tauri webview IPC.
+          Concretely that means every mutation:
+        </p>
+        <ul>
+          <li>records a proper undo/redo entry, just like a click in the UI would,</li>
+          <li>fires the Lua plugin lifecycle hooks <span class="mono">(new</span>,
+          <span class="mono">open</span>, <span class="mono">save…)</span>,</li>
+          <li>emits the same scene/document events so an open editor window refreshes live.</li>
+        </ul>
+        <p>
+          Documents are plain JSON — the payloads the bridge accepts are the same shapes stored in
+          <span class="mono">.arc</span> files, e.g.
+          <span class="mono">{"type":"box","width":10,"height":2,"depth":5}</span> or
+          <span class="mono">{"type":"cylinder","radius":3,"height":8,"segments":12}</span>
+          (the shape tags are snake case: <span class="mono">box</span>,
+          <span class="mono">cylinder</span>, <span class="mono">line_curve</span>,
+          <span class="mono">polyline_curve</span>, <span class="mono">circle_curve</span>,
+          <span class="mono">rectangle_curve</span>, …).
+        </p>
+      </section>
+
+      <section class="doc" id="handshake">
+        <h2>bridge.json and auth</h2>
+        <p>
+          The running app writes connection info next to its other settings. Each client connect
+          must authenticate with the token from that file before accepting commands.
+        </p>
+        <table class="tbl">
+          <caption>Connection info</caption>
+          <tr><th>Item</th><th>Value</th></tr>
+          <tr><td class="keys mono">File</td><td><span class="mono">bridge.json</span> in the app data dir — Linux <span class="mono">~/.local/share/com.arc.cad/</span>, macOS <span class="mono">~/Library/Application Support/com.arc.cad/</span>, Windows <span class="mono">%APPDATA%\com.arc.cad\</span></td></tr>
+          <tr><td class="keys mono">Contents</td><td><span class="mono">{"port":3987,"token":"…"}</span></td></tr>
+          <tr><td class="keys mono">Port source</td><td>env <span class="mono">ARC_BRIDGE_PORT</span>, else 3987 (auto-increment up to 3987+5 when busy)</td></tr>
+          <tr><td class="keys mono">File override</td><td>env <span class="mono">ARC_BRIDGE_INFO</span> — path the file is written to</td></tr>
+          <tr><td class="keys mono">Auth</td><td>per connection, first line <span class="mono">{"auth":"&lt;token&gt;"}</span>, server answers <span class="mono">{"ok":true}</span> and closes the connection if it fails</td></tr>
+        </table>
+        <p>
+          arc must be running when a bridge client starts; restarting the app regenerates the token
+          and port, so long-lived clients simply re-read <span class="mono">bridge.json</span> and
+          reconnect (the bundled MCP client does this on every start).
+        </p>
+      </section>
+
+      <section class="doc" id="protocol">
+        <h2>Protocol</h2>
+        <p>One TCP connection per session. After auth it exchanges HTTP-free, newline-delimited JSON:</p>
+        <pre class="code"><code><span class="c">// client → server, one line per call</span>
+{"id":"1","cmd":"get_state","params":{}}
+{"id":"2","cmd":"create_entity","params":{"document_id":"doc-1","geometry":{"type":"box","width":10,"height":2,"depth":5}}}
+{"id":"3","cmd":"set_transform","params":{"document_id":"doc-1","updates":[{"id":"ent-…","transform":{"position":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}}]}}
+
+<span class="c">// server → client, one line per response</span>
+{"id":"1","ok":true,"result":{…AppOverview…}}
+{"id":"2","ok":true,"result":{"id":"ent-…","name":"Box 1"}}
+{"id":"3","ok":false,"error":"unknown document doc-9"}</code></pre>
+        <p>
+          Streaming is not multiplexed — each connection processes lines sequentially and answers in
+          order, so client code can keep a socket open and post a call per line.
+        </p>
+      </section>
+
+      <section class="doc" id="commands">
+        <h2>Commands</h2>
+        <p>
+          The bridge accepts the same commands as the editor IPC (see the sources in
+          <span class="mono">src-tauri/src/bridge.rs</span> and
+          <span class="mono">commands.rs</span> for exact signatures):
+        </p>
+        <table class="tbl">
+          <caption>Command groups</caption>
+          <tr><th>Group</th><th>Commands</th></tr>
+          <tr><td class="keys">State</td><td class="mono">get_state, get_settings, get_plugins</td></tr>
+          <tr><td class="keys">Settings</td><td class="mono">set_settings</td></tr>
+          <tr><td class="keys">Documents</td><td class="mono">new_document, open_document, save_document, close_document, set_active_document, get_scene</td></tr>
+          <tr><td class="keys">Entities</td><td class="mono">create_entity, update_geometry, delete_entities, duplicate_entities, explode_entities, set_transform, set_entity_props, set_selection, raycast</td></tr>
+          <tr><td class="keys">History</td><td class="mono">undo, redo</td></tr>
+          <tr><td class="keys">Layers</td><td class="mono">add_layer, delete_layer, rename_layer, set_layer_visible, set_layer_locked, set_layer_color, set_active_layer</td></tr>
+          <tr><td class="keys">Plugins</td><td class="mono">reload_plugins, set_plugin_enabled</td></tr>
+          <tr><td class="keys">Export</td><td class="mono">export_scene (OBJ / binary STL)</td></tr>
+        </table>
+        <p>
+          A minimal useful loop: <span class="mono">get_state</span> to see documents, then
+          <span class="mono">get_scene</span> for entities/layers, then
+          <span class="mono">create_entity</span> + <span class="mono">set_transform</span> to place
+          geometry. <span class="mono">list_projects(data_dir)</span> also exists on the Tauri IPC
+          (the startup screen uses it to list <span class="mono">.arc</span> files in a folder).
+        </p>
+      </section>
+
+      <section class="doc" id="mcp">
+        <h2>MCP client</h2>
+        <p>
+          <span class="mono">crates/arc-mcp</span> is a Model Context Protocol stdio server that
+          drives the bridge on the assistant's behalf, so any MCP-capable client (opencode, Claude
+          Desktop, …) can edit the open model. Build it next to the app:
+          <span class="mono">cargo build -p arc-mcp</span>.
+        </p>
+        <p>It ships essentially one tool per bridge command:</p>
+        <pre><code>arc_get_state · arc_get_scene · arc_get_settings · arc_get_plugins
+arc_new_document · arc_open_document · arc_save_document
+arc_close_document · arc_set_active_document
+arc_create_entity · arc_update_geometry · arc_delete_entities
+arc_duplicate_entities · arc_explode_entities · arc_set_transform
+arc_set_position · arc_set_entity_props · arc_raycast
+arc_undo · arc_redo
+arc_add_layer · arc_delete_layer · arc_rename_layer · arc_set_settings
+arc_set_active_layer · arc_set_layer_visible · arc_set_layer_locked · arc_set_layer_color
+arc_set_plugin_enabled · arc_set_selection · arc_reload_plugins · arc_export_scene
+
+<span class="cmt">// resources: arc://doc/&lt;document_id&gt; — a snapshot of one document's scene</span></code></pre>
+        <p>
+          <span class="mono">arc_set_position</span> is the convenience wrapper: it takes an entity
+          id and a position and sends an identity-rotation/scale transform. Quaternions still pass
+          through <span class="mono">arc_set_transform</span> when rotation matters. Omit the
+          document id to act on the active document.
+        </p>
+        <p>Wiring it into an MCP client is a single process entry:</p>
+        <pre><code><span class="cmt">// e.g. Claude Desktop, generic MCP stdio config</span>
+{
+  "mcpServers": {
+    "arc": { "command": "/home/&lt;you&gt;/…/arc/target/debug/arc-mcp" }
+  }
+}</code></pre>
+        <p>
+          The client keeps no state: each process start it reads
+          <span class="mono">bridge.json</span>, opens one connection for the request, authenticates
+          and returns the result — so app restarts only require relaunching the client process.
+        </p>
+      </section>
+
+      <section class="doc" id="raw">
+        <h2>Raw socket example</h2>
+        <p>
+          The protocol is deliberately tiny; if MCP is overkill, a script can talk to it directly.
+          Below is a compact Python example that checks the running app and drops a box at the
+          origin of the active document:
+        </p>
+        <pre class="code"><code><span class="k">import</span> json, socket, pathlib
+
+info = json.loads(pathlib.Path(<span class="str">"~/.local/share/com.arc.cad/bridge.json"</span>).expanduser().read_text())
+sock = socket.create_connection((<span class="str">"127.0.0.1"</span>, info[<span class="str">"port"</span>]))
+f = sock.makefile(<span class="str">"rw"</span>, encoding=<span class="str">"utf-8"</span>, newline=<span class="str">"\n"</span>)
+
+f.write(json.dumps({<span class="str">"auth"</span>: info[<span class="str">"token"</span>]}) + <span class="str">"\n"</span>); f.flush()
+<span class="k">print</span>(json.loads(f.readline()))          <span class="c"># {"ok": true}</span>
+
+<span class="k">def</span> <span class="fn">call</span>(n, cmd, **params):
+    f.write(json.dumps({<span class="str">"id"</span>: n, <span class="str">"cmd"</span>: cmd, <span class="str">"params"</span>: params}) + <span class="str">"\n"</span>); f.flush()
+    <span class="k">return</span> json.loads(f.readline())
+
+<span class="k">print</span>(call(1, <span class="str">"get_state"</span>)[<span class="str">"result"</span>])
+<span class="k">print</span>(call(2, <span class="str">"create_entity"</span>, document_id=<span class="str">"doc-1"</span>,
+           geometry={<span class="str">"type"</span>: <span class="str">"box"</span>, <span class="str">"width"</span>: 10, <span class="str">"height"</span>: 2, <span class="str">"depth"</span>: 5}))</code></pre>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site">
+    <div class="wrap">
+      <img src="assets/icon.svg" alt="" />
+      <div class="who">
+        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon
+      </div>
+      <div class="right">
+        <a href="index.html">Docs home</a>
+        <a href="https://github.com/Remgr12/arc">GitHub</a>
+        <a href="https://github.com/Remgr12/arc/releases">Releases</a>
+        <a href="https://github.com/Remgr12/arc/issues">Issues</a>
+      </div>
+      <div class="legal">
+        <small>
+          Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or
+          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
+          Not affiliated with the Arc browser, a product of The Browser Company.
+        </small>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

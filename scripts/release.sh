@@ -87,7 +87,7 @@ commit_changes() {
     local new_version="$1"
     git add "${PROJECT_ROOT}/Cargo.toml" \
             "${PROJECT_ROOT}/Cargo.lock" \
-            "${PROJECT_ROOT}/crates/truck-core/Cargo.toml" \
+            "${PROJECT_ROOT}/crates/truck/Cargo.toml" \
             "${PROJECT_ROOT}/src-tauri/Cargo.toml" \
             "${PROJECT_ROOT}/src-tauri/tauri.conf.json" \
             "${PROJECT_ROOT}/flatpak/com.arc.cad.metainfo.xml"

@@ -1,7 +1,7 @@
-use arc_core::annotation::AnnotationRegistry;
-use arc_core::constraints::ConstraintSystem;
-use arc_core::document::SceneData;
-use arc_core::{Document, EntityId};
+use crate::core::annotation::AnnotationRegistry;
+use crate::core::constraints::ConstraintSystem;
+use crate::core::document::SceneData;
+use crate::core::{Document, EntityId};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -169,7 +169,7 @@ pub struct SceneEnvelope {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TransformUpdate {
     pub id: String,
-    pub transform: arc_core::Transform,
+    pub transform: crate::core::Transform,
 }
 
 /// Get a document mutably, recording a history entry labelled `label`.

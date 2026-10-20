@@ -6,12 +6,12 @@ use crate::state::{
     doc_mut, doc_ref, parse_ids, AppOverview, DocumentInfo, SceneEnvelope, Settings,
     SharedState, TransformUpdate,
 };
-use arc_core::annotation::{Annotation, AnnotationKind, DimensionGeometry};
-use arc_core::entity::CsgOperation;
-use arc_core::constraints::{Constraint, ConstraintExpression, ConstraintType, GeometryParameter};
-use arc_core::formats::{Format, TriangleSoup};
-use arc_core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
-use arc_core::{Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, Transform};
+use crate::core::annotation::{Annotation, AnnotationKind, DimensionGeometry};
+use crate::core::entity::CsgOperation;
+use crate::core::constraints::{Constraint, ConstraintExpression, ConstraintType, GeometryParameter};
+use crate::core::formats::{Format, TriangleSoup};
+use crate::core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
+use crate::core::{Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, Transform};
 use serde::Deserialize;
 use serde_json::Value as Json;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -869,22 +869,19 @@ pub fn export_scene(
             .documents
             .get_mut(&document_id)
             .ok_or_else(|| format!("unknown document {document_id}"))?;
-        arc_core::materialize_meshes(doc);
+        crate::core::materialize_meshes(doc);
         match format.as_str() {
             "obj" => bytes_of_text(&export_obj(doc)),
             "stl" => export_stl_binary(doc),
-            "stl_ascii" => bytes_of_text(&arc_core::formats::export_stl_ascii(
+            "stl_ascii" => bytes_of_text(&crate::core::formats::export_stl_ascii(
                 &merged_world_mesh(doc),
                 &doc.name,
             )),
-            "gltf" => bytes_of_text(&arc_core::formats::export_gltf(
+            "gltf" => bytes_of_text(&crate::core::formats::export_gltf(
                 &merged_world_mesh(doc),
                 &doc.name,
             )?),
-            "step" | "stp" => bytes_of_text(&arc_core::formats::export_step_iso_10303(
-                &merged_world_mesh(doc),
-                &doc.name,
-            )),
+            "step" | "stp" => bytes_of_text(&crate::kernel::step::export_document(doc)?),
             other => return Err(format!("unsupported format: {other}")),
         }
     };
@@ -960,7 +957,7 @@ fn export_stl_binary(doc: &mut Document) -> Vec<u8> {
     out[80..84].copy_from_slice(&count.to_le_bytes());
     let mut cursor = 84usize;
     for (a, b, c) in tris {
-        let n = arc_core::mesh::tri_normal(a, b, c);
+        let n = crate::core::mesh::tri_normal(a, b, c);
         for v in [n, a, b, c] {
             for comp in v {
                 out[cursor..cursor + 4].copy_from_slice(&(comp as f32).to_le_bytes());
@@ -974,7 +971,7 @@ fn export_stl_binary(doc: &mut Document) -> Vec<u8> {
 }
 
 /// All visible geometry baked into one world-space triangle buffer, for the
-/// single-mesh exporters in `arc_core::formats` (STL ASCII, glTF).
+/// single-mesh exporters in `crate::core::formats` (STL ASCII, glTF).
 fn merged_world_mesh(doc: &mut Document) -> MeshBuffer {
     let ids: Vec<EntityId> = doc
         .entities
@@ -990,7 +987,7 @@ fn merged_world_mesh(doc: &mut Document) -> MeshBuffer {
         let Some(buffer) = doc.mesh(&id) else {
             continue;
         };
-        let world = arc_core::mesh::mesh_world(&buffer, &t);
+        let world = crate::core::mesh::mesh_world(&buffer, &t);
         merged.positions.extend_from_slice(&world.positions);
         merged.normals.extend_from_slice(&world.normals);
     }
@@ -1078,7 +1075,7 @@ pub fn import_file(
     let mut new_entities: Vec<(String, Geometry, Transform)> = Vec::new();
     match detected {
         Format::Obj => {
-            let obj = arc_core::formats::parse_obj(&String::from_utf8_lossy(&bytes))?;
+            let obj = crate::core::formats::parse_obj(&String::from_utf8_lossy(&bytes))?;
             let soup = TriangleSoup::from_triangles(obj.faces.iter().filter_map(|f| {
                 if f.len() != 3 {
                     return None;
@@ -1089,13 +1086,13 @@ pub fn import_file(
             new_entities.push(soup_entity(&stem, soup)?);
         }
         Format::Stl | Format::StlAscii => {
-            let mesh = arc_core::formats::parse_stl(&bytes)?;
+            let mesh = crate::core::formats::parse_stl(&bytes)?;
             let name = mesh.name.clone().unwrap_or_else(|| stem.clone());
             let soup = TriangleSoup::from_stl(&mesh);
             new_entities.push(soup_entity(&path, soup).map(|(_, g, t)| (name, g, t))?);
         }
         Format::Dxf => {
-            let drawing = arc_core::formats::parse_dxf(&String::from_utf8_lossy(&bytes))?;
+            let drawing = crate::core::formats::parse_dxf(&String::from_utf8_lossy(&bytes))?;
             for line in drawing.lines {
                 let start = dxf_point(line.start);
                 let end = dxf_point(line.end);
@@ -1160,17 +1157,9 @@ pub fn import_file(
         }
         Format::Step => {
             let text = String::from_utf8_lossy(&bytes);
-            let mesh = arc_core::formats::parse_step(&text)?;
-            let soup = TriangleSoup::from_triangles(mesh.indices.iter().map(|tri| {
-                let [a, b, c] = *tri;
-                [
-                    mesh.positions[a as usize],
-                    mesh.positions[b as usize],
-                    mesh.positions[c as usize],
-                ]
-            }));
-            let (name, kind, transform) = soup_entity("STEP mesh", soup)?;
-            new_entities.push((name, kind, transform));
+            for (name, kind, transform) in crate::core::entity::Geometry::from_step_mesh(&text)? {
+                new_entities.push((name, kind, transform));
+            }
         }
         Format::Gltf => unreachable!("rejected above"),
     }
@@ -1197,7 +1186,7 @@ pub fn import_file(
 
 #[tauri::command]
 pub fn sheetmetal_materials() -> Vec<SheetMetalMaterial> {
-    arc_core::sheetmetal::default_materials()
+    crate::core::sheetmetal::default_materials()
 }
 
 #[tauri::command]
@@ -1205,7 +1194,7 @@ pub fn sheetmetal_flat_pattern(spec: Json) -> Result<FlatPattern, String> {
     let part: SheetMetalPart =
         serde_json::from_value(spec).map_err(|e| format!("bad sheet metal part: {e}"))?;
     part.validate()?;
-    arc_core::sheetmetal::flat_pattern(&part)
+    crate::core::sheetmetal::flat_pattern(&part)
 }
 
 // ------------------------------------------------------------ annotations

@@ -1,10 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["crates/truck-core", "src-tauri"]
-exclude = ["frontend"]
+members = ["src-tauri"]
+exclude = ["frontend", "crates/truck"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.9.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remgr12/arc"
