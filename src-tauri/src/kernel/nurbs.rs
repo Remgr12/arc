@@ -8,7 +8,6 @@ use truck_geometry::prelude::{
     BSplineCurve, BSplineSurface, KnotVec, NurbsCurve, NurbsSurface,
     ParametricCurve, ParametricSurface,
 };
-use cgmath::Vector4;
 
 /// Payload homogeneous point -> truck homogeneous vector.
 pub fn hom(p: [f64; 4]) -> cgmath::Vector4<f64> {
