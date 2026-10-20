@@ -9,9 +9,8 @@ use std::f64::consts::TAU;
 
 use truck_geometry::prelude::{
     BoundedCurve, BoundedSurface, KnotVec, NurbsCurve, NurbsSurface,
-    ParametricCurve, ParametricCurve3D, ParametricSurface3D,
 };
-use truck_meshalgo::prelude::{MeshableShape, MeshedShape, PolygonMesh};
+use truck_meshalgo::tessellation::{MeshableShape, MeshedShape, RobustMeshableShape};
 
 use truck_modeling::Solid;
 
@@ -38,50 +37,50 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             } else {
                 shapes::rounded_box_solid(*width, *depth, *height, *corner_radius)?
             };
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Sphere { radius, .. } => {
             let solid = shapes::sphere_solid(*radius)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Cylinder { radius, height, .. } => {
             let solid = shapes::cylinder_solid(*radius, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Cone { radius, height, .. } => {
             let solid = shapes::cone_solid(*radius, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Torus { radius, tube, .. } => {
             let solid = shapes::torus_solid(*radius, *tube)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Extrude { polygon, height } => {
             let solid = shapes::extrude_solid(polygon, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Revolve { profile, steps, angle_deg } => {
             let solid = shapes::revolve_solid(profile, *steps, *angle_deg)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Column { radius, height, sides } => {
             let solid = shapes::column_solid(*radius, *height, *sides)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Beam { length, width, height } => {
             let solid = shapes::beam_solid(*length, *width, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Slab { polygon, height } => {
             // slab = extruded footprint 0..height (truck prism)
             let solid = shapes::slab_solid(polygon, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
         Geometry::Csg { operation, first, second } => {
             let a = payload_to_solid(first)?;
             let b = payload_to_solid(second)?;
             let solid = csg_boolean(*operation, a, b)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
         }
 
         // ---- mesh-level payloads (old generators)

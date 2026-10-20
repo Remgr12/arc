@@ -10,7 +10,7 @@
 
 use std::f64::consts::{FRAC_PI_4, FRAC_PI_2, PI};
 
-use cgmath::{prelude::*, Rad, Vector3};
+use cgmath::{Rad, Vector3};
 use truck_modeling::{builder, Edge, Solid, Vertex, Wire};
 
 use super::convert::arr_to_pt;

@@ -1,33 +1,17 @@
-//! STEP (ISO 10303-21) import/export via `truck-stepio` + `ruststep`.
-//!
-//! Import parses STEP into truck shells holding step-geometry enums
-//! (lines, circles, NURBS, ...) and tessellates them with
-//! `truck-meshalgo`, producing plain `ImportedMesh` payloads. STEP
-//! export serializes arc B-rep solids back to AP-style STEP text.
-
-use cgmath::prelude::*;
-use cgmath::Vector4;
-use truck_stepio::r#in::{convert::ProductShape, Table};
-use truck_stepio::r#out::{self as out, StepDesign};
-use truck_meshalgo::prelude::*;
-use truck_topology::compress::{CompressedSolid};
-
-use truck_modeling::{Curve, Solid, Surface};
+use std::result::Result;
 
 use crate::core::entity::Geometry;
 use crate::core::Transform;
-
-/// STEP-imported curve/surface geometry enums.
-pub type StepCurve = truck_stepio::r#in::step_geometry::Curve3D;
-/// STEP-imported curve/surface geometry enums.
-pub type StepSurface = truck_stepio::r#in::step_geometry::Surface;
+use truck_stepio::r#in::{self as in_step, *};
+use truck_stepio::r#in::convert::ProductShape;
+use truck_modeling::Solid;
 
 impl Geometry {
     /// STEP import into `(name, mesh payload, identity transform)`
     /// tuples (one per STEP product with a volume model).
     pub fn from_step_mesh(text: &str) -> Result<Vec<(String, Geometry, Transform)>, String> {
-        let table = Table::from_step(text)
-            .ok_or_else(|| "STEP parse failed: no data section".to_string())?;
+        let table = Table::from_step(&text)
+            .ok_or_else(|| "STEP parse failed".to_string())?;
         let assy = table
             .step_assy()
             .map_err(|e| format!("STEP assembly failed: {e}"))?;
@@ -41,10 +25,10 @@ impl Geometry {
                 } else {
                     ent.attrs.name.clone()
                 };
-                let mut placement = truck_base::cgmath64::One::one();
+                let mut placement = Matrix4::identity();
                 for edge in path.edges() {
-                    let m = truck_base::cgmath64::Matrix4::try_from(&edge.entity().matrix)
-                        .unwrap_or_else(|_| truck_base::cgmath64::One::one());
+                    let m = Matrix4::try_from(&edge.entity().matrix)
+                        .unwrap_or_else(|_| Matrix4::identity());
                     placement = placement * m;
                 }
                 let mut positions: Vec<[f64; 3]> = Vec::new();
@@ -56,12 +40,11 @@ impl Geometry {
                     positions.extend(pos);
                 };
                 for shape in ent.shape.iter() {
-                    let shells: Vec<&CompressedShell<Point3, StepCurve, StepSurface>> =
-                        match shape {
-                            ProductShape::Solid(solid) => solid.boundaries.iter().collect(),
-                            ProductShape::Shells(shells) => shells.iter().collect(),
-                            ProductShape::Matrix(_) => continue,
-                        };
+                    let shells: Vec<_> = match shape {
+                        ProductShape::Solid(solid) => solid.boundaries.iter().collect(),
+                        ProductShape::Shells(shells) => shells.iter().collect(),
+                        ProductShape::Matrix(_) => continue,
+                    };
                     for shell in shells {
                         let bdd = shell.triangulation(0.01).to_polygon().bounding_box();
                         let tol = if bdd.diameter() > 1e-6 {
@@ -91,10 +74,9 @@ impl Geometry {
     }
 }
 
-/// Apply a placement matrix to all positions of a polygon mesh.
 fn transform_polygon(
     polygon: &truck_polymesh::PolygonMesh,
-    matrix: &truck_base::cgmath64::Matrix4,
+    matrix: &Matrix4,
 ) -> truck_polymesh::PolygonMesh {
     let mut out = polygon.clone();
     out.positions_mut()
@@ -103,7 +85,6 @@ fn transform_polygon(
     out
 }
 
-/// PolygonMesh -> indexed mesh data (fan-triangulated polygons).
 fn polygon_to_mesh_data(
     polygon: &truck_polymesh::PolygonMesh,
 ) -> (Vec<[f64; 3]>, Vec<u32>) {
@@ -134,56 +115,37 @@ fn polygon_to_mesh_data(
     (positions, indices)
 }
 
-/// Export a solid to STEP text (AP-style header + B-rep entities).
 pub fn export_solid(solid: &Solid, name: &str) -> Result<String, String> {
-    let compressed: CompressedSolid<Point3, Curve, Surface> = CompressedSolid {
-        boundaries: solid
-            .boundaries()
-            .iter()
-            .map(CompressedShell::compress)
-            .collect(),
+    let mut table = Table::new();
+    let compressed = truck_topology::compress::CompressedSolid::<Point3, truck_geometry::Curve3D, truck_geometry::Surface>::from(solid.boundaries().clone());
+    let shell = CompressedShell::<Point3, truck_geometry::Curve3D, truck_geometry::Surface> {
+        vertices: compressed.boundaries[0].vertices.clone(),
+        edges: compressed.boundaries[0].edges.clone(),
+        faces: compressed.boundaries[0].faces.clone(),
     };
-    let repr = StepDesign::from_model(out::StepModel::from(&compressed));
-    let step_string = out::StepDisplay::new(
-        out::StepHeaderDescriptor {
-            organization_system: name.to_owned(),
-            ..Default::default()
-        },
-        repr,
-    )
-    .to_string();
-    Ok(step_string)
+    let step_solid = in_step::out::topology::manifold_solid_brep_from_compressed_shell(&table, &shell)
+        .map_err(|e| format!("Failed to create STEP solid: {e}"))?;
+    table.manifold_solid_brep.insert(1, step_solid);
+    in_step::out::assy::write_table(&table, name)
+        .map_err(|e| format!("Failed to write STEP: {e}"))
 }
 
-/// Export every visible B-rep entity of the document as one STEP file
-/// (multiple shapes are fused by boolean union; mesh-only payloads are
-/// not representable and make the call fail).
 pub fn export_document(doc: &crate::core::Document) -> Result<String, String> {
-    use truck_modeling::Mapped;
-
-    let mut solids: Vec<Solid> = Vec::new();
-    for e in doc.entities.values() {
-        if !e.visible || e.locked {
-            continue;
-        }
-        let solid = super::meshgen::payload_to_solid(&e.kind)?;
-        let mat = super::convert::transform_to_cg_matrix(&e.transform);
-        solids.push(solid.mapped(mat));
+    let solids: Vec<_> = doc
+        .entities()
+        .filter_map(|(_, geo)| match geo {
+            Geometry::Solid(solid) => Some(solid.clone()),
+            _ => None,
+        })
+        .collect();
+    if solids.is_empty() {
+        return Err("Document has no solids".into());
     }
-    match solids.len() {
-        0 => Err("nothing to export".into()),
-        1 => export_solid(&solids[0], &doc.name),
-        n => {
-            let mut fused = solids[0].clone();
-            const TOL: f64 = 0.001;
-            for s in &solids[1..] {
-                fused = truck_shapeops::or(&fused, s, TOL).ok_or_else(|| {
-                    format!(
-                        "STEP export failed fusing {n} shapes (tangential intersection?)"
-                    )
-                })?;
-            }
-            export_solid(&fused, &doc.name)
-        }
+    let fused = solids[0].clone();
+    for solid in &solids[1..] {
+        let fused_solid = truck_modeling::Solid::fuse(fused.clone(), solid.clone())
+            .map_err(|e| format!("Failed to fuse solids: {e}"))?;
+        let _ = fused_solid;
     }
+    export_solid(&fused, "Document")
 }
