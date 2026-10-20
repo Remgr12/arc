@@ -18,9 +18,8 @@ pub mod units;
 
 pub use document::*;
 pub use entity::*;
-pub use history::*;
 pub use mesh::*;
-pub use units::*;
+pub use units::Units;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
