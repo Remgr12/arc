@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Plugins — arc docs</title>
+  <title>Plugins: arc docs</title>
   <meta name="description" content="The Lua plugin system of arc: lifecycle hooks (start, new, open, save), the arc API, where plugin files live, and working examples." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/plugins.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -65,8 +66,8 @@
         <h2>How plugins work</h2>
         <p>
           A plugin is a single Lua file. Its <em>file stem</em> (the name without
-          <span class="mono">.lua</span>) is the plugin's name. On startup — and whenever you hit
-          <em>Reload</em> — arc discovers every <span class="mono">.lua</span> file in its plugin
+          <span class="mono">.lua</span>) is the plugin's name. On startup, and whenever you hit
+          <em>Reload</em>, arc discovers every <span class="mono">.lua</span> file in its plugin
           directories, evaluates each once, and records any hooks it registers. If two plugins have
           the same name (same file stem), the first one found wins. Plugins run in their own Lua
           state, so editor commands never block on plugin code.
@@ -78,11 +79,11 @@
         <p>arc looks for plugins in two places (first match per name wins):</p>
         <ul>
           <li>
-            <strong>Next to the executable</strong> — a <span class="mono">plugins</span> folder in
+            <strong>Next to the executable</strong>: a <span class="mono">plugins</span> folder in
             the same directory as the arc binary.
           </li>
           <li>
-            <strong>App data directory</strong> — <span class="mono">plugins</span> inside the
+            <strong>App data directory</strong>: <span class="mono">plugins</span> inside the
             per-user app data dir (e.g. <span class="mono">%APPDATA%/arc/plugins</span> on Windows).
           </li>
         </ul>
@@ -130,13 +131,13 @@
           <caption>arc.*</caption>
           <thead><tr><th class="keys">Function</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td class="keys mono">on(event, fn)</td><td>—</td><td>Register a lifecycle hook (see events above).</td></tr>
-            <tr><td class="keys mono">log(msg)</td><td>—</td><td>Write a line to the application log.</td></tr>
+            <tr><td class="keys mono">on(event, fn)</td><td>none</td><td>Register a lifecycle hook (see events above).</td></tr>
+            <tr><td class="keys mono">log(msg)</td><td>none</td><td>Write a line to the application log.</td></tr>
             <tr><td class="keys mono">active_document()</td><td>id or nil</td><td>The id string of the active document, or nil when none is open.</td></tr>
             <tr><td class="keys mono">entities()</td><td>array</td><td>List of <span class="mono">{ id, name, kind, position, visible }</span> for every entity in the active document.</td></tr>
             <tr><td class="keys mono">add_entity(geometry, name?)</td><td>id</td><td>Create an entity from a geometry table (or a JSON string) and an optional name; returns the new entity id.</td></tr>
             <tr><td class="keys mono">raycast(origin, direction, tolerance?)</td><td>hit or nil</td><td>Raycast from <span class="mono">origin</span> along <span class="mono">direction</span> (two number arrays) against the active document; tolerance defaults to 1. Returns <span class="mono">{ entity_id, point, normal, distance }</span>.</td></tr>
-            <tr><td class="keys mono">set_transform(id, transform)</td><td>—</td><td>Set the full transform of one entity; recorded in undo history.</td></tr>
+            <tr><td class="keys mono">set_transform(id, transform)</td><td>none</td><td>Set the full transform of one entity; recorded in undo history.</td></tr>
             <tr><td class="keys mono">undo()</td><td>label or nil</td><td>Undo the last operation in the active document.</td></tr>
             <tr><td class="keys mono">redo()</td><td>label or nil</td><td>Redo the last undone operation.</td></tr>
           </tbody>

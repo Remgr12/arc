@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Themes — arc docs</title>
+  <title>Themes: arc docs</title>
   <meta name="description" content="Custom themes in arc: built-in themes, importing and exporting theme JSON files, and the sixteen color keys a theme defines." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/themes.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -69,7 +70,7 @@
             <tr><td class="keys">Graphite</td><td>Neutral dark grays with a blue accent. The default theme.</td></tr>
             <tr><td class="keys">Midnight</td><td>Deep blue-navy panels with a bright blue accent.</td></tr>
             <tr><td class="keys">Forest</td><td>Dark green panels with a green accent.</td></tr>
-            <tr><td class="keys">Blueprint</td><td>Light blue-gray paper look — like drafting paper.</td></tr>
+            <tr><td class="keys">Blueprint</td><td>Light blue-gray paper look, like drafting paper.</td></tr>
             <tr><td class="keys">Paper</td><td>Warm light cream tones with a burnt-orange accent.</td></tr>
           </tbody>
         </table>
@@ -89,7 +90,7 @@
             <tr><td class="keys mono">base-50</td><td>Deepest background (window background in dark themes).</td></tr>
             <tr><td class="keys mono">base-100</td><td>Base surfaces: panels and dialogs.</td></tr>
             <tr><td class="keys mono">base-150</td><td>Slightly raised surfaces, control backgrounds.</td></tr>
-            <tr><td class="keys mono">base-200</td><td>Fills — hover and control states.</td></tr>
+            <tr><td class="keys mono">base-200</td><td>Fills: hover and control states.</td></tr>
             <tr><td class="keys mono">base-300</td><td>Deeper fills and pressed states.</td></tr>
             <tr><td class="keys mono">base-400</td><td>Borders between regions and controls.</td></tr>
             <tr><td class="keys mono">base-500</td><td>Faint text and placeholders.</td></tr>
@@ -122,11 +123,11 @@
 }</code></pre>
         <p>More rules make files forgiving to write:</p>
         <ul>
-          <li>A <strong>flat file without the wrapper works too</strong> — colors at the top level, with <span class="mono">name</span> alongside them.</li>
+          <li>A <strong>flat file without the wrapper works too</strong>: colors at the top level, with <span class="mono">name</span> alongside them.</li>
           <li>A few <strong>shorthand aliases</strong> are accepted: <span class="mono">accent</span> → <span class="mono">accent-600</span>; <span class="mono">background</span>, <span class="mono">bg</span>, <span class="mono">viewport</span>, <span class="mono">canvas</span>, <span class="mono">theme</span> → <span class="mono">viewport-bg</span>; <span class="mono">grid</span> → <span class="mono">viewport-grid</span>; <span class="mono">grid-line</span>, <span class="mono">gridline</span> → <span class="mono">viewport-grid-line</span>.</li>
           <li><strong>Missing keys fall back</strong> to the default theme (Graphite), so you can theme just one part.</li>
           <li><strong>Unknown keys are ignored.</strong></li>
-          <li>Colors may be any CSS form — <span class="mono">#abc</span>, <span class="mono">#aabbccdd</span>, <span class="mono">rgb(...)</span> — and are normalized; unrecognized colors make the import fail with the offending key named.</li>
+          <li>Colors may be any CSS form, such as <span class="mono">#abc</span>, <span class="mono">#aabbccdd</span>, or <span class="mono">rgb(...)</span>, and are normalized; unrecognized colors make the import fail with the offending key named.</li>
         </ul>
       </section>
 
@@ -134,7 +135,7 @@
         <h2>Import and export</h2>
         <p>
           In <strong>Settings → Appearance</strong>, import a theme JSON file to add it to your
-          themes — importing is instant and the theme applies immediately. Re-importing a file with
+          themes. Importing is instant and the theme applies immediately. Re-importing a file with
           the same name creates a fresh entry. Exporting a theme writes the wrapped JSON format
           above, pretty-printed, ready to share. Your custom themes and the active selection are
           stored with your profile data (in the app's web storage) and survive restarts.

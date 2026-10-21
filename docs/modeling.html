@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modeling — arc docs</title>
+  <title>Modeling: arc docs</title>
   <meta name="description" content="Modeling tools reference for arc: primitives, sketch tools, select and move, layers, properties editing, undo and redo, and working with .arc documents." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/modeling.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -65,7 +66,7 @@
         <h2>Primitives</h2>
         <p>
           Pick a primitive from the palette (or its key) and click a point on the ground plane to
-          place it. Primitives are parametric — their parameters stay editable in the Properties
+          place it. Primitives are parametric: their parameters stay editable in the Properties
           panel afterwards.
         </p>
         <table class="tbl">
@@ -106,10 +107,10 @@
       <section class="doc" id="select-move">
         <h2>Select and move</h2>
         <ul>
-          <li><strong>Select</strong> (<kbd>V</kbd>) — select and inspect entities in the viewport.</li>
-          <li><strong>Move</strong> (<kbd>M</kbd>) — drag entities along the ground plane.</li>
-          <li><strong>Select all</strong> — <span class="mono">Ctrl A</span>; <strong>Duplicate</strong> — <span class="mono">Ctrl D</span>; <strong>Delete selection</strong> — <span class="mono">Delete</span> or <span class="mono">Backspace</span>.</li>
-          <li><strong>Explode selection</strong> — available from the command palette (<span class="mono">Ctrl K</span>); it has no default key.</li>
+          <li><strong>Select</strong> (<kbd>V</kbd>): select and inspect entities in the viewport.</li>
+          <li><strong>Move</strong> (<kbd>M</kbd>): drag entities along the ground plane.</li>
+          <li><strong>Select all</strong>: <span class="mono">Ctrl A</span>; <strong>Duplicate</strong>: <span class="mono">Ctrl D</span>; <strong>Delete selection</strong>: <span class="mono">Delete</span> or <span class="mono">Backspace</span>.</li>
+          <li><strong>Explode selection</strong>: available from the command palette (<span class="mono">Ctrl K</span>); it has no default key.</li>
           <li>Double-click an entity to zoom the camera to it.</li>
         </ul>
       </section>
@@ -127,7 +128,7 @@
         <h2>Properties</h2>
         <p>
           With something selected, the Properties panel below the Project panel shows its editable
-          parameters — geometry dimensions, transform position, rotation and scale, visibility, and
+          parameters: geometry dimensions, transform position, rotation and scale, visibility, and
           so on. Edit a value and the change applies immediately. Entities without editable
           parameters say so.
         </p>
@@ -155,14 +156,14 @@
             <tr><td>New document</td><td class="keys"><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>Opens an empty <span class="mono">Untitled n</span> document.</td></tr>
             <tr><td>Open…</td><td class="keys"><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Native <span class="mono">.arc</span> files (plain JSON).</td></tr>
             <tr><td>Save</td><td class="keys"><kbd>Ctrl</kbd> <kbd>S</kbd></td><td>Saves to the document's path; asks for one when the file has none.</td></tr>
-            <tr><td>Save As…</td><td class="keys" aria-label="no default binding">—</td><td>No default binding; use File menu or the command palette.</td></tr>
+            <tr><td>Save As…</td><td class="keys" aria-label="no default binding">none</td><td>No default binding; use File menu or the command palette.</td></tr>
             <tr><td>Export model</td><td class="keys"><kbd>Ctrl</kbd> <kbd>E</kbd></td><td><span class="mono">.obj</span> (text OBJ) or <span class="mono">.stl</span> (binary STL).</td></tr>
           </tbody>
         </table>
         <p>
           The <em>File</em> menu also lists up to five recently opened files. With
           <em>Reopen last session at launch</em> enabled, up to six recent documents are reopened on
-          startup (most recent last, so it ends up active) — see
+          startup (most recent last, so it ends up active), see
           <a href="getting-started.html">Getting started</a>.
         </p>
       </section>
