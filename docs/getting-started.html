@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Getting started — arc docs</title>
+  <title>Getting started: arc docs</title>
   <meta name="description" content="Install arc from prebuilt bundles or compile it from source, then a tour of the interface: top bar, tool palette, viewport, project and properties panels, and the status bar." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/getting-started.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -110,11 +111,11 @@
         </p>
         <p>
           Themes live under <strong>Settings → Appearance</strong>, keyboard profiles under
-          <strong>Settings → Keyboard</strong> — see <a href="keybinds.html">Keybinds</a> and
+          <strong>Settings → Keyboard</strong>, see <a href="keybinds.html">Keybinds</a> and
           <a href="themes.html">Themes</a>.
         </p>
         <p>
-          The first run also asks for a <em>projects folder</em> — it is where the startup screen
+          The first run also asks for a <em>projects folder</em>; it is where the startup screen
           lists your <span class="mono">.arc</span> project files, lets you sort them by name,
           date, or size, and offers a <em>New project</em> button. You can change the folder later
           from the startup screen or open the app without it.
@@ -122,7 +123,7 @@
         <p>
           <strong>Updates.</strong> arc checks GitHub Releases for a new version when you start it,
           but never more often than every 12 hours. If one is found you get a window with the
-          version and release notes and can install it with one click — the update downloads and
+          version and release notes and can install it with one click. The update downloads and
           arc restarts. You can also check manually under <strong>Settings → General → Check for
           updates</strong>. Flatpak installs and system packages (deb/rpm) are skipped: they are
           updated by the Flatpak CLI or your package manager instead.
@@ -134,32 +135,32 @@
         <p>The window is arranged in five regions:</p>
         <ul>
           <li>
-            <strong>Top bar</strong> — the arc logo, the <em>File</em> menu (New document, Open…,
+            <strong>Top bar</strong>: the arc logo, the <em>File</em> menu (New document, Open…,
             Save, Save As…, Export model, and up to five recent files with their keybind hints),
             document tabs for switching between every open document, and a <em>Help</em> menu that
             lists all keybinds.
           </li>
           <li>
-            <strong>Tool dock</strong> — a floating panel on the left with one button per tool,
+            <strong>Tool dock</strong>: a floating panel on the left with one button per tool,
             grouped into <em>Tools</em> (Select, Move), <em>Create</em> (box, sphere, cylinder,
             cone, torus, plane), and <em>Sketch</em> tools (sketch mode, circle, line, polyline,
             rectangle, dimension, wall). Drag its header to move it, grab the bottom-right corner
             to resize it, and double-click the header (or use the chevron) to fold it into a small
-            floating pill. Every tool also sits under a single key — see
+            floating pill. Every tool also sits under a single key, see
             <a href="keybinds.html">Keybinds</a>.
           </li>
           <li>
-            <strong>Viewport</strong> — the WebGL scene where you draw and view your model. The
+            <strong>Viewport</strong>: the WebGL scene where you draw and view your model. The
             view cube in the top-right corner mirrors the camera orientation; see
             <a href="navigation.html">Navigation</a>.
           </li>
           <li>
-            <strong>Right panel</strong> — the <em>Project</em> panel on top (a tabbed outline of
+            <strong>Right panel</strong>: the <em>Project</em> panel on top (a tabbed outline of
             the scene's entities and the document's layers, switchable to <em>Layers</em>), and the
             <em>Properties</em> panel below it for the current selection.
           </li>
           <li>
-            <strong>Status bar</strong> — a thin strip at the very bottom showing the current grid
+            <strong>Status bar</strong>: a thin strip at the very bottom showing the current grid
             size in the active units (cm in metric, inches in imperial), a <em>snap</em> indicator
             when snapping is on, and the current status message.
           </li>

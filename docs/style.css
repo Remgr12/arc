@@ -1,5 +1,5 @@
 /* =========================================================
-   arc — documentation ("the arc wiki")
+   arc: documentation ("the arc wiki")
    same drafting-sheet system as the site: paper, ink,
    hairlines, mono labels, title-block footer.
    ========================================================= */
@@ -7,6 +7,7 @@
 :root {
   --paper: #f5f1e8;
   --paper-hi: #fdfaf3;
+  --paper-soft: #f2ecdf;
   --ink: #211d14;
   --ink-soft: #55503f;
   --ink-faint: #8a8371;
@@ -16,8 +17,33 @@
   --accent-ink: #b23210;
   --panel: #26221a;
   --panel-ink: #e8e0cf;
+  --shadow: rgba(33, 29, 20, 0.08);
+  --kbd-shadow: rgba(33, 29, 20, 0.45);
+  --chip: rgba(33, 29, 20, 0.06);
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16140f;
+    --paper-hi: #1e1b15;
+    --paper-soft: #262219;
+    --ink: #ece5d4;
+    --ink-soft: #b3ab95;
+    --ink-faint: #807865;
+    --line: rgba(236, 229, 212, 0.30);
+    --line-soft: rgba(236, 229, 212, 0.14);
+    --accent: #e85a2a;
+    --accent-ink: #f0713f;
+    --panel: #100e0a;
+    --panel-ink: #e8e0cf;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --kbd-shadow: rgba(0, 0, 0, 0.65);
+    --chip: rgba(236, 229, 212, 0.09);
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -32,6 +58,8 @@ body {
   font-size: 15.5px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 ::selection { background: var(--accent); color: var(--paper-hi); }
@@ -77,7 +105,7 @@ header.site .wrap {
   text-decoration: none;
 }
 
-.brand img { display: block; }
+.brand img { display: block; width: 22px; height: 22px; }
 
 .docs-badge {
   font-family: var(--mono);
@@ -120,7 +148,7 @@ nav.top a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--i
   padding-bottom: 64px;
 }
 
-/* toc — the drawing index */
+/* toc: the drawing index */
 
 .toc {
   position: sticky;
@@ -239,7 +267,7 @@ h3 { font-family: var(--mono); font-weight: 700; font-size: 1.1rem; letter-spaci
   border-right: 0;
   border-bottom: 0;
   background: var(--paper-hi);
-  box-shadow: 6px 6px 0 rgba(33, 29, 20, 0.08);
+  box-shadow: 6px 6px 0 var(--shadow);
 }
 
 .card {
@@ -251,7 +279,7 @@ h3 { font-family: var(--mono); font-weight: 700; font-size: 1.1rem; letter-spaci
   transition: background 120ms linear;
 }
 
-.card:hover { background: #f2ecdf; color: var(--ink); }
+.card:hover { background: var(--paper-soft); color: var(--ink); }
 .card:hover .t { color: var(--accent-ink); }
 
 .card .t {
@@ -329,14 +357,14 @@ kbd {
   border: 1.5px solid var(--ink);
   border-radius: 4px;
   background: var(--paper-hi);
-  box-shadow: 2px 2px 0 rgba(33, 29, 20, 0.45);
+  box-shadow: 2px 2px 0 var(--kbd-shadow);
   color: var(--ink);
   position: relative;
   top: -1px;
   margin-right: 4px;
 }
 
-/* note — a stamped margin remark */
+/* note: a stamped margin remark */
 
 .note {
   position: relative;
@@ -394,7 +422,7 @@ caption { display: table-caption; }
 /* inline code chip */
 
 p code, li code, td code, .mono {
-  background: rgba(33, 29, 20, 0.06);
+  background: var(--chip);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -414,7 +442,7 @@ footer.site .wrap {
   gap: 0;
 }
 
-footer.site img { display: block; margin: 16px 0 0; }
+footer.site img { display: block; margin: 16px 0 0; width: 22px; height: 22px; }
 
 footer.site .who {
   font-family: var(--mono);
@@ -466,9 +494,11 @@ footer.site .legal a { color: var(--ink-soft); }
 
 @media (max-width: 620px) {
   .wrap { padding: 0 18px; }
-  header.site .wrap { min-height: 52px; }
-  nav.top { gap: 13px; }
-  nav.top a { font-size: 10.5px; letter-spacing: 0.05em; }
+  header.site .wrap { min-height: 52px; gap: 12px; }
+  /* chapter links live in the sidebar; the top bar keeps Home, Docs, GitHub */
+  nav.top { margin-left: auto; justify-content: flex-end; gap: 2px 16px; }
+  nav.top a { font-size: 10.5px; letter-spacing: 0.05em; padding: 9px 0; }
+  nav.top a:not(.keep):not(.gh) { display: none; }
   footer.site .wrap { grid-template-columns: 1fr; }
   footer.site .right { justify-content: flex-start; }
   .docs-badge { display: none; }

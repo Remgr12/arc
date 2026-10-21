@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>arc — 3D modeling for builders</title>
+  <title>arc: 3D modeling for builders</title>
   <meta name="description" content="arc is a 3D modeling application for design, architecture, and interiors. Rust geometry kernel, native on Windows, macOS, and Linux. Free and open-source under MIT or Apache-2.0." />
 
   <link rel="canonical" href="https://remgr12.github.io/arc/" />
@@ -13,13 +13,14 @@
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="arc" />
-  <meta property="og:title" content="arc — 3D modeling for builders" />
+  <meta property="og:title" content="arc: 3D modeling for builders" />
   <meta property="og:description" content="A 3D modeling app with a Rust geometry kernel. Native on Windows, macOS, and Linux. Free and open-source." />
   <meta property="og:url" content="https://remgr12.github.io/arc/" />
   <meta property="og:image" content="https://remgr12.github.io/arc/assets/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta name="theme-color" content="#f5f1e8" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
 
   <link rel="preload" href="./assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="./assets/fonts/jetbrains-mono-var-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -50,8 +51,8 @@
           <p class="sheet-no">SHEET 01 · ARC 3D MODELING · SCALE 1:1</p>
           <h1>Model on a<br /><span class="accent">drawn</span> plan</h1>
           <p class="tag">
-            arc is a solid modeling application for design, architecture, and interiors —
-            sketch, extrude, place walls like building parts, and adjust everything
+            arc is a solid modeling application for design, architecture, and interiors.
+            Sketch, extrude, place walls like building parts, and adjust everything
             in place. Native on Windows, macOS, and Linux.
           </p>
           <div class="cta">
@@ -61,7 +62,10 @@
         </div>
 
         <figure class="draftpad">
-          <img src="./assets/rings-ink.svg" alt="arc logo — two concentric broken rings, drafted with construction circles" width="220" height="220" />
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="./assets/rings-night.svg" />
+            <img src="./assets/rings-ink.svg" alt="arc logo, two concentric broken rings, drafted with construction circles" width="220" height="220" />
+          </picture>
           <span class="dim h" style="--d:100%; top:-10px;"><s>270°</s></span>
           <span class="dim v" style="--d:100%; right:-12px;"><s>R160</s></span>
           <span class="callout" style="--x:18%; --y:70%;">R160<br />NE gap</span>
@@ -84,12 +88,12 @@
         <p class="progress"><span>02</span><i></i><span>05</span></p>
         <h2 class="section-title">What you draw</h2>
         <ol class="ledger">
-          <li><span>primitives</span><p>Box, sphere, cylinder, cone, torus, plane — typed as numbers, edited in place, no dialog stack.</p></li>
+          <li><span>primitives</span><p>Box, sphere, cylinder, cone, torus, plane, typed as numbers, edited in place, no dialog stack.</p></li>
           <li><span>sketch</span><p>Circles, lines, polylines, rectangles, and walls on the ground plane, snapping to grid and geometry.</p></li>
           <li><span>solids</span><p>Extrude, revolve, sweep, and loft a profile into a watertight solid.</p></li>
           <li><span>architecture</span><p>Walls, stairs, slabs, roofs, columns, beams, doors, and windows that behave like building parts.</p></li>
           <li><span>layers</span><p>Visibility, locking, and colors with per-entity overrides.</p></li>
-          <li><span>history</span><p>Every change is one reversible step on the undo stack — keep going, nothing is final.</p></li>
+          <li><span>history</span><p>Every change is one reversible step on the undo stack; keep going, nothing is final.</p></li>
           <li><span>documents</span><p>Several open at once. The native <span class="mono">.arc</span> document is plain JSON.</p></li>
           <li><span>formats</span><p>STEP in and out (B-rep), OBJ and binary STL up and down.</p></li>
         </ol>
@@ -113,7 +117,7 @@
         <h2 class="section-title">Under the hood</h2>
         <p class="sect">
           Three layers, one chart. The UI is React, the document lives in a Rust kernel,
-          and between them run typed commands — nothing reads a screen copy of the model.
+          and between them run typed commands; nothing reads a screen copy of the model.
         </p>
         <div class="chart">
           <div class="box">
@@ -144,7 +148,7 @@
         <h2 class="section-title">Plugins, in three lines</h2>
         <p class="sect">
           Drop a Lua file next to your documents. It runs on document events and edits the
-          model directly — same objects, same commands the UI uses.
+          model directly, with the same objects, same commands the UI uses.
         </p>
         <figure class="listing">
           <figcaption>plugin.lua</figcaption>
@@ -167,8 +171,8 @@ arc.<span class="fn">on</span>(<span class="str">"new"</span>, <span class="k">f
         <h2 class="section-title">Ten minutes to first wall</h2>
         <div class="obtain">
           <div class="way">
-            <em>A — prebuilt</em>
-            <p>Installers on <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>: MSI and NSIS for Windows, DMG for macOS, AppImage, DEB, and RPM for Linux. A flatpak of the latest release lives in arc's own repository — published alongside every release:</p>
+            <em>A. Prebuilt</em>
+            <p>Installers on <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>: MSI and NSIS for Windows, DMG for macOS, AppImage, DEB, and RPM for Linux. A flatpak of the latest release lives in arc's own repository, published alongside every release:</p>
             <figure class="listing">
               <figcaption>linux · flatpak</figcaption>
               <pre><code><span class="cmt"># one-time: add the arc remote</span>
@@ -179,7 +183,7 @@ flatpak <span class="k">install</span> arc com.arc.cad</code></pre>
             <p class="hint">The app updates itself against the same channel; small green arrow in the title bar when a new build ships.</p>
           </div>
           <div class="way">
-            <em>B — from source</em>
+            <em>B. From source</em>
             <p>Repo is <a href="https://github.com/Remgr12/arc">github.com/Remgr12/arc</a>. A release build takes one command per side.</p>
             <figure class="listing">
               <figcaption>shell</figcaption>

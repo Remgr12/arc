@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Navigation — arc docs</title>
+  <title>Navigation: arc docs</title>
   <meta name="description" content="Viewport navigation in arc: orbiting, panning, zooming, the view cube, grid snapping, and units and grid-size settings." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/navigation.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -77,13 +78,13 @@
         <h2>The view cube</h2>
         <p>
           The top-right corner of the viewport holds a small 3D cube that mirrors the current camera
-          orientation — as you orbit, the cube rotates with you. Its faces are labeled
+          orientation: as you orbit, the cube rotates with you. Its faces are labeled
           <span class="mono">TOP</span>, <span class="mono">BOTTOM</span>, <span class="mono">FRONT</span>,
           <span class="mono">BACK</span>, <span class="mono">LEFT</span>, and <span class="mono">RIGHT</span>.
         </p>
         <ul>
           <li><strong>Hover</strong> a face to highlight it (the highlight uses the theme accent color).</li>
-          <li><strong>Click</strong> a face to focus that plane — the camera snaps into a straight-on view of it.</li>
+          <li><strong>Click</strong> a face to focus that plane; the camera snaps into a straight-on view of it.</li>
           <li><strong>Drag</strong> on the cube itself (not a face) to orbit the scene. A click only counts if you release on the same face without moving more than a few pixels.</li>
         </ul>
         <p>
@@ -103,9 +104,9 @@
           All of this lives in <strong>Settings → General</strong>:
         </p>
         <ul>
-          <li><strong>Grid size</strong> — the spacing between grid points (a positive number, editable in place).</li>
-          <li><strong>Snap to grid</strong> — enable or disable snapping; the status bar shows a <em>snap</em> indicator while it is on.</li>
-          <li><strong>Show grid</strong> / <strong>Show axes</strong> — toggle the viewport overlays.</li>
+          <li><strong>Grid size</strong>: the spacing between grid points (a positive number, editable in place).</li>
+          <li><strong>Snap to grid</strong>: enable or disable snapping; the status bar shows a <em>snap</em> indicator while it is on.</li>
+          <li><strong>Show grid</strong> / <strong>Show axes</strong>: toggle the viewport overlays.</li>
         </ul>
         <p>The current grid size and the snap state are also visible in the status bar at all times.</p>
       </section>
@@ -114,7 +115,7 @@
         <h2>Units</h2>
         <p>
           arc supports two unit systems, selectable in <strong>Settings → General</strong>:
-          <span class="mono">Metric (cm)</span> — the default — or <span class="mono">Imperial (in)</span>.
+          <span class="mono">Metric (cm)</span>, the default, or <span class="mono">Imperial (in)</span>.
           The unit system determines how grid size is labelled and interpreted; the status bar shows
           it in the active unit (cm in metric, inches in imperial).
         </p>
