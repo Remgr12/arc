@@ -4,4 +4,40 @@
     <loc>https://remgr12.github.io/arc/</loc>
     <changefreq>monthly</changefreq>
   </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/getting-started.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/modeling.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/navigation.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/keybinds.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/plugins.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/themes.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/docs/automation.html</loc>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://remgr12.github.io/arc/flatpak-repo/summary</loc>
+    <changefreq>weekly</changefreq>
+  </url>
 </urlset>
