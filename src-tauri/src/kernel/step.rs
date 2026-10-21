@@ -13,8 +13,9 @@ use crate::core::Transform;
 use truck_stepio::r#in::{convert::ProductShape, Table};
 use truck_stepio::r#out::{self as out, StepDesign};
 use truck_meshalgo::prelude::*;
-use truck_topology::compress::{CompressedSolid, CompressedShell};
+use truck_topology::compress::CompressedShell;
 
+use truck_base::cgmath64::Transform as _;
 use truck_modeling::{Solid};
 
 /// STEP-imported curve/surface geometry enums.
@@ -113,7 +114,7 @@ fn polygon_to_mesh_data(
         .map(|p| [p.x, p.y, p.z])
         .collect();
     let mut indices: Vec<u32> = Vec::new();
-    let push_fan = |indices: &mut Vec<u32>, face: &[_]| {
+    let push_fan = |indices: &mut Vec<u32>, face: &[truck_polymesh::StandardVertex]| {
         if face.len() >= 3 {
             for i in 1..face.len() - 1 {
                 indices.push(face[0].pos as u32);
@@ -136,13 +137,7 @@ fn polygon_to_mesh_data(
 
 /// Export a solid to STEP text (AP-style header + B-rep entities).
 pub fn export_solid(solid: &Solid, name: &str) -> Result<String, String> {
-    let compressed: CompressedSolid<Point3, Curve, Surface> = CompressedSolid {
-        boundaries: solid
-            .boundaries()
-            .iter()
-            .map(CompressedShell::compress)
-            .collect(),
-    };
+    let compressed = solid.compress();
     let repr = StepDesign::from_model(out::StepModel::from(&compressed));
     let step_string = out::StepDisplay::new(
         out::StepHeaderDescriptor {
@@ -159,8 +154,6 @@ pub fn export_solid(solid: &Solid, name: &str) -> Result<String, String> {
 /// (multiple shapes are fused by boolean union; mesh-only payloads are
 /// not representable and make the call fail).
 pub fn export_document(doc: &crate::core::Document) -> Result<String, String> {
-    use truck_modeling::Mapped;
-
     let mut solids: Vec<Solid> = Vec::new();
     for e in doc.entities.values() {
         if !e.visible || e.locked {
@@ -169,7 +162,7 @@ pub fn export_document(doc: &crate::core::Document) -> Result<String, String> {
         let solid = super::meshgen::payload_to_solid(&e.kind)?;
         let mat = super::convert::transform_to_cg_matrix(&e.transform);
         solids.push(solid.mapped(
-            |p: Point3| mat.transform_point(p),
+            |p: &Point3| mat.transform_point(*p),
             |c| c.clone(),
             |s| s.clone(),
         ));

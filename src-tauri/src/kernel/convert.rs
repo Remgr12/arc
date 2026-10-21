@@ -15,6 +15,7 @@ pub fn pt_to_arr(p: cgmath::Point3<f64>) -> [f64; 3] {
 }
 
 /// cgmath vector -> `[x, y, z]`.
+#[allow(dead_code)]
 pub fn vec_to_arr(v: cgmath::Vector3<f64>) -> [f64; 3] {
     [v.x, v.y, v.z]
 }

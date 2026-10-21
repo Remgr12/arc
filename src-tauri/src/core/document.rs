@@ -36,11 +36,13 @@ pub struct DocumentData {
 /// Domain document.
 #[derive(Debug)]
 pub struct Document {
+    #[allow(dead_code)]
     pub id: EntityId,
     pub name: String,
     pub path: Option<String>,
     pub units: Units,
     pub modified: bool,
+    #[allow(dead_code)]
     pub data_version: u32,
     pub layers: Vec<Layer>,
     pub active_layer: EntityId,
@@ -84,6 +86,7 @@ impl Document {
         }
     }
 
+    #[allow(dead_code)]
     pub fn scene_version(&self) -> u64 {
         self.scene_version
     }
@@ -175,6 +178,7 @@ impl Document {
         self.entities.get(id)
     }
 
+    #[allow(dead_code)]
     pub fn get_mut(&mut self, id: &EntityId) -> Option<&mut Entity> {
         if self.entities.contains_key(id) {
             self.touch();
@@ -300,6 +304,7 @@ impl Document {
         self.touch();
     }
 
+    #[allow(dead_code)]
     pub fn clear_selection(&mut self) {
         if !self.selection.is_empty() || self.primary.is_some() {
             self.selection.clear();
@@ -571,6 +576,7 @@ impl Document {
     }
 
     /// Bounding box of all visible entities ([min, max] per component).
+    #[allow(dead_code)]
     pub fn bounds(&self) -> Option<[[f64; 3]; 2]> {
         let mut min = [f64::INFINITY; 3];
         let mut max = [f64::NEG_INFINITY; 3];

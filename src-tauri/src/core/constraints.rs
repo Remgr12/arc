@@ -264,6 +264,7 @@ impl Constraint {
     }
 
     /// Constraint summary used in diagnostics and the UI.
+    #[allow(dead_code)]
     pub fn describe(&self) -> String {
         let rhs = self
             .rhs
@@ -298,6 +299,7 @@ pub struct ConstraintSystem {
 }
 
 impl ConstraintSystem {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
@@ -318,10 +320,12 @@ impl ConstraintSystem {
         self.constraints.len() != before
     }
 
+    #[allow(dead_code)]
     pub fn constraints(&self) -> &[Constraint] {
         &self.constraints
     }
 
+    #[allow(dead_code)]
     pub fn has_dirty_entities(&self) -> bool {
         !self.dirty.is_empty()
     }
@@ -341,10 +345,12 @@ impl ConstraintSystem {
         self.dirty.insert(entity_id);
     }
 
+    #[allow(dead_code)]
     pub fn clear_dirty(&mut self, entity_id: u64) {
         self.dirty.remove(&entity_id);
     }
 
+    #[allow(dead_code)]
     pub fn is_dirty(&self, entity_id: u64) -> bool {
         self.dirty.contains(&entity_id)
     }
@@ -419,6 +425,7 @@ impl ConstraintSystem {
     }
 
     /// Number of constraints that reference parameters with no cached value.
+    #[allow(dead_code)]
     pub fn pending_count(&self) -> usize {
         self.constraints
             .iter()

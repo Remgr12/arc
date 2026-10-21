@@ -15,6 +15,8 @@
 //! or bends that do not span the full width are rejected with an error; a
 //! general unfold (hinge-tree layout with collision resolution) is future work.
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 

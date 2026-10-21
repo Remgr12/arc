@@ -107,11 +107,13 @@ impl History {
         self.entries.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     /// Last applied label (current state description).
+    #[allow(dead_code)]
     pub fn current_label(&self) -> Option<&str> {
         if self.position > 0 {
             Some(self.entries[self.position - 1].label.as_str())

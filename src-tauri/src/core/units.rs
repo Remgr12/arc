@@ -50,6 +50,7 @@ impl Default for Units {
 
 impl Units {
     /// Suffix appended by the frontend when formatting lengths.
+    #[allow(dead_code)]
     pub fn abbreviation(&self) -> &'static str {
         match self.length {
             LengthUnit::Millimeter => "mm",

@@ -22,7 +22,11 @@ nalgebra = { workspace = true }
 truck-modeling = { path = "../crates/truck/truck-modeling" }
 truck-shapeops = { path = "../crates/truck/truck-shapeops" }
 truck-stepio = { path = "../crates/truck/truck-stepio" }
-truck-meshalgo = { path = "../crates/truck/truck-meshalgo" }
+truck-meshalgo = { path = "../crates/truck/truck-meshalgo", default-features = false, features = [
+    "analyzers",
+    "filters",
+    "tessellation",
+] }
 truck-polymesh = { path = "../crates/truck/truck-polymesh" }
 truck-geometry = { path = "../crates/truck/truck-geometry" }
 truck-topology = { path = "../crates/truck/truck-topology" }

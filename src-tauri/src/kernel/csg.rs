@@ -11,6 +11,7 @@ use truck_shapeops;
 use crate::core::entity::CsgOperation;
 
 /// Boolean operation on two solids (both in local payload space).
+#[allow(dead_code)]
 pub fn boolean(op: CsgOperation, a: &Solid, b: &Solid) -> Result<Solid, String> {
     match op {
         CsgOperation::Union => union(a, b),
@@ -20,12 +21,14 @@ pub fn boolean(op: CsgOperation, a: &Solid, b: &Solid) -> Result<Solid, String> 
 }
 
 /// Boolean union via `truck_shapeops::or`.
+#[allow(dead_code)]
 pub fn union(a: &Solid, b: &Solid) -> Result<Solid, String> {
     truck_shapeops::or(a, b, crate::kernel::csg::TOLERANCE)
         .ok_or_else(|| "union failed (faces may intersect tangentially)".to_string())
 }
 
 /// Boolean difference: complement of `b` intersected with `a`.
+#[allow(dead_code)]
 pub fn difference(a: &Solid, b: &Solid) -> Result<Solid, String> {
     let mut cut = b.clone();
     cut.not();
@@ -34,10 +37,12 @@ pub fn difference(a: &Solid, b: &Solid) -> Result<Solid, String> {
 }
 
 /// Boolean intersection via `truck_shapeops::and`.
+#[allow(dead_code)]
 pub fn intersection(a: &Solid, b: &Solid) -> Result<Solid, String> {
     truck_shapeops::and(a, b, TOLERANCE)
         .ok_or_else(|| "intersection failed (faces may intersect tangentially)".to_string())
 }
 
 /// Global boolean tolerance.
+#[allow(dead_code)]
 pub const TOLERANCE: f64 = 0.001;

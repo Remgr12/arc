@@ -43,6 +43,7 @@ pub enum Format {
 
 impl Format {
     /// Canonical lower-case file extension for this format.
+    #[allow(dead_code)]
     pub fn extension(&self) -> &'static str {
         match self {
             Format::Obj => "obj",
@@ -655,6 +656,7 @@ fn sanitize_name(name: &str) -> String {
 /// kept), so face indices are simply `1, 2, 3, ...` per triangle. Per-vertex
 /// normals are written when present (faces become `f v//vn`), otherwise plain
 /// `f v` faces are emitted.
+#[allow(dead_code)]
 pub fn export_obj(mesh: &MeshBuffer, name: &str) -> String {
     let mut out = String::with_capacity(mesh.positions.len() * 12 + 64);
     out.push_str("# ");
@@ -686,6 +688,7 @@ pub fn export_obj(mesh: &MeshBuffer, name: &str) -> String {
 /// Export a [`MeshBuffer`] as binary STL bytes: 80-byte header, u32 LE
 /// triangle count, then 50 bytes per triangle (facet normal, three vertices,
 /// u16 attribute byte count of 0; all floats little-endian).
+#[allow(dead_code)]
 pub fn export_stl_binary(mesh: &MeshBuffer) -> Vec<u8> {
     let tris = mesh.tri_count();
     let count = u32::try_from(tris).unwrap_or(u32::MAX);
@@ -850,6 +853,7 @@ fn base64_encode(data: &[u8]) -> String {
 /// Format one `f64` as a STEP real literal: the decimal point is mandatory,
 /// so whole numbers gain a `.0` suffix. Non-finite values collapse to `0.`
 /// (STEP has no `Inf`/`NaN` literals).
+#[allow(dead_code)]
 fn step_real(x: f64) -> String {
     if !x.is_finite() {
         return "0.".into();
@@ -864,12 +868,14 @@ fn step_real(x: f64) -> String {
 
 /// Escape a string for a STEP single-quoted literal (apostrophes doubled;
 /// newlines, CR and NUL are already handled by [`sanitize_name`]).
+#[allow(dead_code)]
 fn step_string(s: &str) -> String {
     s.replace('\'', "''")
 }
 
 /// UTC timestamp for the given Unix seconds, in the `YYYY-MM-DDThh:mm:ss`
 /// shape expected by STEP `FILE_NAME` entries (civil-from-days algorithm).
+#[allow(dead_code)]
 fn iso_timestamp_at(secs: u64) -> String {
     let days = (secs / 86_400) as i64;
     let rem = secs % 86_400;
@@ -894,6 +900,7 @@ fn iso_timestamp_at(secs: u64) -> String {
 }
 
 /// Current UTC timestamp for STEP `FILE_NAME` header entries.
+#[allow(dead_code)]
 fn iso_timestamp() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -942,6 +949,7 @@ impl TriangleSoup {
     }
 
     /// Number of triangles.
+    #[allow(dead_code)]
     pub fn tri_count(&self) -> usize {
         self.indices.len()
     }
@@ -953,6 +961,7 @@ impl TriangleSoup {
 }
 
 /// Merge several STL meshes into a single welded [`TriangleSoup`].
+#[allow(dead_code)]
 pub fn merge_stl(meshes: &[StlMesh]) -> TriangleSoup {
     TriangleSoup::from_triangles(
         meshes

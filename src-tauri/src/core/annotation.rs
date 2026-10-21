@@ -6,6 +6,7 @@
 //!   formatting of dimensions (units, precision, text height, arrow size,
 //!   extension line geometry, text placement).
 //! - Pure measurement math: [`linear_distance`], [`aligned_distance`],
+#![allow(dead_code)]
 //!   [`rotated_distance`], [`angle_between_directions`], [`circumradius`]
 //!   and [`ordinate_value`].
 //! - Geometry builders that turn measurements into simple render primitives

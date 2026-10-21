@@ -2,6 +2,7 @@
 //!
 //! Contains component-based assembly structures, transform hierarchies,
 //! component references, and assembly-level operations.
+#![allow(dead_code)]
 
 use std::collections::{BTreeMap, BTreeSet};
 

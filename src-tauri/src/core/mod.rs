@@ -19,7 +19,6 @@ pub mod units;
 pub use document::*;
 pub use entity::*;
 pub use mesh::*;
-pub use units::Units;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -33,6 +32,7 @@ impl EntityId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
+    #[allow(dead_code)]
     pub fn nil() -> Self {
         Self(Uuid::nil())
     }
@@ -52,6 +52,7 @@ impl Default for EntityId {
 
 impl EntityId {
     /// Short human-friendly prefix (first 8 chars) used for auto names.
+    #[allow(dead_code)]
     pub fn short(&self) -> String {
         self.0.to_string()[..8].to_string()
     }
@@ -76,12 +77,17 @@ impl Color {
     pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
+    #[allow(dead_code)]
     pub const WHITE: Color = Color::rgb(1.0, 1.0, 1.0);
     pub const GRAY: Color = Color::rgb(0.62, 0.62, 0.65);
+    #[allow(dead_code)]
     pub const ORANGE: Color = Color::rgb(0.95, 0.61, 0.22);
+    #[allow(dead_code)]
     pub const BLUE: Color = Color::rgb(0.36, 0.55, 0.98);
+    #[allow(dead_code)]
     pub const GREEN: Color = Color::rgb(0.42, 0.73, 0.38);
 
+    #[allow(dead_code)]
     pub fn to_css(&self) -> String {
         if self.a >= 1.0 {
             format!("rgb({:.0} {:.0} {:.0})", self.r * 255.0, self.g * 255.0, self.b * 255.0)
@@ -116,6 +122,7 @@ impl Default for Transform {
 }
 
 impl Transform {
+    #[allow(dead_code)]
     pub fn identity() -> Self {
         Self::default()
     }

@@ -7,10 +7,8 @@
 
 use std::f64::consts::TAU;
 
-use truck_geometry::prelude::{
-    BoundedCurve, BoundedSurface, KnotVec, NurbsCurve, NurbsSurface,
-};
-use truck_meshalgo::tessellation::{MeshableShape, MeshedShape, RobustMeshableShape};
+use truck_geometry::prelude::{BoundedCurve, BoundedSurface};
+use truck_meshalgo::tessellation::{MeshedShape, RobustMeshableShape};
 
 use truck_modeling::Solid;
 
@@ -246,6 +244,7 @@ fn emit_cuboid(mb: &mut MeshBuilder, min: [f64; 3], max: [f64; 3]) {
 }
 
 /// Extrude a closed XZ profile (ensured CCW) between y0 and y1 with caps.
+#[allow(dead_code)]
 fn gen_prism_xz(mb: &mut MeshBuilder, profile: &mut [[f64; 2]], y0: f64, y1: f64) {
     ensure_ccw(profile);
     let tris = earclip_xz(profile);
@@ -289,6 +288,7 @@ fn gen_prism_xz(mb: &mut MeshBuilder, profile: &mut [[f64; 2]], y0: f64, y1: f64
 }
 
 /// Reverse the polygon in place if clockwise.
+#[allow(dead_code)]
 fn ensure_ccw(profile: &mut [[f64; 2]]) {
     if polygon_signed_area_xz(profile) < 0.0 {
         profile.reverse();
