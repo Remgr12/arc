@@ -71,7 +71,7 @@ export default function App() {
           <div className="h-px bg-base-200" />
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex h-full flex-col p-3">
-              <h3 className="mb-3 text-[12px] font-semibold text-base-800">Entities博物館</h3>
+              <h3 className="mb-3 text-[12px] font-semibold text-base-800">Entities</h3>
               <div className="flex flex-col gap-1">
                 <div className="text-[12px] text-base-500">Entities list placeholder</div>
               </div>
