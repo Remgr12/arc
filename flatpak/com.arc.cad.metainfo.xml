@@ -23,7 +23,7 @@
   <developer_name>Zsombor Simon</developer_name>
   <url type="homepage">https://remgr12.github.io/arc/</url>
   <url type="bugtracker">https://github.com/Remgr12/arc/issues</url>
-  <url type="help">https://github.com/Remgr12/arc/wiki</url>
+  <url type="help">https://remgr12.github.io/arc/docs/</url>
   <icon type="cached" height="128" width="128">com.arc.cad.png</icon>
   <launchable type="desktop-id">com.arc.cad.desktop</launchable>
   <provides>
