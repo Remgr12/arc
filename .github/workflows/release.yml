@@ -396,7 +396,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: flatpak-repo
-          path: flatpak-repo
+          path: flatpak-repo/repo
 
       - name: Deploy Flatpak repo to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
