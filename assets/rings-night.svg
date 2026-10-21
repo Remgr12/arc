@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    arc logo, ink variant for the dark sheet, two concentric rings for the
+    drafting-sheet design. Same geometry as logo.svg (outer centerline
+    radius 160, gap in the north-east quarter; inner radius 72, gap in
+    the south-west quarter) drawn flat on paper, with construction
+    guides that echo a technical drawing.
+  -->
+  <title>arc</title>
+  <g stroke="#3b372e" stroke-width="2" fill="none">
+    <circle cx="256" cy="256" r="160"/>
+    <circle cx="256" cy="256" r="72"/>
+    <line x1="256" y1="16" x2="256" y2="496"/>
+    <line x1="16" y1="256" x2="496" y2="256"/>
+  </g>
+  <g stroke="#ece5d4" stroke-width="44" fill="none" stroke-linecap="round">
+    <path d="M256 96 A160 160 0 1 0 416 256"/>
+    <path d="M184 256 A72 72 0 1 1 256 328"/>
+  </g>
+  <g stroke="#f27145" stroke-width="8" fill="none">
+    <line x1="256" y1="64" x2="256" y2="96"/>
+    <line x1="184" y1="256" x2="152" y2="256"/>
+    <line x1="256" y1="328" x2="256" y2="360"/>
+    <line x1="416" y1="256" x2="448" y2="256"/>
+  </g>
+</svg>

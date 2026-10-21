@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
-    arc logo — two concentric 270 degree rings.
+    arc logo, two concentric rings with two gaps each.
     The outer ring is missing its top-right (north-east) quarter,
     the inner ring its diametrically opposite (south-west) quarter.
     Inner ring: centerline radius 72, drawn from west (184,256) clockwise
