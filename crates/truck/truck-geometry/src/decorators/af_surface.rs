@@ -565,3 +565,32 @@ mod tests {
         assert_near!(surface.normal(1.0, v), surface1.normal(u1, v1));
     }
 }
+
+impl<S0, S1> Invertible for ApproxFilletSurface<S0, S1>
+where
+    S0: Clone,
+    S1: Clone,
+{
+    /// Fillet surface parameter inversion is not defined; identity is used so
+    /// the surface can live in face representations that assume invertibility.
+    #[inline]
+    fn invert(&mut self) {}
+}
+
+impl<S0, S1> Transformed<Matrix4> for ApproxFilletSurface<S0, S1>
+where
+    S0: Clone + Transformed<Matrix4>,
+    S1: Clone + Transformed<Matrix4>,
+{
+    #[inline]
+    fn transform_by(&mut self, trans: Matrix4) {
+        self.surface0.transform_by(trans);
+        self.surface1.transform_by(trans);
+    }
+    #[inline]
+    fn transformed(&self, trans: Matrix4) -> Self {
+        let mut res = self.clone();
+        res.transform_by(trans);
+        res
+    }
+}

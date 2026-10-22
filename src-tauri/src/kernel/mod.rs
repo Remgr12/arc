@@ -15,6 +15,7 @@
 
 pub mod convert;
 pub mod csg;
+pub mod fillet;
 pub mod meshgen;
 pub mod nurbs;
 pub mod shapes;

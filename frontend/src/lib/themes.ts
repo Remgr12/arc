@@ -60,148 +60,53 @@ const CS_VARS: Record<ThemeColorKey, string> = {
   "viewport-grid-line": "--color-viewport-grid-line",
 };
 
-const GRAPHITE: ThemeColors = {
-  "base-50": "#0a0a0a",
-  "base-100": "#131313",
-  "base-150": "#181818",
-  "base-200": "#1e1e1e",
-  "base-300": "#282828",
-  "base-400": "#383838",
-  "base-500": "#555555",
-  "base-600": "#868686",
-  "base-700": "#b7b7b7",
-  "base-800": "#e8e8e8",
-  "accent-500": "#21b3ed",
-  "accent-600": "#00a0dd",
-  "accent-700": "#0086be",
-  "viewport-bg": "#0c0c0e",
-  "viewport-grid": "#302f38",
-  "viewport-grid-line": "#222229",
+const DEEP_GRAPHITE: ThemeColors = {
+  "base-50": "#0a0a0d",
+  "base-100": "#0c0e14",
+  "base-150": "#10121a",
+  "base-200": "#131521",
+  "base-300": "#181b2c",
+  "base-400": "#232742",
+  "base-500": "#303b5a",
+  "base-600": "#4e5d7c",
+  "base-700": "#8a9bb8",
+  "base-800": "#c9d4e6",
+  "accent-500": "#00e8ff",
+  "accent-600": "#00b8d8",
+  "accent-700": "#0089b2",
+  "viewport-bg": "#050709",
+  "viewport-grid": "#1c2938",
+  "viewport-grid-line": "#0f141e",
 };
 
 export const BUILTIN_THEMES: Theme[] = [
-  { id: "graphite", name: "Graphite", builtin: true, colors: GRAPHITE },
+  { id: "deep-graphite", name: "Deep Graphite", builtin: true, colors: DEEP_GRAPHITE },
   {
-    id: "midnight",
-    name: "Midnight",
+    id: "glass",
+    name: "Glass",
     builtin: true,
     colors: {
-      "base-50": "#070b14",
-      "base-100": "#0b101d",
-      "base-150": "#0f1626",
-      "base-200": "#131c31",
-      "base-300": "#1a2542",
-      "base-400": "#26345a",
-      "base-500": "#3e5284",
-      "base-600": "#6d84b8",
-      "base-700": "#a3b6d8",
-      "base-800": "#dde5f2",
-      "accent-500": "#4d9fff",
-      "accent-600": "#2f7ef2",
-      "accent-700": "#245fc4",
-      "viewport-bg": "#060a12",
-      "viewport-grid": "#1c2545",
-      "viewport-grid-line": "#121930",
-    },
-  },
-  {
-    id: "forest",
-    name: "Forest",
-    builtin: true,
-    colors: {
-      "base-50": "#070b08",
-      "base-100": "#0c120e",
-      "base-150": "#111813",
-      "base-200": "#161e18",
-      "base-300": "#1f2b23",
-      "base-400": "#2c3e32",
-      "base-500": "#3f5a47",
-      "base-600": "#6f9180",
-      "base-700": "#a7c2b2",
-      "base-800": "#dce8e0",
-      "accent-500": "#4ccf7f",
-      "accent-600": "#2fb464",
-      "accent-700": "#26914f",
-      "viewport-bg": "#080d0a",
-      "viewport-grid": "#1e2a22",
-      "viewport-grid-line": "#14201a",
-    },
-  },
-  {
-    id: "blueprint",
-    name: "Blueprint",
-    builtin: true,
-    colors: {
-      "base-50": "#f5f7fb",
-      "base-100": "#eaeef6",
-      "base-150": "#e0e7f0",
-      "base-200": "#d2dcea",
-      "base-300": "#b9c8de",
-      "base-400": "#8ea3c4",
-      "base-500": "#5f7799",
-      "base-600": "#3d516e",
-      "base-700": "#24334b",
-      "base-800": "#0f1826",
-      "accent-500": "#3577f6",
-      "accent-600": "#1f5fe0",
-      "accent-700": "#1a4bba",
-      "viewport-bg": "#f0f4fa",
-      "viewport-grid": "#cbd5e7",
-      "viewport-grid-line": "#dde5f0",
-    },
-  },
-  {
-    id: "paper",
-    name: "Paper",
-    builtin: true,
-    colors: {
-      "base-50": "#f7f5ef",
-      "base-100": "#efece2",
-      "base-150": "#e6e2d4",
-      "base-200": "#dbd6c5",
-      "base-300": "#c8c2af",
-      "base-400": "#a09a87",
-      "base-500": "#787264",
-      "base-600": "#514c41",
-      "base-700": "#2f2c24",
-      "base-800": "#15130d",
-      "accent-500": "#d97a2b",
-      "accent-600": "#c06317",
-      "accent-700": "#9c4f10",
-      "viewport-bg": "#f2efe7",
-      "viewport-grid": "#d8d2c0",
-      "viewport-grid-line": "#e3ded0",
+      "base-50": "#0f0f0f",
+      "base-100": "#171717",
+      "base-150": "#1f1f1f",
+      "base-200": "#262626",
+      "base-300": "#2d2d2d",
+      "base-400": "#404040",
+      "base-500": "#525252",
+      "base-600": "#737373",
+      "base-700": "#a3a3a3",
+      "base-800": "#e5e5e5",
+      "accent-500": "#0099ff",
+      "accent-600": "#0080ff",
+      "accent-700": "#0066ff",
+      "viewport-bg": "#0a0a0a",
+      "viewport-grid": "#252525",
+      "viewport-grid-line": "#1a1a1a",
     },
   },
 ];
 
 export const DEFAULT_THEME = BUILTIN_THEMES[0];
-
-// -------------------------------------------------------------------- parsing
-
-/** Normalize any CSS color ("#abc", "#aabbccdd", "rgb(...)") to #rrggbb[aa]. */
-export function normalizeColor(input: string): string | null {
-  const value = input.trim();
-  if (!value) return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.fillStyle = "#123456";
-  ctx.fillStyle = value;
-  const parsed = ctx.fillStyle;
-  if (typeof parsed !== "string" || parsed === "#123456") return null;
-  const rgba = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(parsed);
-  if (rgba) {
-    const hex = rgba
-      .slice(1, 4)
-      .map((n) => Math.round(Number(n)).toString(16).padStart(2, "0"))
-      .join("");
-    const alpha = rgba[4] !== undefined ? Number(rgba[4]) : 1;
-    return alpha < 0.999 ? `${hex}${Math.round(alpha * 255).toString(16).padStart(2, "0")}` : `#${hex}`;
-  }
-  return parsed.toLowerCase();
-}
 
 const ALIASES: Record<string, ThemeColorKey> = {
   accent: "accent-600",
@@ -226,16 +131,13 @@ export function parseThemeFile(text: string, fallbackName: string, id: string): 
   try {
     data = JSON.parse(text);
   } catch (error) {
-    return { error: `Not valid JSON: ${String(error).split("\n")[0]}` };
+    return { error: `Not valid JSON: ${String(error).split("\\n")[0]}` };
   }
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return { error: "Expected a JSON object with color values." };
   }
   const raw = data as Record<string, unknown>;
-  const source = (typeof raw.colors === "object" && raw.colors !== null ? raw.colors : raw) as Record<
-    string,
-    unknown
-  >;
+  const source = (typeof raw.colors === "object" && raw.colors !== null ? raw.colors : raw) as Record<string, unknown>;
   const colors = { ...DEFAULT_THEME.colors };
   const provided: [ThemeColorKey, string][] = [];
 
@@ -244,7 +146,7 @@ export function parseThemeFile(text: string, fallbackName: string, id: string): 
     const target = (THEME_COLOR_KEYS as readonly string[]).includes(key)
       ? (key as ThemeColorKey)
       : ALIASES[key.toLowerCase()];
-    if (!target) continue; // unknown keys are ignored
+    if (!target) continue;
     const hex = normalizeColor(value);
     if (!hex) return { error: `"${key}" is not a valid color: ${value}` };
     provided.push([target, hex]);
@@ -259,11 +161,32 @@ export function parseThemeFile(text: string, fallbackName: string, id: string): 
   return { theme: { id, name, builtin: false, colors } };
 }
 
+function normalizeColor(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#123456";
+  ctx.fillStyle = value;
+  const parsed = ctx.fillStyle;
+  if (typeof parsed !== "string" || parsed === "#123456") return null;
+  const rgba = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(parsed);
+  if (rgba) {
+    const hex = rgba
+      .slice(1, 4)
+      .map((n) => Math.round(Number(n)).toString(16).padStart(2, "0"))
+      .join("");
+    const alpha = rgba[4] !== undefined ? Number(rgba[4]) : 1;
+    return alpha < 0.999 ? `${hex}${Math.round(alpha * 255).toString(16).padStart(2, "0")}` : `#${hex}`;
+  }
+  return parsed.toLowerCase();
+}
+
 export function exportThemeJson(theme: Theme): string {
   return JSON.stringify({ name: theme.name, colors: theme.colors }, null, 2);
 }
-
-// --------------------------------------------------------------- css handling
 
 let styleEl: HTMLStyleElement | null = null;
 
@@ -286,8 +209,6 @@ export function isLightColor(hex: string): boolean {
   const f = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b) > 0.5;
 }
-
-// ---------------------------------------------------------------------- store
 
 interface ThemeState {
   custom: Theme[];
@@ -343,17 +264,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     })),
 }));
 
-// Re-imported custom themes with the same file name get a fresh id; keep ids
-// unique for localStorage bookkeeping.
-export function nextCustomThemeId(): string {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `custom-${uuid}`;
-}
-
-// Persist and apply on every change.
 useThemeStore.subscribe((state) => {
   applyThemeCss(themeById(state.activeId, state.custom));
   try {
@@ -367,8 +277,6 @@ useThemeStore.subscribe((state) => {
 });
 
 applyThemeCss(themeById(initial.activeId, initial.custom));
-
-// --------------------------------------------------------- viewport shortcuts
 
 export interface ViewportPalette {
   bg: string;
@@ -389,3 +297,13 @@ export function viewportPalette(theme: Theme): ViewportPalette {
     lightViewport: isLightColor(theme.colors["viewport-bg"]),
   };
 }
+
+function nextCustomThemeId(): string {
+  const uuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `custom-${uuid}`;
+}
+
+export { ALIASES, nextCustomThemeId };

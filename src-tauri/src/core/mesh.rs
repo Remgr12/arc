@@ -8,6 +8,7 @@ use crate::core::Transform;
 pub struct MeshBuffer {
     pub positions: Vec<f32>,
     pub normals: Vec<f32>,
+    pub tri_face_ids: Vec<u32>, // One per triangle, parallel to positions
     pub lines: Vec<f32>,
 }
 
@@ -38,16 +39,23 @@ impl MeshBuilder {
             .positions
             .extend_from_slice(&buffer.positions);
         self.buffer.normals.extend_from_slice(&buffer.normals);
+        self.buffer.tri_face_ids.extend_from_slice(&buffer.tri_face_ids);
         self.buffer.lines.extend_from_slice(&buffer.lines);
     }
 
-    pub fn push_tri(&mut self, a: [f64; 3], b: [f64; 3], c: [f64; 3], normal: [f64; 3]) {
-        for v in [a, b, c] {
-            self.buffer.positions.extend_from_slice(&[v[0] as f32, v[1] as f32, v[2] as f32]);
-            self.buffer
-                .normals
-                .extend_from_slice(&[normal[0] as f32, normal[1] as f32, normal[2] as f32]);
-        }
+    /// Push a triangle with a face identifier.
+    pub fn push_tri(&mut self, a: [f64; 3], b: [f64; 3], c: [f64; 3], normal: [f64; 3], face_id: u32) {
+        self.buffer.positions.extend_from_slice(&[
+            a[0] as f32, a[1] as f32, a[2] as f32,
+            b[0] as f32, b[1] as f32, b[2] as f32,
+            c[0] as f32, c[1] as f32, c[2] as f32,
+        ]);
+        self.buffer.normals.extend_from_slice(&[
+            normal[0] as f32, normal[1] as f32, normal[2] as f32,
+            normal[0] as f32, normal[1] as f32, normal[2] as f32,
+            normal[0] as f32, normal[1] as f32, normal[2] as f32,
+        ]);
+        self.buffer.tri_face_ids.extend_from_slice(&[face_id, face_id, face_id]);
     }
 
     /// Flat-shaded quad: two triangles with a shared normal.
@@ -58,9 +66,10 @@ impl MeshBuilder {
         c: [f64; 3],
         d: [f64; 3],
         normal: [f64; 3],
+        face_id: u32,
     ) {
-        self.push_tri(a, b, c, normal);
-        self.push_tri(a, c, d, normal);
+        self.push_tri(a, b, c, normal, face_id);
+        self.push_tri(a, c, d, normal, face_id);
     }
 
     pub fn push_line(&mut self, a: [f64; 3], b: [f64; 3]) {
@@ -223,14 +232,15 @@ pub fn earclip_xz(points: &[[f64; 2]]) -> Vec<[usize; 3]> {
     tris
 }
 
-/// Möller-Trumbore ray-triangle intersection. Returns distance along ray.
+/// Möller-Trumbore ray-triangle intersection. Returns (distance, face_id) along ray.
 pub fn ray_triangle(
     origin: [f64; 3],
     dir: [f64; 3],
     a: [f64; 3],
     b: [f64; 3],
     c: [f64; 3],
-) -> Option<f64> {
+    face_id: u32,
+) -> Option<(f64, u32)> {
     let e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
     let p = [
@@ -263,7 +273,7 @@ pub fn ray_triangle(
     }
     let dist = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv_det;
     if dist > 1e-9 {
-        Some(dist)
+        Some((dist, face_id))
     } else {
         None
     }

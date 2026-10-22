@@ -290,67 +290,73 @@ export function ProjectPanel() {
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        <div>
-          <SectionLabel>Documents</SectionLabel>
-          {documents.length === 0 ? (
-            <div className="px-2 text-[12px] text-base-500">No documents open.</div>
-          ) : (
-            <div className="flex flex-col gap-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-base-200 bg-base-50 shadow-lg transition-all duration-300 hover:shadow-xl">
+        <div className="flex min-h-0 w-[240px] shrink-0 flex-col border-r border-base-200 bg-base-50 transition-all duration-300 hover:bg-base-100">
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-base-200 bg-base-100 px-3 transition-all duration-300">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" />
+            <span className="text-[11.5px] font-medium text-base-700">Documents</span>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto transition-all duration-300">
+            <div className="w-full space-y-0.5 py-1 transition-all duration-300">
               {documents.map((d) => (
                 <DocumentRow key={d.id} doc={d} active={overview?.active === d.id} />
               ))}
             </div>
-          )}
+          </div>
         </div>
 
-        {mode === "items" ? (
-          <div className="mt-3 flex min-h-0 flex-col">
-            <SectionLabel>Items</SectionLabel>
-            {!scene || scene.entities.length === 0 ? (
-              <div className="px-2 text-[12px] text-base-500">
-                Nothing here yet. Pick a tool and click in the viewport.
-              </div>
-            ) : (
-              grouped.map((group) => (
-                <div key={group.category}>
-                  <div className="mt-2.5 flex items-baseline justify-between px-2 pb-0.5 first:mt-0">
-                    <span className="text-[11px] font-medium text-base-500">
-                      {CATEGORY_LABELS[group.category]}
-                    </span>
-                    <span className="text-[10px] tabular-nums text-base-500/70">{group.entities.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {group.entities.map((entity) => (
-                      <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
-                    ))}
-                  </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden transition-all duration-300">
+          {mode === "items" ? (
+            <div className="mt-3 flex min-h-0 flex-col transition-all duration-300">
+              <SectionLabel>Items</SectionLabel>
+              {!scene || scene.entities.length === 0 ? (
+                <div className="px-2 text-[12px] text-base-500">
+                  Nothing here yet. Pick a tool and click in the viewport.
                 </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div className="mt-3 flex min-h-0 flex-col">
-            <SectionLabel>Layers</SectionLabel>
-            {!scene || scene.layers.length === 0 ? (
-              <div className="px-2 text-[12px] text-base-500">No layers.</div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {scene.layers.map((layer) => (
-                  <LayerRow
-                    key={layer.id}
-                    layer={layer}
-                    docId={docId}
-                    active={scene.activeLayer === layer.id}
-                    count={scene.entities.filter((e) => e.layer === layer.id).length}
-                    canDelete={scene.layers.length > 1}
-                    onRename={(name) => void ipc.renameLayer(docId, layer.id, name).catch(() => undefined)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                grouped.map((group) => (
+                  <div key={group.category} className="transition-all duration-300">
+                    <div className="mt-2.5 flex items-baseline justify-between px-2 pb-0.5 first:mt-0 transition-all duration-300">
+                      <span className="text-[11px] font-medium text-base-500 transition-all duration-300">
+                        {CATEGORY_LABELS[group.category]}
+                      </span>
+                      <span className="text-[10px] tabular-nums text-base-500/70 transition-all duration-300">
+                        {group.entities.length}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1 transition-all duration-300">
+                      {group.entities.map((entity) => (
+                        <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 flex min-h-0 flex-col transition-all duration-300">
+              <SectionLabel>Layers</SectionLabel>
+              {!scene || scene.layers.length === 0 ? (
+                <div className="px-2 text-[12px] text-base-500">No layers.</div>
+              ) : (
+                <div className="flex flex-col gap-1 transition-all duration-300">
+                  {scene.layers.map((layer) => (
+                    <LayerRow
+                      key={layer.id}
+                      layer={layer}
+                      docId={docId}
+                      active={scene.activeLayer === layer.id}
+                      count={scene.entities.filter((e) => e.layer === layer.id).length}
+                      canDelete={scene.layers.length > 1}
+                      onRename={(name) => void ipc.renameLayer(docId, layer.id, name).catch(() => undefined)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

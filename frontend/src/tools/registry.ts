@@ -1,10 +1,11 @@
 import type { ToolId } from "../lib/types";
 import type { ToolHandler } from "./types";
 import { selectTool } from "./select";
-import { moveTool } from "./transform";
+import { moveTool, rotateTool, scaleTool } from "./transform";
 import { lineTool, polylineTool, rectangleTool, circleTool, arcTool, polygonTool } from "./sketch";
 import { offsetTool, trimTool, extendTool, filletTool, mirrorTool } from "./edit";
 import { extrudeTool, revolveTool, sweepTool, loftTool } from "./solid";
+import { extrudeFaceTool, offsetFaceTool, filletEdgeTool } from "./faceTools";
 import { boxTool, sphereTool, cylinderTool, coneTool, torusTool, planeTool } from "./primitives";
 import { dimensionTool, wallTool } from "./annotate";
 
@@ -12,6 +13,8 @@ import { dimensionTool, wallTool } from "./annotate";
 export const HANDLERS: ReadonlyMap<ToolId, ToolHandler> = new Map([
   ["select", selectTool],
   ["move", moveTool],
+  ["rotate", rotateTool],
+  ["scale", scaleTool],
   ["line", lineTool],
   ["polyline", polylineTool],
   ["rectangle", rectangleTool],
@@ -24,6 +27,9 @@ export const HANDLERS: ReadonlyMap<ToolId, ToolHandler> = new Map([
   ["fillet", filletTool],
   ["mirror", mirrorTool],
   ["extrude", extrudeTool],
+  ["extrude-face", extrudeFaceTool],
+  ["offset-face", offsetFaceTool],
+  ["fillet-edge", filletEdgeTool],
   ["revolve", revolveTool],
   ["sweep", sweepTool],
   ["loft", loftTool],

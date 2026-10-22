@@ -1,5 +1,6 @@
 import type * as THREE from "three";
-import type { EntityData, Geometry, SceneData, ToolId } from "../lib/types";
+import type { EntityData, Geometry, RefObject, SceneData, ToolId } from "../lib/types";
+import type { EdgeHit, FaceHit } from "./topology";
 
 export interface ViewPalette {
   bg: THREE.Color;
@@ -45,6 +46,12 @@ export interface ToolContext {
   rayAt(event: PointerEvent | MouseEvent): THREE.Ray;
   /** Entity id under the cursor (mesh or line picking). */
   pickEntity(event: PointerEvent | MouseEvent): string | null;
+  /** Face pick on the cursor ray (null when no tagged face is under it). */
+  pickFace(event: PointerEvent | MouseEvent): FaceHit | null;
+  /** Screen-space nearest-edge pick (null when no edge is within threshold). */
+  pickEdge(event: PointerEvent | MouseEvent, thresholdPx?: number): EdgeHit | null;
+  /** Store-level face/edge/entity selection ref. */
+  setSelectionRef(obj: RefObject | null): void;
   screenPoint(event: PointerEvent | MouseEvent): ScreenPoint;
   /** Project a world point to host-relative screen coordinates. */
   worldToScreen(p: THREE.Vector3): ScreenPoint | null;

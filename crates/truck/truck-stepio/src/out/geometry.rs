@@ -2,6 +2,7 @@ use super::{Result, *};
 use truck_geometry::prelude::*;
 use truck_modeling::{Curve as ModelingCurve, Surface as ModelingSurface};
 use truck_polymesh::PolylineCurve;
+use std::ops::Bound;
 
 impl DisplayByStep for Point2 {
     fn fmt(&self, idx: usize, f: &mut Formatter<'_>) -> Result {
@@ -478,6 +479,7 @@ impl DisplayByStep for ModelingCurve {
             ModelingCurve::BSplineCurve(x) => DisplayByStep::fmt(x, idx, f),
             ModelingCurve::NurbsCurve(x) => DisplayByStep::fmt(x, idx, f),
             ModelingCurve::IntersectionCurve(x) => DisplayByStep::fmt(x, idx, f),
+            ModelingCurve::Parametric(x) => DisplayByStep::fmt(x, idx, f),
         }
     }
 }
@@ -489,6 +491,7 @@ impl StepLength for ModelingCurve {
             ModelingCurve::BSplineCurve(x) => x.step_length(),
             ModelingCurve::NurbsCurve(x) => x.step_length(),
             ModelingCurve::IntersectionCurve(x) => x.step_length(),
+            ModelingCurve::Parametric(x) => x.step_length(),
         }
     }
 }
@@ -801,6 +804,7 @@ impl DisplayByStep for ModelingSurface {
             ModelingSurface::BSplineSurface(x) => DisplayByStep::fmt(x, idx, f),
             ModelingSurface::NurbsSurface(x) => DisplayByStep::fmt(x, idx, f),
             ModelingSurface::RevolutedCurve(x) => DisplayByStep::fmt(x, idx, f),
+            ModelingSurface::Fillet(x) => DisplayByStep::fmt(x.as_ref(), idx, f),
         }
     }
 }
@@ -812,8 +816,52 @@ impl StepLength for ModelingSurface {
             ModelingSurface::BSplineSurface(x) => x.step_length(),
             ModelingSurface::NurbsSurface(x) => x.step_length(),
             ModelingSurface::RevolutedCurve(x) => x.entity().step_length(),
+            ModelingSurface::Fillet(x) => x.as_ref().step_length(),
         }
     }
 }
 
 impl StepSurface for ModelingSurface {}
+
+/// Builds a coarse NURBS approximation (4 x 4 control grid) of the exact
+/// rolling-ball fillet surface for STEP export.
+fn fillet_approx_nurbs(surface: &ApproxFilletSurface<Box<ModelingSurface>, Box<ModelingSurface>>) -> NurbsSurface<Vector4> {
+    let (_, v_range) = surface.parameter_range();
+    let (v0, v1) = match v_range {
+        (Bound::Included(a) | Bound::Excluded(a), Bound::Included(b) | Bound::Excluded(b)) => (a, b),
+        _ => (0.0, 1.0),
+    };
+    let u_samples = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0];
+    let v_samples = [v0, v0 + (v1 - v0) / 3.0, v0 + (v1 - v0) * 2.0 / 3.0, v1];
+    let rows = v_samples
+        .iter()
+        .map(|v| {
+            u_samples
+                .iter()
+                .map(|u| {
+                    let p = surface.subs(*u, *v);
+                    Vector4::new(p[0], p[1], p[2], 1.0)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    NurbsSurface::new(BSplineSurface::new(
+        (KnotVec::bezier_knot(3), KnotVec::bezier_knot(3)),
+        rows,
+    ))
+}
+
+impl DisplayByStep for ApproxFilletSurface<Box<ModelingSurface>, Box<ModelingSurface>> {
+    fn fmt(&self, idx: usize, f: &mut Formatter<'_>) -> Result {
+        DisplayByStep::fmt(&fillet_approx_nurbs(self), idx, f)
+    }
+}
+
+impl StepLength for ApproxFilletSurface<Box<ModelingSurface>, Box<ModelingSurface>> {
+    fn step_length(&self) -> usize { fillet_approx_nurbs(self).step_length() }
+}
+
+impl StepSurface for ApproxFilletSurface<Box<ModelingSurface>, Box<ModelingSurface>> {
+    #[inline(always)]
+    fn same_sense(&self) -> bool { true }
+}

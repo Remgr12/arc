@@ -30,6 +30,8 @@ pub enum Curve {
     NurbsCurve(NurbsCurve<Vector4>),
     /// intersection curve
     IntersectionCurve(IntersectionCurve<Box<Curve>, Box<Surface>, Box<Surface>>),
+    /// parametric curve on a surface (fillet boundaries)
+    Parametric(Box<PCurve<BSplineCurve<Point2>, Surface>>),
 }
 
 macro_rules! derive_curve_method {
@@ -39,6 +41,7 @@ macro_rules! derive_curve_method {
             Curve::BSplineCurve(got) => $method(got, $($ver), *),
             Curve::NurbsCurve(got) => $method(got, $($ver), *),
             Curve::IntersectionCurve(got) => $method(got, $($ver), *),
+            Curve::Parametric(got) => $method(got, $($ver), *),
         }
     };
 }
@@ -50,6 +53,7 @@ macro_rules! derive_curve_self_method {
             Curve::BSplineCurve(got) => Curve::BSplineCurve($method(got, $($ver), *)),
             Curve::NurbsCurve(got) => Curve::NurbsCurve($method(got, $($ver), *)),
             Curve::IntersectionCurve(got) => Curve::IntersectionCurve($method(got, $($ver), *)),
+            Curve::Parametric(got) => Curve::Parametric($method(got, $($ver), *)),
         }
     };
 }
@@ -89,6 +93,53 @@ impl ToSameGeometry<Curve> for BSplineCurve<Point3> {
     fn to_same_geometry(&self) -> Curve { Curve::from(self.clone()) }
 }
 
+impl ToSameGeometry<Curve> for NurbsCurve<Vector4> {
+    #[inline]
+    fn to_same_geometry(&self) -> Curve { Curve::NurbsCurve(self.clone()) }
+}
+
+impl ToSameGeometry<Curve> for PCurve<BSplineCurve<Point2>, Surface> {
+    #[inline]
+    fn to_same_geometry(&self) -> Curve { Curve::Parametric(Box::new(self.clone())) }
+}
+
+impl ToSameGeometry<Surface> for ApproxFilletSurface<Surface, Surface> {
+    fn to_same_geometry(&self) -> Surface { Surface::Fillet(Box::new(self.clone().into())) }
+}
+
+impl ToSameGeometry<Curve> for IntersectionCurve<Curve, Surface, Surface> {
+    fn to_same_geometry(&self) -> Curve {
+        let (surface0, surface1, leader) = self.clone().destruct();
+        Curve::IntersectionCurve(IntersectionCurve::new(
+            Box::new(surface0),
+            Box::new(surface1),
+            Box::new(leader),
+        ))
+    }
+}
+
+impl ToSameGeometry<Curve> for IntersectionCurve<Box<Curve>, Box<Surface>, Box<Surface>> {
+    fn to_same_geometry(&self) -> Curve { Curve::IntersectionCurve(self.clone()) }
+}
+
+impl ToSameGeometry<Surface> for ApproxFilletSurface<Box<Surface>, Box<Surface>> {
+    fn to_same_geometry(&self) -> Surface { Surface::Fillet(Box::new(self.clone())) }
+}
+
+/// Checks whether a curve lies on a surface by sampling the curve and
+/// searching each sample on the surface (used for curves whose parametrized
+/// representation does not directly reference the checked surface).
+fn sampled_curve_on_surface<S>(surface: &S, curve: &Curve) -> bool
+where
+    S: SearchParameter<D2, Point = Point3>,
+{
+    let (t0, t1) = curve.range_tuple();
+    (0..=24).all(|i| {
+        let t = t0 + (t1 - t0) * (i as f64) / 24.0;
+        surface.search_parameter(curve.subs(t), None, 1).is_some()
+    })
+}
+
 impl Curve {
     /// Into non-ratinalized 4-dimensional B-spline curve
     pub fn lift_up(&self) -> BSplineCurve<Vector4> {
@@ -103,8 +154,8 @@ impl Curve {
                     .collect(),
             ),
             Curve::NurbsCurve(curve) => curve.non_rationalized().clone(),
-            Curve::IntersectionCurve(_) => {
-                unimplemented!("intersection curve cannot connect by homotopy")
+            Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                unimplemented!("fillet curves cannot connect by homotopy")
             }
         }
     }
@@ -132,6 +183,8 @@ pub enum Surface {
     NurbsSurface(NurbsSurface<Vector4>),
     /// revoluted curve
     RevolutedCurve(Processor<RevolutedCurve<Curve>, Matrix4>),
+    /// rolling-ball fillet surface (fillet faces)
+    Fillet(Box<ApproxFilletSurface<Box<Surface>, Box<Surface>>>),
 }
 
 macro_rules! derive_surface_method {
@@ -141,6 +194,7 @@ macro_rules! derive_surface_method {
             Self::BSplineSurface(got) => $method(got, $($ver), *),
             Self::NurbsSurface(got) => $method(got, $($ver), *),
             Self::RevolutedCurve(got) => $method(got, $($ver), *),
+            Self::Fillet(got) => $method(got, $($ver), *),
         }
     };
 }
@@ -152,6 +206,7 @@ macro_rules! derive_surface_self_method {
             Self::BSplineSurface(got) => Self::BSplineSurface($method(got, $($ver), *)),
             Self::NurbsSurface(got) => Self::NurbsSurface($method(got, $($ver), *)),
             Self::RevolutedCurve(got) => Self::RevolutedCurve($method(got, $($ver), *)),
+            Self::Fillet(got) => Self::Fillet(Box::new($method(got, $($ver), *))),
         }
     };
 }
@@ -176,23 +231,30 @@ impl IncludeCurve<Curve> for Surface {
     #[inline(always)]
     fn include(&self, curve: &Curve) -> bool {
         match self {
+            Surface::Fillet(fillet) => sampled_curve_on_surface(fillet, curve),
             Surface::BSplineSurface(surface) => match curve {
                 &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                 Curve::BSplineCurve(curve) => surface.include(curve),
                 Curve::NurbsCurve(curve) => surface.include(curve),
-                Curve::IntersectionCurve(_) => unimplemented!(),
+                Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                    sampled_curve_on_surface(self, curve)
+                }
             },
             Surface::NurbsSurface(surface) => match curve {
                 &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                 Curve::BSplineCurve(curve) => surface.include(curve),
                 Curve::NurbsCurve(curve) => surface.include(curve),
-                Curve::IntersectionCurve(_) => unimplemented!(),
+                Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                    sampled_curve_on_surface(self, curve)
+                }
             },
             Surface::Plane(surface) => match curve {
                 &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                 Curve::BSplineCurve(curve) => surface.include(curve),
                 Curve::NurbsCurve(curve) => surface.include(curve),
-                Curve::IntersectionCurve(_) => unimplemented!(),
+                Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                    sampled_curve_on_surface(self, curve)
+                }
             },
             Surface::RevolutedCurve(surface) => match surface.entity_curve() {
                 &Curve::Line(entity_curve) => {
@@ -206,7 +268,9 @@ impl IncludeCurve<Curve> for Surface {
                         &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                         Curve::BSplineCurve(curve) => surface.include(curve),
                         Curve::NurbsCurve(curve) => surface.include(curve),
-                        Curve::IntersectionCurve(_) => unimplemented!(),
+                        Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                            sampled_curve_on_surface(self, curve)
+                        }
                     }
                 }
                 Curve::BSplineCurve(entity_curve) => {
@@ -220,7 +284,9 @@ impl IncludeCurve<Curve> for Surface {
                         &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                         Curve::BSplineCurve(curve) => surface.include(curve),
                         Curve::NurbsCurve(curve) => surface.include(curve),
-                        Curve::IntersectionCurve(_) => unimplemented!(),
+                        Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                            sampled_curve_on_surface(self, curve)
+                        }
                     }
                 }
                 Curve::NurbsCurve(entity_curve) => {
@@ -234,10 +300,14 @@ impl IncludeCurve<Curve> for Surface {
                         &Curve::Line(curve) => surface.include(&BSplineCurve::from(curve)),
                         Curve::BSplineCurve(curve) => surface.include(curve),
                         Curve::NurbsCurve(curve) => surface.include(curve),
-                        Curve::IntersectionCurve(_) => unimplemented!(),
+                        Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                            sampled_curve_on_surface(self, curve)
+                        }
                     }
                 }
-                Curve::IntersectionCurve(_) => unimplemented!(),
+                Curve::IntersectionCurve(_) | Curve::Parametric(_) => {
+                    sampled_curve_on_surface(self, curve)
+                }
             },
         }
     }
@@ -245,6 +315,9 @@ impl IncludeCurve<Curve> for Surface {
 
 impl IncludeCurve<Curve> for Plane {
     fn include(&self, curve: &Curve) -> bool {
+        if matches!(curve, Curve::IntersectionCurve(_) | Curve::Parametric(_)) {
+            return sampled_curve_on_surface(self, curve);
+        }
         curve.lift_up().control_points().iter().all(|v| {
             let p = v.to_point();
             self.search_parameter(p, None, 1).is_some()
@@ -274,6 +347,7 @@ impl SearchNearestParameter<D2> for Surface {
                 bspsurface.search_nearest_parameter(point, hint, trials)
             }
             Surface::NurbsSurface(surface) => surface.search_nearest_parameter(point, hint, trials),
+            Surface::Fillet(fillet) => fillet.search_nearest_parameter(point, hint, trials),
             Surface::RevolutedCurve(rotted) => {
                 let hint = match hint.into() {
                     SPHint2D::Parameter(hint0, hint1) => (hint0, hint1),

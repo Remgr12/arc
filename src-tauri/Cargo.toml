@@ -17,6 +17,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 nalgebra = { workspace = true }
+bytemuck = "1.23"
+
+#! base64 for thumbnail handling
+base64 = "0.13"
 
 # richosjp/truck kernel (vendored upstream in ../crates/truck)
 truck-modeling = { path = "../crates/truck/truck-modeling" }

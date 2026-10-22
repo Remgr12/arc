@@ -249,10 +249,12 @@ impl Transform {
 }
 
 /// World-space ray cast result.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RayHit {
     pub entity_id: EntityId,
     pub point: [f64; 3],
     pub normal: [f64; 3],
     pub distance: f64,
+    #[serde(default)]
+    pub face: Option<u32>,
 }

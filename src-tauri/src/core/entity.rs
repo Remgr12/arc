@@ -190,6 +190,14 @@ pub enum Geometry {
         first: Box<Geometry>,
         second: Box<Geometry>,
     },
+    /// Fillet applied to a picked edge of a source solid. The edge is stored
+    /// as its two endpoints in source-local coordinates and matched
+    /// geometrically when the payload is evaluated.
+    SolidFillet {
+        source: Box<Geometry>,
+        edge: [[f64; 3]; 2],
+        radius: f64,
+    },
 }
 
 /// Boolean operation applied by a `Geometry::Csg`.
@@ -228,6 +236,7 @@ impl Geometry {
             Geometry::NurbsLoft { .. } => "nurbs_loft",
             Geometry::NurbsSweep { .. } => "nurbs_sweep",
             Geometry::Csg { .. } => "csg",
+            Geometry::SolidFillet { .. } => "solid_fillet",
             Geometry::ImportedMesh { .. } => "imported_mesh",
             Geometry::Wall { .. } => "wall",
             Geometry::Stair { .. } => "stair",
@@ -263,7 +272,8 @@ impl Geometry {
             | Geometry::NurbsSurface { .. }
             | Geometry::NurbsLoft { .. }
             | Geometry::NurbsSweep { .. }
-            | Geometry::Csg { .. } => GeometryCategory::Solid,
+            | Geometry::Csg { .. }
+            | Geometry::SolidFillet { .. } => GeometryCategory::Solid,
             Geometry::Wall { .. }
             | Geometry::Stair { .. }
             | Geometry::Slab { .. }

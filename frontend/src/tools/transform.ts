@@ -1,38 +1,60 @@
-import type { ToolHandler } from "./types";
+import type { ToolHandler, GizmoMode } from "./types";
 import { selectUnderCursor } from "./select";
 
 // ---------------------------------------------------------------------------
-// Move tool. The viewport attaches a translate gizmo to the primary selection
-// while this tool is active; drags commit through the viewport's gizmo
-// write-back. This handler only owns selection and hints.
+// Transform tools. The viewport attaches a TransformControls gizmo to the
+// primary selection while the tool is active; drags commit through the
+// viewport's gizmo write-back. The handler owns selection, hints and the
+// gizmo mode.
 // ---------------------------------------------------------------------------
 
-export const moveTool: ToolHandler = {
-  id: "move",
-  onActivate(ctx) {
-    const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
-    ctx.setGizmo(primary ? "translate" : null);
-    ctx.setStatus("Move · drag the arrows or planes · drag empty space to orbit-select");
-  },
-  onDeactivate(ctx) {
-    ctx.setGizmo(null);
-  },
-  onPointerDown(event, ctx) {
-    if (event.button !== 0 || ctx.gizmoActive()) return false;
-    const had = ctx.selection().length;
-    selectUnderCursor(event, ctx);
-    const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
-    ctx.setGizmo(primary ? "translate" : null);
-    if (primary && ctx.selection().length === 1 && had <= 1) {
-      ctx.setStatus("Move · drag a gizmo arrow or plane");
-    }
-    return true;
-  },
-  onPointerMove(event, ctx) {
-    if (ctx.isMarqueeActive()) ctx.moveMarquee(event);
-  },
-  onPointerUp(event, ctx) {
-    if (ctx.isMarqueeActive()) ctx.finishMarquee(event);
-  },
-  hint: () => "Move · drag gizmo arrows/planes",
-};
+function centeredGizmoTool(id: string, mode: GizmoMode, label: string, tip: string): ToolHandler {
+  return {
+    id: id as ToolHandler["id"],
+    onActivate(ctx) {
+      const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
+      ctx.setGizmo(primary ? mode : null);
+      ctx.setStatus(`${label} · drag the gizmo · click empty space to reselect`);
+    },
+    onDeactivate(ctx) {
+      ctx.setGizmo(null);
+    },
+    onPointerDown(event, ctx) {
+      if (event.button !== 0 || ctx.gizmoActive()) return false;
+      const had = ctx.selection().length;
+      selectUnderCursor(event, ctx);
+      const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
+      ctx.setGizmo(primary ? mode : null);
+      if (primary && ctx.selection().length === 1 && had <= 1) {
+        ctx.setStatus(`${label} · drag the gizmo`);
+      }
+      return true;
+    },
+    onPointerMove(event, ctx) {
+      if (ctx.isMarqueeActive()) ctx.moveMarquee(event);
+    },
+    onPointerUp(event, ctx) {
+      if (ctx.isMarqueeActive()) ctx.finishMarquee(event);
+    },
+    hint: () => tip,
+  };
+}
+
+export const moveTool: ToolHandler = centeredGizmoTool(
+  "move",
+  "translate",
+  "Move",
+  "Move · drag gizmo arrows/planes",
+);
+export const rotateTool: ToolHandler = centeredGizmoTool(
+  "rotate",
+  "rotate",
+  "Rotate",
+  "Rotate · drag the rotate gizmo",
+);
+export const scaleTool: ToolHandler = centeredGizmoTool(
+  "scale",
+  "scale",
+  "Scale",
+  "Scale · drag the scale gizmo",
+);

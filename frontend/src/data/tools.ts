@@ -13,6 +13,7 @@ import {
   Globe,
   Layers,
   LifeBuoy,
+  Maximize2,
   Minus,
   MousePointer2,
   Move3d,
@@ -41,6 +42,8 @@ export interface ToolDef {
 export const TOOLS: ToolDef[] = [
   { id: "select", label: "Select", tip: "Select and inspect entities (Esc)", icon: MousePointer2, group: "select" },
   { id: "move", label: "Move", tip: "Drag entities with the transform gizmo (M)", icon: Move3d, group: "select" },
+  { id: "rotate", label: "Rotate", tip: "Rotate the selection with the rotate gizmo", icon: RotateCw, group: "select" },
+  { id: "scale", label: "Scale", tip: "Scale the selection with the scale gizmo", icon: Maximize2, group: "select" },
 
   { id: "line", label: "Line", tip: "Line between two points (L). Shift = ortho. Chain from endpoints", icon: Minus, group: "sketch" },
   { id: "polyline", label: "Polyline", tip: "Multi-segment polyline (J). Click first point again or Enter to close", icon: Waypoints, group: "sketch" },
@@ -56,6 +59,9 @@ export const TOOLS: ToolDef[] = [
   { id: "mirror", label: "Mirror", tip: "Mirror selected curves across a two-point axis (I)", icon: FlipHorizontal2, group: "modify" },
 
   { id: "extrude", label: "Extrude", tip: "Extrude a closed profile (E). Pick profile, drag height, click", icon: ArrowUpFromLine, group: "solid" },
+  { id: "extrude-face", label: "Extrude Face", tip: "Extrude a face in its own direction (E)", icon: ArrowUpFromLine, group: "solid" },
+  { id: "offset-face", label: "Offset Face", tip: "Offset a face or its edges by a distance", icon: Equal, group: "solid" },
+  { id: "fillet-edge", label: "Fillet Edge", tip: "Round the selected edges (F)", icon: Blend, group: "solid" },
   { id: "revolve", label: "Revolve", tip: "Revolve an open profile around an axis (W). Pick profile, axis, then angle", icon: RotateCw, group: "solid" },
   { id: "sweep", label: "Sweep", tip: "Sweep a tube along a path (S). Pick path, drag radius, click", icon: Cable, group: "solid" },
   { id: "loft", label: "Loft", tip: "Loft through closed profiles (K). Click 2+ profiles, Enter to commit", icon: Layers, group: "solid" },

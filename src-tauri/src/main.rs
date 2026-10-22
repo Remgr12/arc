@@ -171,6 +171,8 @@ fn main() {
             commands::get_material_library,
             commands::set_entity_material,
             commands::csg_apply,
+            // commands::save_project_thumbnail,
+            // commands::read_project_thumbnail,
             updater::check_for_updates,
             updater::install_update,
         ])

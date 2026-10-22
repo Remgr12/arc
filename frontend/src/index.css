@@ -1,37 +1,40 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter Variable", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  /* Deep graphite scale - refined and deeper */
+  --color-base-50: oklch(0.05 0.005 265);
+  --color-base-100: oklch(0.095 0.005 265);
+  --color-base-150: oklch(0.12 0.006 265);
+  --color-base-200: oklch(0.16 0.007 265);
+  --color-base-300: oklch(0.24 0.009 265);
+  --color-base-400: oklch(0.36 0.011 265);
+  --color-base-500: oklch(0.52 0.013 265);
+  --color-base-600: oklch(0.75 0.014 265);
+  --color-base-700: oklch(0.87 0.012 265);
+  --color-base-800: oklch(0.94 0.008 265);
 
-  /* Cool graphite scale, darkest → lightest. Slight blue cast keeps the UI
-     from reading as "pure gray template" while staying neutral. */
-  --color-base-50: oklch(0.155 0.004 265);
-  --color-base-100: oklch(0.195 0.004 265);
-  --color-base-150: oklch(0.22 0.005 265);
-  --color-base-200: oklch(0.245 0.005 265);
-  --color-base-300: oklch(0.29 0.006 265);
-  --color-base-400: oklch(0.36 0.006 265);
-  --color-base-500: oklch(0.48 0.007 265);
-  --color-base-600: oklch(0.66 0.006 265);
-  --color-base-700: oklch(0.82 0.005 265);
-  --color-base-800: oklch(0.94 0.003 265);
+  /* Accent colors - refined and modern */
+  --color-accent-400: oklch(0.72 0.16 200);
+  --color-accent-500: oklch(0.66 0.18 200);
+  --color-accent-600: oklch(0.58 0.18 200);
+  --color-accent-700: oklch(0.48 0.16 200);
+  --color-accent-800: oklch(0.38 0.13 200);
 
-  --color-accent-400: oklch(0.74 0.14 255);
-  --color-accent-500: oklch(0.68 0.16 255);
-  --color-accent-600: oklch(0.61 0.17 255);
-  --color-accent-700: oklch(0.53 0.16 255);
-  --color-accent-800: oklch(0.45 0.13 255);
-
-  --color-danger-500: oklch(0.64 0.19 25);
-  --color-danger-600: oklch(0.56 0.19 25);
-  --color-warn-500: oklch(0.8 0.14 85);
-
+  /* Spacing and sizing */
+  --spacing: 0.25rem;
   --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows for depth */
+  --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.15);
+  --shadow-xl: 0 20px 25px -5px oklch(0 0 0 / 0.2);
 }
 
+/* Base styles */
 html,
 body,
 #root {
@@ -49,41 +52,39 @@ body {
   text-rendering: optimizeLegibility;
   user-select: none;
   cursor: default;
+  line-height: 1.5;
 }
 
+/* Enhanced selection with better contrast */
 ::selection {
-  background: color-mix(in oklch, var(--color-accent-500) 70%, transparent);
+  background: color-mix(in oklch, var(--color-accent-500) 60%, transparent);
   color: var(--color-base-800);
 }
 
+/* Custom scrollbar with glass appearance */
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 }
-*::-webkit-scrollbar-thumb {
-  background: var(--color-base-400);
-  border-radius: 8px;
-  background-clip: content-box;
-  border: 2px solid transparent;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--color-base-500);
-  background-clip: content-box;
-}
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--color-base-700) 20%, transparent);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  backdrop-filter: blur(4px);
 }
 
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--color-accent-500) 40%, transparent);
+  background-clip: content-box;
+}
+
+/* Input reset */
 input,
 select,
 textarea,
@@ -91,11 +92,458 @@ button {
   font-family: inherit;
 }
 
-.panel-focus-ring {
-  outline: 1px solid var(--color-accent-500);
+/* Focus ring for accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
 }
 
-/* Hairline separators that stay visible on dark graphite. */
-.hairline-b {
-  box-shadow: inset 0 -1px 0 0 color-mix(in oklch, white 7%, transparent);
+/* Glass panel base styles */
+.glass-panel {
+  background: color-mix(in oklch, var(--color-base-50) 70%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in oklch, var(--color-base-700) 10%, transparent);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+}
+
+/* Enhanced glass panel with hover effect */
+.glass-panel-hover {
+  transition: all 0.2s ease;
+}
+
+.glass-panel-hover:hover {
+  background: color-mix(in oklch, var(--color-base-100) 80%, transparent);
+  border-color: color-mix(in oklch, var(--color-accent-500) 30%, transparent);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-1px);
+}
+
+/* Floating dock with glass effect */
+.floating-dock {
+  background: color-mix(in oklch, var(--color-base-50) 85%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in oklch, var(--color-base-700) 15%, transparent);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Panel stack layout for right-side panels */
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+/* Smooth transitions for theme switching and panel visibility */
+* {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* Responsive utilities */
+@media (max-width: 768px) {
+  body {
+    font-size: 11px;
+  }
+  
+  .glass-panel {
+    border-radius: var(--radius-md);
+  }
+}
+/* Enhanced responsive design utilities */
+@media (max-width: 768px) {
+  /* Main layout adjustments */
+  .responsive-layout {
+    flex-direction: column;
+  }
+
+  /* Panel stacking order */
+  .responsive-panel-stack {
+    flex-direction: column;
+    order: -1; /* Projects panel first */
+  }
+
+  /* Content area height */
+  .responsive-content-area {
+    flex: 0 1 auto;
+    min-height: 300px;
+  }
+
+  /* Properties panel height adjustment */
+  .responsive-properties-panel {
+    height: 240px;
+    order: 1;
+  }
+
+  /* Header and toolbar adjustments */
+  .responsive-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .responsive-toolbar {
+    display: none;
+  }
+
+  /* Viewport container */
+  .responsive-viewport-container {
+    min-height: 200px;
+  }
+
+  /* Floating components positioning */
+  .responsive-floating-component {
+    position: fixed;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    max-width: none;
+    transform: none;
+  }
+
+  /* Context menu positioning */
+  .responsive-context-menu {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+  }
+
+  /* Utility rail adjustment */
+  .responsive-utility-rail {
+    right: 0.5rem;
+    bottom: 3rem;
+    top: auto;
+    transform: none;
+  }
+
+  /* Dock adjustments for mobile */
+  .responsive-dock {
+    bottom: 0.5rem;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 95%;
+    max-width: 400px;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0.5rem;
+  }
+
+  /* Banner adjustments */
+  .responsive-banner {
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    max-width: none;
+  }
+
+  /* Status pill adjustments */
+  .responsive-status-pill {
+    bottom: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    max-width: none;
+  }
+
+  /* Project panel mobile */
+  .responsive-project-panel {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Dashboard grid */
+  .responsive-dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  /* Dashboard action cards */
+  .responsive-dashboard-card {
+    padding: 1rem;
+  }
+
+  /* Grid layout */
+  .responsive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Panel widths */
+  .responsive-panel {
+    width: 100% !important;
+  }
+
+  /* Form elements */
+  .responsive-form-element {
+    font-size: 0.875rem;
+  }
+
+  /* Button sizes */
+  .responsive-button {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  /* Text sizes */
+  .responsive-text-header {
+    font-size: 1.25rem;
+  }
+
+  .responsive-text-body {
+    font-size: 0.875rem;
+  }
+
+  .responsive-text-small {
+    font-size: 0.75rem;
+  }
+
+  /* Spacing */
+  .responsive-spacing {
+    margin: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  /* Flex direction */
+  .responsive-flex {
+    flex-direction: column;
+  }
+
+  /* Grid columns */
+  .responsive-grid-columns-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .responsive-grid-columns-3 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Width utility */
+  .responsive-w-full {
+    width: 100% !important;
+  }
+
+  /* Margin utility */
+  .responsive-m-0 {
+    margin: 0 !important;
+  }
+
+  .responsive-mb-1 {
+    margin-bottom: 0.25rem !important;
+  }
+
+  .responsive-mb-2 {
+    margin-bottom: 0.5rem !important;
+  }
+
+  .responsive-p-1 {
+    padding: 0.25rem !important;
+  }
+
+  .responsive-p-2 {
+    padding: 0.5rem !important;
+  }
+
+  /* Icon sizes */
+  .responsive-icon-small {
+    width: 14px;
+    height: 14px;
+  }
+
+  .responsive-icon-medium {
+    width: 20px;
+    height: 20px;
+  }
+
+  .responsive-icon-large {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Z-index layering */
+  .responsive-z-dropdown {
+    z-index: 1000;
+  }
+
+  .responsive-z-sticky {
+    z-index: 1020;
+  }
+
+  .responsive-z-fixed {
+    z-index: 1030;
+  }
+
+  /* Image containers */
+  .responsive-image-container {
+    aspect-ratio: 16/9;
+    max-height: 160px;
+  }
+
+  /* Form controls */
+  .responsive-input {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .responsive-select {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  /* Card layouts */
+  .responsive-card {
+    padding: 0.75rem;
+  }
+
+  /* Table layouts */
+  .responsive-table-cell {
+    padding: 0.375rem;
+    font-size: 0.75rem;
+  }
+
+  /* Badge sizes */
+  .responsive-badge {
+    padding: 0.125rem 0.375rem;
+    font-size: 0.625rem;
+  }
+
+  /* Avatar sizes */
+  .responsive-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+
+  /* Transition adjustments */
+  .responsive-transition-slow {
+    transition-duration: 300ms;
+  }
+
+  /* Scrollbars */
+  .responsive-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  .responsive-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Overlay adjustments */
+  .responsive-overlay {
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Small screens (320px to 480px) */
+@media (max-width: 480px) {
+  .responsive-container {
+    padding: 0.5rem;
+  }
+
+  .responsive-header {
+    padding: 0.5rem;
+  }
+
+  .responsive-content {
+    margin: 0.5rem;
+  }
+
+  .responsive-card {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .responsive-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+
+  .responsive-grid {
+    gap: 0.5rem;
+  }
+
+  .responsive-modal {
+    margin: 0.5rem;
+    max-height: 95vh;
+  }
+}
+
+/* Landscape orientation for tablets */
+@media (max-width: 768px) and (orientation: landscape) {
+  .responsive-layout {
+    flex-direction: row;
+  }
+
+  .responsive-sidebar {
+    width: 240px !important;
+    height: 100% !important;
+    order: 0;
+  }
+
+  .responsive-content-area {
+    flex: 1;
+    order: 1;
+  }
+
+  .responsive-toolbar {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    width: 48px;
+  }
+}
+
+/* Tablet and small desktop */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .responsive-sidebar {
+    width: 220px;
+  }
+
+  .responsive-content-area {
+    flex: 1;
+  }
+
+  .responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Large desktop */
+@media (min-width: 1440px) {
+  .responsive-container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .responsive-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .responsive-sidebar {
+    width: 320px;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .responsive-image {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .responsive-transition-smooth {
+    transition: none;
+  }
 }

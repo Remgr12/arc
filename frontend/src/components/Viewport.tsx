@@ -13,6 +13,12 @@ import { TOOL_BY_ID } from "../data/tools";
 import { handlerFor } from "../tools/registry";
 import type { ToolContext, ViewPalette, GizmoMode } from "../tools/types";
 import type { EntityData, LayerData, SceneData, ToolId, Transform } from "../lib/types";
+import type { EdgeHit, FaceHit } from "../tools/topology";
+import {
+  edgeOverlayGeometry,
+  faceOverlayGeometry,
+  pickEdgeScreen,
+} from "../tools/topology";
 
 interface ViewAnim {
   start: number;
@@ -68,12 +74,16 @@ interface ViewportRefs {
   palette: ViewPalette;
   marquee: MarqueeState | null;
   marqueeEl: HTMLDivElement | null;
-  contextMenu: HTMLDivElement | null;
-  contextMenuCloser: (() => void) | null;
   /** Screen position of an in-flight right-button press (pan-drag suppression). */
   contextPress: { x: number; y: number } | null;
   /** Overlay objects grouped by tag; each new object replaces the old one. */
   previews: Map<string, THREE.Object3D>;
+  /** Hovered/selected face & edge highlight overlays. */
+  hoverOverlay: THREE.Mesh | null;
+  selOverlay: THREE.Mesh | null;
+  hoverEdgeOverlay: THREE.LineSegments | null;
+  selEdgeOverlay: THREE.LineSegments | null;
+  overlayKey: string;
   ctx: ToolContext;
 }
 
@@ -259,10 +269,13 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     palette: viewPalette,
     marquee: null,
     marqueeEl: null,
-    contextMenu: null,
-    contextMenuCloser: null,
     contextPress: null,
     previews: new Map(),
+    hoverOverlay: null,
+    selOverlay: null,
+    hoverEdgeOverlay: null,
+    selEdgeOverlay: null,
+    overlayKey: "",
     ctx: null as unknown as ToolContext,
   };
 
@@ -295,6 +308,11 @@ function startLoop(ref: ViewportRefs): () => void {
   ro.observe(ref.host);
 
   let raf = 0;
+  let pendingCapture = false;
+  const captureListener = () => {
+    pendingCapture = true;
+  };
+  window.addEventListener("arc-capture", captureListener);
   const tick = () => {
     if (ref.disposed) return;
 
@@ -319,12 +337,25 @@ function startLoop(ref: ViewportRefs): () => void {
     const w = ref.host.clientWidth;
     const h = ref.host.clientHeight;
     if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
+    if (pendingCapture) {
+      pendingCapture = false;
+      try {
+        const url = ref.renderer.domElement.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.download = `${useArcStore.getState().scene?.name ?? "scene"}.png`;
+        link.href = url;
+        link.click();
+      } catch {
+        // capture unsupported on this renderer config
+      }
+    }
     raf = requestAnimationFrame(tick);
   };
   tick();
   return () => {
     cancelAnimationFrame(raf);
     ro.disconnect();
+    window.removeEventListener("arc-capture", captureListener);
   };
 }
 
@@ -388,6 +419,16 @@ function syncSceneToThree(ref: ViewportRefs): void {
   if (sceneChanged) {
     ref.lastScene = scene;
     if (scene) rebuildEntities(ref, scene);
+    ref.overlayKey = "";
+    // A face/edge ref on an entity that is no longer selected is stale.
+    const st = useArcStore.getState();
+    const faceKept = st.selFace && scene?.selection.includes(st.selFace.entityId);
+    const edgeKept = st.selEdge && scene?.selection.includes(st.selEdge.entityId);
+    if (st.selKind === "face" && !faceKept) {
+      useArcStore.setState({ selKind: "entity", selFace: null, selEdge: null });
+    } else if (st.selKind === "edge" && !edgeKept) {
+      useArcStore.setState({ selKind: "entity", selFace: null, selEdge: null });
+    }
     updateGizmoAttachment(ref);
   } else if (hoverChanged && scene) {
     // Targeted update: only re-present the entities whose hover changed.
@@ -400,12 +441,110 @@ function syncSceneToThree(ref: ViewportRefs): void {
     }
   }
   ref.lastHover = state.hoverEntity;
+  updateOverlays(ref);
 
   const settings = state.settings;
   ref.gridNode.visible = settings?.show_grid ?? true;
   ref.axes.visible = settings?.show_axes ?? true;
   const tool = state.tool;
   if (tool !== ref.lastTool) switchTool(ref, tool);
+}
+
+/** Replace the hovered/selected face & edge highlight overlays. */
+function updateOverlays(ref: ViewportRefs): void {
+  const state = useArcStore.getState();
+  const scene = state.scene;
+  const key = `${scene?.version ?? -1}|${scene?.selection.join(",") ?? ""}|${JSON.stringify(state.hoverObj)}|${state.selKind}|${state.selFace?.entityId ?? ""}/${state.selFace?.face ?? ""}|${state.selEdge?.key ?? ""}`;
+  if (key === ref.overlayKey) return;
+  ref.overlayKey = key;
+
+  const clear = <T extends THREE.Object3D>(obj: T | null): null => {
+    if (obj) {
+      ref.entityRoot.remove(obj);
+      disposeObject(obj);
+    }
+    return null;
+  };
+  ref.hoverOverlay = clear(ref.hoverOverlay);
+  ref.selOverlay = clear(ref.selOverlay);
+  ref.hoverEdgeOverlay = clear(ref.hoverEdgeOverlay);
+  ref.selEdgeOverlay = clear(ref.selEdgeOverlay);
+  if (!scene) return;
+
+  const entity = (id: string) => scene.entities.find((e) => e.id === id) ?? null;
+  const host = (id: string): THREE.Object3D | null => {
+    const obj = ref.objects.get(id);
+    if (!obj || !obj.visible) return null;
+    return obj;
+  };
+  const makeFace = (
+    entityId: string,
+    face: number,
+    color: THREE.Color,
+    opacity: number,
+  ): THREE.Mesh | null => {
+    const data = entity(entityId);
+    const obj = host(entityId);
+    if (!data || !obj) return null;
+    const geometry = faceOverlayGeometry(data, face);
+    if (!geometry) return null;
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+      side: THREE.DoubleSide,
+    });
+    const overlay = new THREE.Mesh(geometry, material);
+    overlay.position.copy(obj.position);
+    overlay.quaternion.copy(obj.quaternion);
+    overlay.scale.copy(obj.scale);
+    overlay.renderOrder = 5;
+    ref.entityRoot.add(overlay);
+    return overlay;
+  };
+  const makeEdge = (
+    entityId: string,
+    segIndex: number,
+    color: THREE.Color,
+  ): THREE.LineSegments | null => {
+    const data = entity(entityId);
+    const obj = host(entityId);
+    if (!data || !obj) return null;
+    const geometry = edgeOverlayGeometry(data, segIndex);
+    if (!geometry) return null;
+    const material = new THREE.LineBasicMaterial({ color, depthWrite: false });
+    const overlay = new THREE.LineSegments(geometry, material);
+    overlay.position.copy(obj.position);
+    overlay.quaternion.copy(obj.quaternion);
+    overlay.scale.copy(obj.scale);
+    overlay.renderOrder = 6;
+    ref.entityRoot.add(overlay);
+    return overlay;
+  };
+
+  const hover = state.hoverObj;
+  if (hover?.kind === "face" && hover.face != null) {
+    ref.hoverOverlay = makeFace(hover.entityId, hover.face, ref.palette.hover, 0.3);
+  } else if (hover?.kind === "edge" && hover.edge != null) {
+    const parts = hover.edge.split(":");
+    const seg = Number(parts[parts.length - 1]);
+    if (Number.isInteger(seg)) {
+      ref.hoverEdgeOverlay = makeEdge(hover.entityId, seg, ref.palette.hover);
+    }
+  }
+  if (state.selKind === "face" && state.selFace) {
+    ref.selOverlay = makeFace(state.selFace.entityId, state.selFace.face, ref.palette.selection, 0.4);
+  } else if (state.selKind === "edge" && state.selEdge) {
+    const parts = state.selEdge.key.split(":");
+    const seg = Number(parts[parts.length - 1]);
+    if (Number.isInteger(seg)) {
+      ref.selEdgeOverlay = makeEdge(state.selEdge.entityId, seg, ref.palette.selection);
+    }
+  }
 }
 
 function switchTool(ref: ViewportRefs, tool: ToolId): void {
@@ -534,7 +673,11 @@ function present(
 ): void {
   const layer = layers.get(entity.layer);
   const selected = scene.selection.includes(entity.id);
-  const hovered = useArcStore.getState().hoverEntity === entity.id;
+  // A face/edge hover highlights the subreference only, not the whole entity.
+  const st = useArcStore.getState();
+  const subHover =
+    st.hoverObj !== null && st.hoverObj.entityId === entity.id && st.hoverObj.kind !== "entity";
+  const hovered = st.hoverEntity === entity.id && !subHover;
   const color = entityColor(entity, layers);
   const colorHex = color.getHex();
   const visible = entity.visible && layerVisible(layer);
@@ -614,6 +757,8 @@ function present(
   if (mesh.isMesh) {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.copy(color);
+    const displayMode = useArcStore.getState().displayMode;
+    mat.wireframe = displayMode === "wireframe";
     if (material) {
       mat.roughness = material.roughness;
       mat.metalness = material.metalness;
@@ -676,45 +821,19 @@ function disposeObject(obj: THREE.Object3D): void {
 
 // ------------------------------------------------------------- context menu
 
-function closeContextMenu(ref: ViewportRefs): void {
-  const closer = ref.contextMenuCloser;
-  ref.contextMenu = null;
-  ref.contextMenuCloser = null;
-  closer?.();
+function closeContextMenu(): void {
+  useArcStore.getState().closeContextMenu();
 }
 
 function openContextMenu(ref: ViewportRefs, hostX: number, hostY: number, items: MenuItem[]): void {
-  closeContextMenu(ref);
-  const menu = document.createElement("div");
-  menu.className =
-    "pointer-events-auto absolute z-50 w-48 rounded-md border border-base-300 bg-base-100 py-1 shadow-xl";
-  for (const item of items) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = item.label;
-    button.disabled = item.disabled === true;
-    button.className =
-      "block w-full px-3 py-1.5 text-left text-[12.5px] text-base-700 transition-colors hover:bg-base-200 hover:text-base-800 disabled:pointer-events-none disabled:opacity-40";
-    button.addEventListener("click", () => {
-      closeContextMenu(ref);
-      item.run();
-    });
-    menu.appendChild(button);
-  }
-  ref.host.appendChild(menu);
-  menu.style.left = `${Math.max(4, Math.min(hostX, ref.host.clientWidth - (menu.offsetWidth + 8)))}px`;
-  menu.style.top = `${Math.max(4, Math.min(hostY, ref.host.clientHeight - (menu.offsetHeight + 8)))}px`;
-  ref.contextMenu = menu;
-  // One-shot dismissal on the next pointer press outside the menu.
-  const dismiss = (e: PointerEvent) => {
-    if (!(e.target instanceof Node) || !menu.contains(e.target)) closeContextMenu(ref);
-  };
-  ref.contextMenuCloser = () => {
-    window.removeEventListener("pointerdown", dismiss, true);
-    if (menu.isConnected) menu.remove();
-  };
-  window.addEventListener("pointerdown", dismiss, true);
+  void ref;
+  useArcStore.getState().openContextMenu(
+    hostX,
+    hostY,
+    items.map((item) => ({ label: item.label, run: item.run, disabled: item.disabled })),
+  );
 }
+
 
 function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
   event.preventDefault();
@@ -725,7 +844,7 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
   const scene = useArcStore.getState().scene;
   const docId = activeDoc();
   if (!scene || !docId) {
-    closeContextMenu(ref);
+    closeContextMenu();
     return;
   }
   const hitId = pickEntityAt(ref, ndcPoint(event));
@@ -788,7 +907,79 @@ function pointOnHorizontalPlane(ray: THREE.Ray, height: number): THREE.Vector3 |
   return hit ? out : null;
 }
 
-function pickEntityAt(ref: ViewportRefs, point: { x: number; y: number }): string | null {
+function pickFaceAt(
+  ref: ViewportRefs,
+  point: { x: number; y: number },
+  scene: SceneData | null,
+): FaceHit | null {
+  if (!scene) return null;
+  ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
+  const hits = ref.raycaster.intersectObjects(
+    Array.from(ref.objects.values()).filter((o) => (o as THREE.Mesh).isMesh === true),
+    false,
+  );
+  for (const hit of hits) {
+    if (!hit.object.visible || !hit.face) continue;
+    const entity = scene.entities.find((e) => e.id === hit.object.userData.entityId);
+    if (!entity || entity.locked) continue;
+    const tags = entity.triFaceIds;
+    if (!tags || tags.length === 0) continue;
+    const tri = hit.faceIndex ?? -1;
+    if (tri < 0 || tri >= tags.length) continue;
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+    const worldN = hit.face.normal.clone().applyNormalMatrix(normalMatrix).normalize();
+    return {
+      entityId: entity.id,
+      faceIndex: tags[tri],
+      distance: hit.distance,
+      point: [hit.point.x, hit.point.y, hit.point.z],
+      normal: [worldN.x, worldN.y, worldN.z],
+    };
+  }
+  return null;
+}
+
+function pickEdgeAt(
+  ref: ViewportRefs,
+  point: { x: number; y: number },
+  scene: SceneData | null,
+  thresholdPx = 8,
+): EdgeHit | null {
+  if (!scene) return null;
+  // Edges live on the entity the cursor is over (or within reach of): look at
+  // the raycast entity first, fall back to a nearest-entity screen search.
+  const hostRect = ref.host.getBoundingClientRect();
+  const mousePx = {
+    x: (point.x * 0.5 + 0.5) * hostRect.width,
+    y: (-point.y * 0.5 + 0.5) * hostRect.height,
+  };
+  const entityId = pickEntityAt(ref, point);
+  const entity = entityFromId(scene, entityId);
+  if (!entity) return null;
+  const obj = ref.objects.get(entity.id);
+  if (!obj || !obj.visible) return null;
+  const seg = pickEdgeScreen(entity, obj, ref.camera, mousePx, hostRect, thresholdPx);
+  if (!seg) return null;
+  return {
+    entityId: entity.id,
+    segIndex: seg.segIndex,
+    key: `${entity.id}:${seg.segIndex}`,
+    distance: seg.distance,
+    point: [seg.point.x, seg.point.y, seg.point.z],
+  };
+}
+
+function entityFromId(
+  scene: SceneData,
+  id: string | null,
+): EntityData | null {
+  return id ? scene.entities.find((e) => e.id === id) ?? null : null;
+}
+
+function pickEntityAt(
+  ref: ViewportRefs,
+  point: { x: number; y: number },
+): string | null {
   ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
   const hits = ref.raycaster.intersectObjects(Array.from(ref.objects.values()), false);
   const hit = hits.find((candidate) => candidate.object.visible);
@@ -948,8 +1139,33 @@ function attachHandlers(ref: ViewportRefs): () => void {
     if (store.scene) {
       const handler = handlerFor(store.tool);
       if (handler && (store.tool === "select" || store.tool === "move")) {
-        const hovered = pickEntityAt(ref, ndcPoint(event));
-        if (hovered !== store.hoverEntity) store.setHoverEntity(hovered);
+        const point = ndcPoint(event);
+        const face = pickFaceAt(ref, point, store.scene);
+        if (face) {
+          store.setHoverObj({
+            entityId: face.entityId,
+            kind: "face",
+            face: face.faceIndex,
+            edge: null,
+            point: face.point,
+            normal: face.normal,
+          });
+        } else {
+          const edge = pickEdgeAt(ref, point, store.scene);
+          if (edge) {
+            store.setHoverObj({
+              entityId: edge.entityId,
+              kind: "edge",
+              face: null,
+              edge: edge.key,
+              point: edge.point,
+              normal: [0, 0, 0],
+            });
+          } else {
+            const id = pickEntityAt(ref, point);
+            if (id !== store.hoverEntity) store.setHoverEntity(id);
+          }
+        }
       }
       const now = performance.now();
       if (now - ref.lastCursorAt > 80) {
@@ -1111,6 +1327,15 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     },
     pickEntity(event) {
       return pickEntityAt(ref, ndcPoint(event));
+    },
+    pickFace(event) {
+      return pickFaceAt(ref, ndcPoint(event), useArcStore.getState().scene);
+    },
+    pickEdge(event, thresholdPx = 8) {
+      return pickEdgeAt(ref, ndcPoint(event), useArcStore.getState().scene, thresholdPx);
+    },
+    setSelectionRef(obj) {
+      useArcStore.getState().setSelectionRef(obj);
     },
     screenPoint(event) {
       const rect = ref.host.getBoundingClientRect();
@@ -1387,11 +1612,18 @@ function disposeViewport(ref: ViewportRefs): void {
   ref.tc.dispose();
   for (const [tag] of ref.previews) ref.ctx?.clearPreview(tag);
   ref.previews.clear();
+  const clearOne = (obj: THREE.Object3D | null) => {
+    if (obj) ref.entityRoot.remove(obj);
+  };
+  clearOne(ref.hoverOverlay);
+  clearOne(ref.selOverlay);
+  clearOne(ref.hoverEdgeOverlay);
+  clearOne(ref.selEdgeOverlay);
   ref.gizmo.dispose();
   for (const obj of ref.objects.values()) disposeObject(obj);
   ref.objects.clear();
   cancelMarquee(ref);
-  closeContextMenu(ref);
+  closeContextMenu();
   const groundMaterial = ref.groundNode.material as THREE.Material;
   ref.groundNode.geometry.dispose();
   groundMaterial.dispose();

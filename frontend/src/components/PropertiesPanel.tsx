@@ -75,10 +75,10 @@ export function PropertiesPanel() {
 
   if (!entity) {
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col bg-base-50/80 backdrop-blur-sm transition-all duration-300">
         <PanelHeader title="Properties" />
         <div className="flex flex-1 items-start px-3 pt-3">
-          <p className="text-[12px] leading-relaxed text-base-500">
+          <p className="text-[12px] leading-relaxed text-base-500/80 transition-all duration-300">
             Select an item to inspect it. Shift-click to build a multiple selection.
           </p>
         </div>
@@ -87,9 +87,9 @@ export function PropertiesPanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-base-200/60 bg-base-50/80 backdrop-blur-md shadow-lg transition-all duration-300 hover:shadow-xl">
       <PanelHeader title="Properties" hint={entity.kind} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 transition-all duration-300">
         <EntityForm docId={docId} entity={entity} scene={scene} />
       </div>
     </div>
@@ -98,10 +98,10 @@ export function PropertiesPanel() {
 
 function PanelHeader({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-50 px-3">
-      <span className="text-[12px] font-semibold text-base-800">{title}</span>
+    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200/60 bg-base-100/80 px-3 backdrop-blur-sm transition-all duration-300">
+      <span className="text-[12px] font-semibold text-base-800 transition-all duration-300">{title}</span>
       {hint && (
-        <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{hint}</span>
+        <span className="rounded bg-base-200/60 px-1.5 py-0.5 font-mono text-[10px] text-base-600 transition-all duration-300">{hint}</span>
       )}
     </div>
   );
@@ -212,15 +212,15 @@ function EntityForm({
 
       <Section
         title="Geometry"
-        className="mt-4 border-t border-base-200 pt-3"
+        className="mt-4 border-t border-base-200/60 pt-3"
       >
         <GeometryForm docId={docId} entity={entity} />
       </Section>
 
-      <div className="mt-5 border-t border-base-200 pt-3 pb-1">
+      <div className="mt-5 border-t border-base-200/60 pt-3 pb-1 transition-all duration-300">
         <button
           type="button"
-          className="flex h-7 w-full items-center justify-center gap-2 rounded-md border border-base-300 text-[12px] text-base-600 transition-colors hover:border-danger-500/50 hover:bg-danger-600/15 hover:text-danger-500"
+          className="flex h-7 w-full items-center justify-center gap-2 rounded-md border border-base-300/50 text-[12px] text-base-600 transition-all duration-300 hover:border-danger-500/50 hover:bg-danger-600/15 hover:text-danger-500 hover:shadow-sm"
           onClick={() =>
             void ipc.deleteEntities(docId, [entity.id]).then(() =>
               ipc.setSelection(docId, [], null),

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, EntityData, Geometry};
 use crate::core::history::{History, Snapshot};
-use crate::core::mesh::{ray_point_segment_distance, ray_triangle, MeshBuffer};
+use crate::core::mesh::{ray_point_segment_distance, MeshBuffer};
 use crate::core::RayHit;
 use crate::kernel::meshgen;
 use crate::core::units::Units;
@@ -135,6 +135,7 @@ impl Document {
             Geometry::NurbsLoft { .. } => "NURBS Loft",
             Geometry::NurbsSweep { .. } => "NURBS Sweep",
             Geometry::Csg { .. } => "CSG Solid",
+            Geometry::SolidFillet { .. } => "Fillet",
             Geometry::ImportedMesh { .. } => "Imported Mesh",
             Geometry::Extrude { .. } => "Extrude",
             Geometry::Revolve { .. } => "Revolve",
@@ -470,17 +471,20 @@ impl Document {
                 continue;
             }
             let (local_origin, local_dir) = entity.transform.ray_to_local(origin, dir);
-            let mut entity_hit: Option<(f64, [f64; 3], [f64; 3])> = None;
+            let mut entity_hit: Option<(f64, [f64; 3], [f64; 3], u32)> = None;
 
             if tri_ok {
                 if let Some(buffer) = self.mesh_cache.get(&entity.id) {
                     let positions = &buffer.positions;
+                    let mut tri_index = 0;
                     for tri in positions.chunks(9) {
                         let a = [tri[0] as f64, tri[1] as f64, tri[2] as f64];
                         let b = [tri[3] as f64, tri[4] as f64, tri[5] as f64];
                         let c = [tri[6] as f64, tri[7] as f64, tri[8] as f64];
-                        if let Some(dist) = ray_triangle(local_origin, local_dir, a, b, c)
-                            && entity_hit.map(|(d, _, _)| dist < d).unwrap_or(true)
+                        let face_id = buffer.tri_face_ids.get(tri_index).copied().unwrap_or(0);
+                        if let Some((dist, hit_face_id)) = crate::core::mesh::ray_triangle(
+                            local_origin, local_dir, a, b, c, face_id
+                        ) && entity_hit.map(|(d, _, _, _)| dist < d).unwrap_or(true)
                         {
                             let normal = crate::core::mesh::tri_normal(a, b, c);
                             // world normal via rotation+scale inverse transpose ≈ transform dir
@@ -490,8 +494,9 @@ impl Document {
                                 origin[1] + dir[1] * dist,
                                 origin[2] + dir[2] * dist,
                             ];
-                            entity_hit = Some((dist, point, world_normal));
+                            entity_hit = Some((dist, point, world_normal, hit_face_id));
                         }
+                        tri_index += 1;
                     }
                 }
             } else if line_ok {
@@ -524,11 +529,11 @@ impl Document {
                     }
                 }
                 if let Some((dist, point)) = best_line {
-                    entity_hit = Some((dist, point, [0.0, 1.0, 0.0]));
+                    entity_hit = Some((dist, point, [0.0, 1.0, 0.0], 0));
                 }
             }
 
-            if let Some((dist, point, normal)) = entity_hit {
+            if let Some((dist, point, normal, face_id)) = entity_hit {
                 let replace = best.as_ref().map(|b| dist_mut(b) > dist).unwrap_or(true);
                 if replace {
                     best = Some(RayHit {
@@ -536,6 +541,7 @@ impl Document {
                         point,
                         normal,
                         distance: dist,
+                        face: Some(face_id),
                     });
                 }
             }
@@ -641,6 +647,9 @@ pub struct SceneEntity {
     pub data: EntityData,
     pub tri_positions: Option<Vec<f32>>,
     pub tri_normals: Option<Vec<f32>>,
+    /// Per-triangle face group ids parallel to `tri_positions` (3 entries per
+    /// face). Sent only for triangulated kinds; used for face picking.
+    pub tri_face_ids: Option<Vec<u32>>,
     pub lines: Option<Vec<f32>>,
 }
 
@@ -677,10 +686,10 @@ pub struct SceneData {
 impl Document {
     /// Build a full snapshot for the frontend.
     pub fn scene_data(&self) -> SceneData {
-        let mut entities = Vec::with_capacity(self.entities.len());
+            let mut entities = Vec::with_capacity(self.entities.len());
         for entity in self.entities.values() {
             let buffer = self.mesh_cache.get(&entity.id);
-            let (tri_positions, tri_normals, lines) = match buffer {
+            let (tri_positions, tri_normals, tri_face_ids, lines) = match buffer {
                 Some(b) => (
                     if entity.kind.has_triangles() {
                         Some(b.positions.clone())
@@ -692,13 +701,18 @@ impl Document {
                     } else {
                         None
                     },
+                    if entity.kind.has_triangles() {
+                        Some(b.tri_face_ids.clone())
+                    } else {
+                        None
+                    },
                     if entity.kind.has_lines() {
                         Some(b.lines.clone())
                     } else {
                         None
                     },
                 ),
-                None => (None, None, None),
+                None => (None, None, None, None),
             };
             entities.push(SceneEntity {
                 data: EntityData {
@@ -716,6 +730,7 @@ impl Document {
                 },
                 tri_positions,
                 tri_normals,
+                tri_face_ids,
                 lines,
             });
         }

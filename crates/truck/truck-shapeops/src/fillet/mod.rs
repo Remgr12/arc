@@ -316,9 +316,16 @@ where
                     new_boundary[(edge_idx + 1) % len] = left_face_front_edge.inverse();
                     new_boundary.insert(edge_idx + 1, fillet_edge.inverse());
                 } else {
+                    // negatively oriented face: the oriented traversal is the
+                    // raw wire reversed, so the slot of the arc starting at
+                    // the corner is `len - edge_idx - 1` and the arc ending
+                    // at the corner is `(2*len - edge_idx - 2) % len`. The
+                    // fillet edge must be inserted *between* the two replaced
+                    // arcs (between left and right), i.e. before the
+                    // right slot, not after it.
                     new_boundary[len - edge_idx - 1] = right_face_back_edge.clone();
                     new_boundary[(2 * len - edge_idx - 2) % len] = left_face_front_edge.clone();
-                    new_boundary.insert(len - edge_idx, fillet_edge.clone());
+                    new_boundary.insert(len - edge_idx - 1, fillet_edge.clone());
                 }
             }
             new_boundary

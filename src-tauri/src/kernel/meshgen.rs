@@ -8,14 +8,12 @@
 use std::f64::consts::TAU;
 
 use truck_geometry::prelude::{BoundedCurve, BoundedSurface};
-use truck_meshalgo::tessellation::{MeshedShape, RobustMeshableShape};
-
 use truck_modeling::Solid;
 
 use crate::core::entity::{CsgOperation, Geometry};
 use crate::core::mesh::{earclip_xz, polygon_signed_area_xz, tri_normal, MeshBuilder, MeshBuffer};
 
-use super::convert::polygon_to_buffer;
+use super::convert::solid_to_buffer;
 use super::nurbs::{payload_curve, payload_surface};
 use super::shapes;
 
@@ -35,50 +33,55 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             } else {
                 shapes::rounded_box_solid(*width, *depth, *height, *corner_radius)?
             };
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Sphere { radius, .. } => {
             let solid = shapes::sphere_solid(*radius)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Cylinder { radius, height, .. } => {
             let solid = shapes::cylinder_solid(*radius, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Cone { radius, height, .. } => {
             let solid = shapes::cone_solid(*radius, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Torus { radius, tube, .. } => {
             let solid = shapes::torus_solid(*radius, *tube)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Extrude { polygon, height } => {
             let solid = shapes::extrude_solid(polygon, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Revolve { profile, steps, angle_deg } => {
             let solid = shapes::revolve_solid(profile, *steps, *angle_deg)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Column { radius, height, sides } => {
             let solid = shapes::column_solid(*radius, *height, *sides)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Beam { length, width, height } => {
             let solid = shapes::beam_solid(*length, *width, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Slab { polygon, height } => {
             // slab = extruded footprint 0..height (truck prism)
             let solid = shapes::slab_solid(polygon, *height)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
         Geometry::Csg { operation, first, second } => {
             let a = payload_to_solid(first)?;
             let b = payload_to_solid(second)?;
             let solid = csg_boolean(*operation, a, b)?;
-            mb.append_buffer(&polygon_to_buffer(&solid.robust_triangulation(TESS_TOL).to_polygon()));
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
+        }
+        Geometry::SolidFillet { source, edge, radius } => {
+            let source_solid = payload_to_solid(source)?;
+            let solid = super::fillet::solid_fillet(&source_solid, *edge, *radius)?;
+            mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
 
         // ---- mesh-level payloads (old generators)
@@ -176,6 +179,11 @@ pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
             let b = payload_to_solid(second)?;
             csg_boolean(*operation, a, b)
         }
+        Geometry::SolidFillet { source, edge, radius } => {
+            let source_solid = payload_to_solid(source)?;
+            let filleted = super::fillet::solid_fillet(&source_solid, *edge, *radius)?;
+            Ok(filleted)
+        }
         other => Err(format!(
             "boolean operations support only B-rep payloads; '{}' cannot be processed",
             other.type_name()
@@ -225,28 +233,37 @@ fn gen_imported_mesh(
             continue;
         };
         let n = tri_normal(*a, *b, *c);
-        mb.push_tri(*a, *b, *c, n);
+        mb.push_tri(*a, *b, *c, n, 0);
     }
     Ok(())
 }
 
-/// Emit a closed axis-aligned cuboid from corners min/max.
-fn emit_cuboid(mb: &mut MeshBuilder, min: [f64; 3], max: [f64; 3]) {
+/// Emit a closed axis-aligned cuboid from corners min/max; faces are tagged
+/// `[face_offset, face_offset+6)` and the next free id is returned.
+fn emit_cuboid(mb: &mut MeshBuilder, min: [f64; 3], max: [f64; 3], face_offset: u32) -> u32 {
     let (x0, x1) = (min[0], max[0]);
     let (y0, y1) = (min[1], max[1]);
     let (z0, z1) = (min[2], max[2]);
-    mb.push_quad([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [0.0, 0.0, -1.0]);
-    mb.push_quad([x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], [0.0, 0.0, 1.0]);
-    mb.push_quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1.0, 0.0, 0.0]);
-    mb.push_quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1.0, 0.0, 0.0]);
-    mb.push_quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0.0, 1.0, 0.0]);
-    mb.push_quad([x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [0.0, -1.0, 0.0]);
+    let mut face_id = face_offset;
+    mb.push_quad([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [0.0, 0.0, -1.0], face_id);
+    face_id += 1;
+    mb.push_quad([x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], [0.0, 0.0, 1.0], face_id);
+    face_id += 1;
+    mb.push_quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1.0, 0.0, 0.0], face_id);
+    face_id += 1;
+    mb.push_quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1.0, 0.0, 0.0], face_id);
+    face_id += 1;
+    mb.push_quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0.0, 1.0, 0.0], face_id);
+    face_id += 1;
+    mb.push_quad([x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [0.0, -1.0, 0.0], face_id);
+    face_id
 }
 
 /// Extrude a closed XZ profile (ensured CCW) between y0 and y1 with caps.
 #[allow(dead_code)]
 fn gen_prism_xz(mb: &mut MeshBuilder, profile: &mut [[f64; 2]], y0: f64, y1: f64) {
     ensure_ccw(profile);
+    let mut face_id = 0u32;
     let tris = earclip_xz(profile);
     for t in &tris {
         let a = profile[t[0]];
@@ -257,13 +274,17 @@ fn gen_prism_xz(mb: &mut MeshBuilder, profile: &mut [[f64; 2]], y0: f64, y1: f64
             [b[0], y1, b[1]],
             [c[0], y1, c[1]],
             [0.0, 1.0, 0.0],
+            face_id,
         );
+        face_id += 1;
         mb.push_tri(
             [a[0], y0, a[1]],
             [c[0], y0, c[1]],
             [b[0], y0, b[1]],
             [0.0, -1.0, 0.0],
+            face_id,
         );
+        face_id += 1;
     }
     let n = profile.len();
     for i in 0..n {
@@ -283,7 +304,9 @@ fn gen_prism_xz(mb: &mut MeshBuilder, profile: &mut [[f64; 2]], y0: f64, y1: f64
             [b[0], y1, b[1]],
             [a[0], y1, a[1]],
             outward,
+            face_id,
         );
+        face_id += 1;
     }
 }
 
@@ -320,12 +343,14 @@ fn norm3(a: [f64; 3]) -> [f64; 3] {
 
 fn gen_plane(mb: &mut MeshBuilder, width: f64, depth: f64) {
     let (w, d) = (width / 2.0, depth / 2.0);
+    let face_id = 0u32;
     mb.push_quad(
         [-w, 0.0, -d],
         [-w, 0.0, d],
         [w, 0.0, d],
         [w, 0.0, -d],
         [0.0, 1.0, 0.0],
+        face_id,
     );
 }
 
@@ -352,6 +377,7 @@ fn gen_wall(mb: &mut MeshBuilder, path: &[[f64; 2]], width: f64, height: f64) {
         return;
     }
     let half = width / 2.0;
+    let mut next_face = 0u32;
     for i in 0..path.len() - 1 {
         let (start, end) = (path[i], path[i + 1]);
         let dx = end[0] - start[0];
@@ -368,7 +394,7 @@ fn gen_wall(mb: &mut MeshBuilder, path: &[[f64; 2]], width: f64, height: f64) {
         let c1 = [a[0] - px, a[1] - pz];
         let c2 = [b[0] - px, b[1] - pz];
         let c3 = [b[0] + px, b[1] + pz];
-        emit_wall_slab(mb, c0, c1, c2, c3, 0.0, height);
+        next_face = emit_wall_slab(mb, c0, c1, c2, c3, 0.0, height, next_face);
     }
 }
 
@@ -380,25 +406,33 @@ fn emit_wall_slab(
     c3: [f64; 2],
     y0: f64,
     y1: f64,
-) {
+    offset: u32,
+) -> u32 {
+    let mut face_id = offset;
     let pts = [c0, c1, c2, c3];
-    mb.push_quad([c0[0], y1, c0[1]], [c1[0], y1, c1[1]], [c2[0], y1, c2[1]], [c3[0], y1, c3[1]], [0.0, 1.0, 0.0]);
-    mb.push_quad([c0[0], y0, c0[1]], [c3[0], y0, c3[1]], [c2[0], y0, c2[1]], [c1[0], y0, c1[1]], [0.0, -1.0, 0.0]);
+    mb.push_quad([c0[0], y1, c0[1]], [c1[0], y1, c1[1]], [c2[0], y1, c2[1]], [c3[0], y1, c3[1]], [0.0, 1.0, 0.0], face_id);
+    face_id += 1;
+    mb.push_quad([c0[0], y0, c0[1]], [c3[0], y0, c3[1]], [c2[0], y0, c2[1]], [c1[0], y0, c1[1]], [0.0, -1.0, 0.0], face_id);
+    face_id += 1;
     for i in 0..4 {
         let j = (i + 1) % 4;
         let a = pts[i];
         let b = pts[j];
         let ex = b[0] - a[0];
+
         let ez = b[1] - a[1];
         let l = (ex * ex + ez * ez).sqrt();
         let nrm = if l > 1e-9 { [ez / l, 0.0, -ex / l] } else { [0.0; 3] };
-        mb.push_quad([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], nrm);
+        mb.push_quad([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], nrm, face_id);
+        face_id += 1;
     }
+    face_id
 }
 
 fn gen_stair(mb: &mut MeshBuilder, width: f64, rise: f64, run: f64, count: u32) {
     let half_w = width / 2.0;
     let mut x = 0.0;
+    let mut face_id = 0u32;
     for step in 0..count {
         let top = rise * (step as f64 + 1.0);
         mb.push_quad(
@@ -407,28 +441,36 @@ fn gen_stair(mb: &mut MeshBuilder, width: f64, rise: f64, run: f64, count: u32) 
             [x + run, top, half_w],
             [x, top, half_w],
             [0.0, 1.0, 0.0],
+            face_id,
         );
+        face_id += 1;
         mb.push_quad(
             [x, top - rise, -half_w],
             [x, top, -half_w],
             [x, top, half_w],
             [x, top - rise, half_w],
             [-1.0, 0.0, 0.0],
+            face_id,
         );
+        face_id += 1;
         mb.push_quad(
             [x, 0.0, -half_w],
             [x, top, -half_w],
             [x + run, top, -half_w],
             [x + run, 0.0, -half_w],
             [0.0, 0.0, -1.0],
+            face_id,
         );
+        face_id += 1;
         mb.push_quad(
             [x + run, 0.0, half_w],
             [x + run, top, half_w],
             [x, top, half_w],
             [x, 0.0, half_w],
             [0.0, 0.0, 1.0],
+            face_id,
         );
+        face_id += 1;
         x += run;
     }
     let top_y = rise * count.max(1) as f64;
@@ -438,6 +480,7 @@ fn gen_stair(mb: &mut MeshBuilder, width: f64, rise: f64, run: f64, count: u32) 
         [x, top_y, half_w],
         [x, 0.0, half_w],
         [1.0, 0.0, 0.0],
+        face_id,
     );
 }
 
@@ -448,23 +491,24 @@ fn gen_roof(mb: &mut MeshBuilder, width: f64, depth: f64, pitch_deg: f64, overha
     let tri: [[f64; 2]; 3] = [[-half_d, 0.0], [half_d, 0.0], [0.0, ridge_h]];
     let (x0, x1) = (-half_w, half_w);
 
-    let mut gable = |x: f64, want_plus_x: bool| {
+    let mut gable = |x: f64, want_plus_x: bool, face_id: u32| {
         let pts: Vec<[f64; 3]> = tri.iter().map(|p| [x, p[1], p[0]]).collect();
         let mut n = tri_normal(pts[0], pts[1], pts[2]);
         if (n[0] > 0.0) != want_plus_x {
             n = [-n[0], -n[1], -n[2]];
-            mb.push_tri(pts[0], pts[2], pts[1], n);
+            mb.push_tri(pts[0], pts[2], pts[1], n, face_id);
         } else {
-            mb.push_tri(pts[0], pts[1], pts[2], n);
+            mb.push_tri(pts[0], pts[1], pts[2], n, face_id);
         }
     };
-    gable(x0, false);
-    gable(x1, true);
+    gable(x0, false, 0);
+    gable(x1, true, 1);
 
     let centroid = [
         (tri[0][0] + tri[1][0] + tri[2][0]) / 3.0,
         (tri[0][1] + tri[1][1] + tri[2][1]) / 3.0,
     ];
+    let mut face_id = 2u32;
     for i in 0..3 {
         let j = (i + 1) % 3;
         let a = tri[i];
@@ -486,7 +530,9 @@ fn gen_roof(mb: &mut MeshBuilder, width: f64, depth: f64, pitch_deg: f64, overha
             [x1, b[1], b[0]],
             [x0, b[1], b[0]],
             [0.0, n2[1], n2[0]],
+            face_id,
         );
+        face_id += 1;
     }
     mb.push_quad(
         [x0, 0.0, tri[0][0]],
@@ -494,6 +540,7 @@ fn gen_roof(mb: &mut MeshBuilder, width: f64, depth: f64, pitch_deg: f64, overha
         [x1, 0.0, tri[1][0]],
         [x1, 0.0, tri[0][0]],
         [0.0, -1.0, 0.0],
+        face_id,
     );
 }
 
@@ -501,11 +548,12 @@ fn gen_door(mb: &mut MeshBuilder, width: f64, height: f64, depth: f64, swing_deg
     let frame = 0.08_f64.max(depth.max(0.02) * 0.15);
     let panel_w = width - frame * 2.0;
     let half_d = depth / 2.0;
+    let mut next_face = 0u32;
 
-    emit_cuboid(mb, [0.0, 0.0, -half_d], [frame, height, half_d]);
-    emit_cuboid(mb, [width - frame, 0.0, -half_d], [width, height, half_d]);
-    emit_cuboid(mb, [0.0, height, -half_d], [width, height + frame, half_d]);
-    emit_cuboid(mb, [0.0, -0.02, -half_d], [width, 0.0, half_d]);
+    next_face = emit_cuboid(mb, [0.0, 0.0, -half_d], [frame, height, half_d], next_face);
+    next_face = emit_cuboid(mb, [width - frame, 0.0, -half_d], [width, height, half_d], next_face);
+    next_face = emit_cuboid(mb, [0.0, height, -half_d], [width, height + frame, half_d], next_face);
+    next_face = emit_cuboid(mb, [0.0, -0.02, -half_d], [width, 0.0, half_d], next_face);
 
     let hinge = [frame, 0.0, -half_d];
     let a = -swing_deg.to_radians();
@@ -528,14 +576,18 @@ fn gen_door(mb: &mut MeshBuilder, width: f64, height: f64, depth: f64, swing_deg
         .collect();
     let (c0, c1, c2, c3) = (pts[0], pts[1], pts[2], pts[3]);
     let (d0, d1, d2, d3) = (pts[4], pts[5], pts[6], pts[7]);
-    mb.push_quad(c0, c3, c2, c1, [0.0, -1.0, 0.0]);
-    mb.push_quad(d0, d1, d2, d3, [0.0, 1.0, 0.0]);
+    let mut face_id = next_face;
+    mb.push_quad(c0, c3, c2, c1, [0.0, -1.0, 0.0], face_id);
+    face_id += 1;
+    mb.push_quad(d0, d1, d2, d3, [0.0, 1.0, 0.0], face_id);
+    face_id += 1;
     for (aa, bb, cc, dd) in [(c0, c1, d1, d0), (c1, c2, d2, d1), (c2, c3, d3, d2), (c3, c0, d0, d3)] {
         let ex = bb[0] - aa[0];
         let ez = bb[2] - aa[2];
         let l = (ex * ex + ez * ez).sqrt();
         let n = if l > 1e-9 { [ez / l, 0.0, -ex / l] } else { [0.0; 3] };
-        mb.push_quad(aa, bb, cc, dd, n);
+        mb.push_quad(aa, bb, cc, dd, n, face_id);
+        face_id += 1;
     }
 }
 
@@ -549,13 +601,14 @@ fn gen_window(
 ) {
     let frame = (depth.max(0.02) * 0.12).clamp(0.02, width / 4.0);
     let half_d = depth / 2.0;
+    let mut next_face = 0u32;
     let mut bar = |x0: f64, y0: f64, x1: f64, y1: f64| {
         let (x0, x1) = (x0.min(x1), x0.max(x1));
         let (y0, y1) = (y0.min(y1), y0.max(y1));
         if (x1 - x0).abs() < 1e-9 && (y1 - y0).abs() < 1e-9 {
             return;
         }
-        emit_cuboid(mb, [x0, y0, -half_d], [x1, y1, half_d]);
+        next_face = emit_cuboid(mb, [x0, y0, -half_d], [x1, y1, half_d], next_face);
     };
     bar(-width / 2.0, -height / 2.0, width / 2.0, -height / 2.0 + frame);
     bar(-width / 2.0, height / 2.0 - frame, width / 2.0, height / 2.0);
@@ -579,6 +632,7 @@ fn gen_window(
         mb,
         [-width / 2.0 + frame, -height / 2.0 + frame, -glass_t],
         [width / 2.0 - frame, height / 2.0 - frame, glass_t],
+        next_face,
     );
 }
 
@@ -679,9 +733,9 @@ fn gen_sweep(mb: &mut MeshBuilder, path: &[[f64; 3]], radius: f64, sides: u32) -
             let c = rings[r + 1][j];
             let d = rings[r + 1][i];
             let n = tri_normal(a, c, b);
-            mb.push_tri(a, c, b, n);
+            mb.push_tri(a, c, b, n, 0);
             let n = tri_normal(a, b, d);
-            mb.push_tri(a, b, d, n);
+            mb.push_tri(a, b, d, n, 0);
         }
     }
     for ring in [&rings[0], rings.last().unwrap()] {
@@ -696,7 +750,7 @@ fn gen_sweep(mb: &mut MeshBuilder, path: &[[f64; 3]], radius: f64, sides: u32) -
         for i in 0..ring.len() {
             let j = (i + 1) % ring.len();
             let normal = tri_normal(center, ring[i], ring[j]);
-            mb.push_tri(center, ring[i], ring[j], normal);
+            mb.push_tri(center, ring[i], ring[j], normal, 0);
         }
     }
     Ok(())
@@ -720,9 +774,9 @@ fn stitch_sections(mb: &mut MeshBuilder, sections: &[Vec<[f64; 3]>]) -> Result<(
             let c = upper[j];
             let d = upper[i];
             let n = tri_normal(a, c, b);
-            mb.push_tri(a, c, b, n);
+            mb.push_tri(a, c, b, n, 0);
             let n = tri_normal(a, b, d);
-            mb.push_tri(a, b, d, n);
+            mb.push_tri(a, b, d, n, 0);
         }
     }
     Ok(())
@@ -739,7 +793,7 @@ fn gen_loft(mb: &mut MeshBuilder, sections: &[Vec<[f64; 3]>]) -> Result<(), Stri
             let b = cap[t[1]];
             let c = cap[t[2]];
             let n = tri_normal(a, b, c);
-            mb.push_tri(a, b, c, n);
+            mb.push_tri(a, b, c, n, 0);
         }
     }
     Ok(())
@@ -901,4 +955,151 @@ fn gen_nurbs_sweep(
         prev_normal = Some(normal);
     }
     gen_loft(mb, &sections)
+}
+
+// --------------------------------------------------------------------- tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Distinct face ids present in a buffer.
+    fn face_ids(buffer: &MeshBuffer) -> Vec<u32> {
+        let mut ids = buffer.tri_face_ids.clone();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    #[test]
+    fn box_has_six_face_tags() {
+        let buffer = generate(&Geometry::Box {
+            width: 60.0,
+            depth: 40.0,
+            height: 20.0,
+            corner_radius: 0.0,
+        })
+        .expect("box mesh");
+        assert!(!buffer.tri_face_ids.is_empty());
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+        let ids = face_ids(&buffer);
+        assert_eq!(ids.len(), 6, "box should expose exactly 6 faces: {ids:?}");
+    }
+
+    #[test]
+    fn cylinder_has_side_and_cap_tags() {
+        let buffer = generate(&Geometry::Cylinder {
+            radius: 20.0,
+            height: 40.0,
+            segments: 24,
+        })
+        .expect("cylinder mesh");
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+        // truck's rsweep cylinder: revoluted side + 2 semicircular caps = 4 B-rep faces
+        assert_eq!(face_ids(&buffer).len(), 4);
+    }
+
+    #[test]
+    fn extrude_has_cap_and_side_tags() {
+        let buffer = generate(&Geometry::Extrude {
+            polygon: vec![
+                [0.0, 0.0],
+                [40.0, 0.0],
+                [40.0, 30.0],
+                [0.0, 30.0],
+            ],
+            height: 20.0,
+        })
+        .expect("extrude mesh");
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+        // 2 caps + at least one side face per polygon edge
+        assert!(face_ids(&buffer).len() >= 6, "quad has 2 caps + 4 sides");
+    }
+
+    #[test]
+    fn generated_tags_are_stable_across_calls() {
+        let kind = Geometry::Box {
+            width: 60.0,
+            depth: 40.0,
+            height: 20.0,
+            corner_radius: 0.0,
+        };
+        let a = generate(&kind).expect("mesh");
+        let b = generate(&kind).expect("mesh");
+        assert_eq!(a.tri_face_ids, b.tri_face_ids);
+        assert_eq!(a.positions, b.positions);
+    }
+
+    #[test]
+    fn sphere_face_picking_falls_back_to_single_tag() {
+        let buffer = generate(&Geometry::Sphere {
+            radius: 30.0,
+            segments: 16,
+        })
+        .expect("sphere mesh");
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+        assert!(!face_ids(&buffer).is_empty());
+    }
+
+    #[test]
+    fn solid_fillet_adds_fillet_face_tag() {
+        use crate::kernel::fillet::solid_fillet;
+        let solid = shapes::box_solid(60.0, 40.0, 20.0).expect("box solid");
+        // vertical edge on +X, +Z corner
+        let filleted = solid_fillet(&solid, [[30.0, 10.0, 20.0], [30.0, -10.0, 20.0]], 4.0)
+            .expect("box edge fillet");
+        let buffer = solid_to_buffer(&filleted, TESS_TOL);
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+        let ids = face_ids(&buffer);
+        // 6 faces minus the two cut faces stay, both cut faces remain and a
+        // fillet face joins: 6 + 1
+        assert_eq!(ids.len(), 7, "filleted box should have 7 faces: {ids:?}");
+    }
+
+    #[test]
+    fn solid_fillet_dispatch_generates_mesh() {
+        let buffer = generate(&Geometry::SolidFillet {
+            source: Box::new(Geometry::Box {
+                width: 60.0,
+                depth: 40.0,
+                height: 20.0,
+                corner_radius: 0.0,
+            }),
+            edge: [[30.0, 10.0, -20.0], [30.0, -10.0, -20.0]],
+            radius: 4.0,
+        })
+        .expect("fillet mesh");
+        assert!(buffer.positions.len() >= 3);
+        assert_eq!(buffer.positions.len() / 3, buffer.tri_face_ids.len());
+    }
+
+    #[test]
+    fn solid_fillet_zero_radius_is_noop() {
+        use crate::kernel::fillet::solid_fillet;
+        let solid = shapes::box_solid(60.0, 40.0, 20.0).expect("box solid");
+        let unchanged = solid_fillet(&solid, [[30.0, 10.0, 20.0], [30.0, -10.0, 20.0]], 0.0)
+            .expect("identity fillet");
+        let before = solid_to_buffer(&solid, TESS_TOL);
+        let after = solid_to_buffer(&unchanged, TESS_TOL);
+        assert_eq!(before.positions, after.positions);
+    }
+
+    #[test]
+    fn solid_fillet_rejects_unknown_edge() {
+        use crate::kernel::fillet::solid_fillet;
+        let solid = shapes::box_solid(60.0, 40.0, 20.0).expect("box solid");
+        // no B-rep edge has (35,10,20) as an endpoint
+        let result = solid_fillet(&solid, [[30.0, 10.0, 20.0], [35.0, 10.0, 20.0]], 4.0);
+        assert!(result.is_err(), "unknown edge pick must be rejected");
+    }
+
+    #[test]
+    fn solid_fillet_vertical_edge_also_fillets() {
+        use crate::kernel::fillet::solid_fillet;
+        let solid = shapes::box_solid(60.0, 40.0, 20.0).expect("box solid");
+        // (30,10,20)-(30,10,-20) is the unambiguous vertical edge on x=30,y=10
+        let result = solid_fillet(&solid, [[30.0, 10.0, 20.0], [30.0, 10.0, -20.0]], 4.0);
+        let filleted = result.expect("vertical edge fillet");
+        assert_eq!(filleted.boundaries()[0].len(), 7);
+    }
 }

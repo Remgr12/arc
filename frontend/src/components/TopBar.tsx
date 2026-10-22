@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Command, Redo2, Settings, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Command, Redo2, Settings, Undo2, ArrowLeft } from "lucide-react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { bindingHint } from "../lib/keybinds";
@@ -113,7 +113,6 @@ function Menu({
   );
 }
 
-/** Minimal top bar: logo mark, File/Edit/View menus, centered document name, undo/redo, palette, settings. */
 export function TopBar({ children }: { children?: ReactNode }) {
   const scene = useArcStore((s) => s.scene);
   const overview = useArcStore((s) => s.overview);
@@ -121,7 +120,6 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const keybindActiveId = useKeybindStore((s) => s.activeId);
   const keybindProfiles = useKeybindStore((s) => s.profiles);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
-  // Rebuild hint strings whenever the profile set or active profile changes.
   void keybindActiveId;
   void keybindProfiles;
 
@@ -247,20 +245,30 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <span className="text-[13px] font-semibold text-base-800">arc</span>
       </div>
 
-      <div className="ml-4 flex items-center gap-1">
+      <div className="ml-4 flex items-center gap-1.5">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
         <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
         <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
       </div>
 
-      <div
-        className="mx-auto hidden min-w-0 max-w-[300px] truncate text-[12px] font-medium text-base-600 sm:block"
-        title={scene?.path ?? undefined}
-      >
+      <div className="mx-auto hidden min-w-0 max-w-[300px] truncate text-[12px] font-medium text-base-600 sm:block">
         {docTitle}
       </div>
 
-      <div className="ml-auto flex items-center gap-1.5">{children}
+      <div className="ml-auto flex items-center gap-1.5">
+        <IconButton
+          icon={<ArrowLeft size={16} strokeWidth={1.75} />}
+          title="Back to dashboard"
+          onClick={() => {
+            useArcStore.getState().setDashboardTransition(true);
+            setTimeout(() => {
+              useArcStore.getState().setView("dashboard");
+            }, 300);
+          }}
+          className="text-base-600 hover:bg-base-200"
+        />
+
+        {children}
         <IconButton
           icon={<Undo2 size={16} strokeWidth={1.75} />}
           title={`Undo${bindingHint("edit:undo") ? ` (${bindingHint("edit:undo")})` : ""}`}

@@ -211,6 +211,34 @@ export const actions = {
     await ipc.setSelection(id, [], null);
   }),
 
+  /** Toggle isolation: hide everything not selected; off shows everything. */
+  isolateSelection: guard(async () => {
+    const id = requireDoc();
+    const store = useArcStore.getState();
+    const scene = store.scene;
+    if (!scene) return;
+    if (store.isolated) {
+      for (const entity of scene.entities) {
+        if (!entity.visible) {
+          await ipc.setEntityProps(id, entity.id, { visible: true });
+        }
+      }
+      store.setIsolated(false);
+      return;
+    }
+    if (scene.selection.length === 0) {
+      store.setStatusMessage("Select something to isolate");
+      return;
+    }
+    for (const entity of scene.entities) {
+      const hidden = !scene.selection.includes(entity.id);
+      if (entity.visible === !hidden) continue;
+      await ipc.setEntityProps(id, entity.id, { visible: entity.visible && false });
+    }
+    store.setIsolated(true);
+    store.setStatusMessage(`Isolated ${scene.selection.length} entities`);
+  }),
+
   setTool: (tool: ToolId) => {
     useArcStore.getState().setTool(tool);
   },

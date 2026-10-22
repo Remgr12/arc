@@ -3,6 +3,8 @@
 export type ToolId =
   | "select"
   | "move"
+  | "rotate"
+  | "scale"
   | "box"
   | "sphere"
   | "cylinder"
@@ -23,6 +25,9 @@ export type ToolId =
   | "fillet"
   | "mirror"
   | "extrude"
+  | "extrude-face"
+  | "offset-face"
+  | "fillet-edge"
   | "revolve"
   | "sweep"
   | "loft"
@@ -55,6 +60,8 @@ export interface EntityData {
   geometry: Geometry;
   triPositions?: number[] | null;
   triNormals?: number[] | null;
+  /** Per-triangle face group id (parallel to triPositions, 1 per triangle). */
+  triFaceIds?: number[] | null;
   lines?: number[] | null;
   material?: string | null;
 }
@@ -134,11 +141,23 @@ export interface AppOverview {
   updater?: UpdateNotice;
 }
 
+export type SelKind = "entity" | "face" | "edge";
+
+export interface RefObject {
+  entityId: string;
+  kind: SelKind;
+  face?: number | null;
+  edge?: string | null;
+  point: [number, number, number];
+  normal: [number, number, number];
+}
+
 export interface RayHit {
   entity_id: string;
   point: [number, number, number];
   normal: [number, number, number];
   distance: number;
+  face?: number | null;
 }
 
 export interface SceneEnvelope {
