@@ -2,7 +2,7 @@ import { Clock, Plus, Search, Upload } from "lucide-react";
 import { useArcStore } from "../lib/store";
 
 export function Dashboard() {
-  const overview = useArcStore((s) => s.overview);
+  const overview = useArcStore((s) => s.overview) as any;
   const documents = overview?.documents || [];
   const recentProjects = documents.slice(0, 5);
 
@@ -70,7 +70,7 @@ export function Dashboard() {
         <div>
           <h2 className="mb-4 text-lg font-semibold text-base-800">Recent Projects</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {recentProjects.map((doc) => (
+            {recentProjects.map((doc: { id: string; name: string; dirty: boolean; path: string | null; updated_at?: string | null }) => (
               <div
                 key={doc.id}
                 className="group cursor-pointer rounded-lg border border-base-200 bg-base-100 p-4 transition-all hover:border-base-300 hover:shadow-md"

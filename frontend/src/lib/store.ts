@@ -1,10 +1,11 @@
 import { create } from "zustand";
+import type { AppOverview, SceneData, ToolId } from "./types";
 
 interface ArcState {
-  overview: any;
-  scene: any;
+  overview: AppOverview | null;
+  scene: SceneData | null;
   sceneVersion: number;
-  tool: string;
+  tool: ToolId;
   drafting: boolean;
   settings: any;
   pluginsList: any[];
@@ -42,10 +43,10 @@ interface ArcState {
   selFace: { entityId: string; face: number } | null;
   selEdge: { entityId: string; key: string } | null;
 
-  setOverview: (o: any) => void;
-  setScene: (scene: any) => void;
+  setOverview: (o: AppOverview | null) => void;
+  setScene: (scene: SceneData | null) => void;
   setPlugins: (plugins: any[]) => void;
-  setTool: (tool: string) => void;
+  setTool: (tool: ToolId) => void;
   setDrafting: (drafting: boolean) => void;
   updateSettings: (settings: any) => void;
   setPaletteOpen: (open: boolean) => void;
@@ -108,13 +109,13 @@ export const useArcStore = create<ArcState>((set) => ({
   selFace: null,
   selEdge: null,
 
-  setOverview: (o) => set({ overview: o, settings: o.settings }),
-  setScene: (scene) => set({ scene, sceneVersion: scene.version }),
-  setPlugins: (pluginsList) => set({ pluginsList }),
-  setTool: (tool) => set({ tool }),
-  setDrafting: (drafting) => set({ drafting }),
-  updateSettings: (settings) => set((st) => ({ settings, overview: st.overview ? { ...st.overview, settings } : st.overview })),
-  setPaletteOpen: (open) => set({ paletteOpen: open }),
+  setOverview: (o: AppOverview | null) => set((_st) => ({ overview: o, settings: o?.settings })),
+  setScene: (scene: SceneData | null) => set(({ scene, sceneVersion: scene?.version ?? 0 })),
+  setPlugins: (pluginsList: any[]) => set({ pluginsList }),
+  setTool: (tool: ToolId) => set({ tool }),
+  setDrafting: (drafting: boolean) => set({ drafting }),
+  updateSettings: (settings: any) => set((_st) => ({ settings, overview: _st.overview ? { ..._st.overview, settings } : _st.overview })),
+  setPaletteOpen: (open: boolean) => set({ paletteOpen: open }),
   setCommandLineOpen: (open) => set({ commandLineOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   setPluginsOpen: (open) => set({ pluginsOpen: open }),

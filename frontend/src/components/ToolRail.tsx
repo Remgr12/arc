@@ -25,7 +25,7 @@ const RAIL_GROUPS: { title: string; tools: ToolId[] }[] = [
 ];
 
 export function ToolRail() {
-  const tool = useArcStore((s) => s.tool);
+  const tool = useArcStore((s) => s.tool) as ToolId;
   const setTool = useArcStore((s) => s.setTool);
   const scene = useArcStore((s) => s.scene);
   useKeybindStore((s) => s.profiles); // re-render when bindings change (tooltips show keys)

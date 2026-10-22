@@ -1,5 +1,6 @@
 import { ipc } from "./ipc";
 import { useArcStore } from "./store";
+import type { Settings } from "./types";
 
 const WORKSPACE_KEY = "arc.workspace.v1";
 
@@ -23,7 +24,7 @@ export async function commitWorkspaceFolder(folder: string): Promise<void> {
   try {
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ folder }));
   } catch {}
-  const settings = useArcStore.getState().settings;
+  const settings = useArcStore.getState().settings as Settings;
   if (settings) {
     const next = await ipc.setSettings({ ...settings, workspace_dir: folder });
     useArcStore.getState().updateSettings(next);
@@ -34,7 +35,8 @@ export async function commitWorkspaceFolder(folder: string): Promise<void> {
 export function decideStartupFlow(): void {
   const st = useArcStore.getState();
   const prefs = loadWorkspacePrefs();
-  const folder = prefs?.folder ?? st.settings?.workspace_dir ?? null;
+  const settings = st.settings as Settings;
+  const folder = prefs?.folder ?? settings?.workspace_dir ?? null;
   st.setWorkspaceFolder(folder);
   
   // Prevent UI flash: ensure smooth transition when restoring session

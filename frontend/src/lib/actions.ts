@@ -8,7 +8,7 @@ function guard<A extends unknown[]>(
   action: (...args: A) => Promise<unknown>,
 ): (...args: A) => void {
   return (...args: A) => {
-    void Promise.resolve(action(...args)).catch((e) => {
+    void Promise.resolve(action(...args)).catch((e: unknown) => {
       useArcStore.getState().setStatusMessage(`Error: ${String(e)}`);
     });
   };

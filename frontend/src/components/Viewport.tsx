@@ -432,7 +432,11 @@ function syncSceneToThree(ref: ViewportRefs): void {
     updateGizmoAttachment(ref);
   } else if (hoverChanged && scene) {
     // Targeted update: only re-present the entities whose hover changed.
-    const layers = new Map(scene.layers.map((l) => [l.id, l]));
+    const layers = new Map(
+      scene.layers.map(
+        (l: LayerData): [string, LayerData] => [l.id, l],
+      ),
+    );
     for (const id of [ref.lastHover, state.hoverEntity]) {
       if (!id) continue;
       const obj = ref.objects.get(id);

@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { TOOL_BY_ID } from "../data/tools";
 import { cn } from "./ui";
+import type { ToolId } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Top-center mode banner: shows the active tool while it is not Select (or
@@ -9,7 +10,7 @@ import { cn } from "./ui";
 // ---------------------------------------------------------------------------
 
 export function ModeBanner() {
-  const tool = useArcStore((s) => s.tool);
+  const tool = useArcStore((s) => s.tool) as ToolId;
   const drafting = useArcStore((s) => s.drafting);
   const visible = tool !== "select" || drafting;
   if (!visible) return null;

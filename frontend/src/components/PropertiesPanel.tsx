@@ -68,10 +68,10 @@ function AxisFields({
 
 /** Right panel: properties of the primary selected entity. */
 export function PropertiesPanel() {
-  const overview = useArcStore((s) => s.overview);
-  const scene = useArcStore((s) => s.scene);
+  const overview = useArcStore((s) => s.overview) as any;
+  const scene = useArcStore((s) => s.scene) as any;
   const docId = overview?.active ?? "";
-  const entity = scene?.entities.find((e) => e.id === scene.primary) ?? null;
+  const entity = scene?.entities.find((e: { id: string; primary?: string }) => e.id === scene.primary) ?? null;
 
   if (!entity) {
     return (

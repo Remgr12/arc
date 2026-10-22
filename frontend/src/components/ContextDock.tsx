@@ -198,8 +198,8 @@ function dockGroups(context: SelectionContext): DockGroup[] {
 }
 
 export function ContextDock() {
-  const scene = useArcStore((s) => s.scene);
-  const tool = useArcStore((s) => s.tool);
+  const scene = useArcStore((s) => s.scene) as any;
+  const tool = useArcStore((s) => s.tool) as ToolId;
   const selKind = useArcStore((s) => s.selKind);
   const selFace = useArcStore((s) => s.selFace);
   const selEdge = useArcStore((s) => s.selEdge);
@@ -208,7 +208,7 @@ export function ContextDock() {
   const selection = scene?.selection ?? [];
   const primaryId = selection[selection.length - 1] ?? null;
   const primaryKind = primaryId
-    ? scene?.entities.find((e) => e.id === primaryId)?.kind ?? null
+    ? scene?.entities.find((e: { id: string; kind?: string }) => e.id === primaryId)?.kind ?? null
     : null;
   const context = deriveSelectionContext(
     selKind,
