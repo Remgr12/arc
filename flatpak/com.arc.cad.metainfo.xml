@@ -30,7 +30,7 @@
     <binary>arc</binary>
   </provides>
   <releases>
-    <release version="0.10.3" date="2026-10-21">
+    <release version="0.12.1" date="2026-10-22">
       <description>
         <p>Truck kernel STEP import/export, bundling fixes, and zero-warning build.</p>
       </description>
