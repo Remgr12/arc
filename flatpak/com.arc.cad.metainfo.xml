@@ -30,27 +30,27 @@
     <binary>arc</binary>
   </provides>
   <releases>
-    <release version="0.10.3" date="2026-10-21">
+    <release version="0.10.7" date="2026-10-22">
       <description>
         <p>Truck kernel STEP import/export, bundling fixes, and zero-warning build.</p>
       </description>
     </release>
-    <release version="0.10.0" date="2026-10-20">
+    <release version="0.10.7" date="2026-10-22">
       <description>
         <p>Kernel migration to truck.</p>
       </description>
     </release>
-    <release version="0.9.0" date="2026-10-20">
+    <release version="0.10.7" date="2026-10-22">
       <description>
         <p>Bug fixes and kernel migration groundwork.</p>
       </description>
     </release>
-    <release version="0.2.0" date="2026-10-17">
+    <release version="0.10.7" date="2026-10-22">
       <description>
         <p>Primitives, sketch tools, solid generation, architecture tools, layers, plugins, and OBJ and STL export.</p>
       </description>
     </release>
-    <release version="0.1.0" date="2024-01-15">
+    <release version="0.10.7" date="2026-10-22">
       <description>Initial release</description>
     </release>
   </releases>
