@@ -39,15 +39,20 @@
 
   <div class="wrap layout">
     <aside class="toc">
-      <div class="label">Docs</div>
-      <a class="on" href="index.html">Overview</a>
-      <a href="getting-started.html">Getting Started</a>
-      <a href="modeling.html">Modeling</a>
-      <a href="navigation.html">Navigation</a>
-      <a href="keybinds.html">Keybinds</a>
-      <a href="plugins.html">Plugins</a>
-      <a href="themes.html">Themes</a>
-      <a href="automation.html">Automation</a>
+      <details class="toc-details" open>
+        <summary class="toc-summary">Navigation &amp; Topics</summary>
+        <div class="toc-content">
+          <div class="label">Docs</div>
+          <a class="on" href="index.html">Overview</a>
+          <a href="getting-started.html">Getting Started</a>
+          <a href="modeling.html">Modeling</a>
+          <a href="navigation.html">Navigation</a>
+          <a href="keybinds.html">Keybinds</a>
+          <a href="plugins.html">Plugins</a>
+          <a href="themes.html">Themes</a>
+          <a href="automation.html">Automation</a>
+        </div>
+      </details>
     </aside>
 
     <main class="page">
@@ -132,5 +137,11 @@
       </div>
     </div>
   </footer>
+  <script>
+    if (window.innerWidth <= 900) {
+      var d = document.querySelector('.toc-details');
+      if (d) d.removeAttribute('open');
+    }
+  </script>
 </body>
 </html>

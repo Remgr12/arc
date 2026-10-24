@@ -3,6 +3,7 @@
    Modern CAD design matching the arc application:
    Deep graphite backgrounds, vibrant cyan accents,
    sleek TOC navigation, dark code listings, and clean data tables.
+   Deeply optimized for mobile and touch devices.
    ========================================================= */
 
 :root {
@@ -50,7 +51,15 @@
   }
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
 
 html {
   scroll-behavior: smooth;
@@ -76,7 +85,7 @@ body {
 .wrap {
   max-width: 1160px;
   margin: 0 auto;
-  padding: 0 28px;
+  padding: 0 24px;
 }
 
 h1, h2, h3, h4 {
@@ -131,6 +140,7 @@ header.site .wrap {
   letter-spacing: -0.02em;
   color: var(--ink-bright);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .brand img {
@@ -157,7 +167,7 @@ header.site .wrap {
 nav.top {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -172,11 +182,13 @@ nav.top a {
   padding: 6px 10px;
   border-radius: 6px;
   transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 nav.top a:hover {
   color: var(--ink-bright);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 nav.top a[aria-current="page"] {
@@ -222,6 +234,16 @@ nav.top a.gh:hover {
   border-radius: 12px;
   padding: 16px 14px;
   box-shadow: var(--shadow-sm);
+}
+
+.toc-details {
+  background: transparent;
+  border: none;
+  width: 100%;
+}
+
+.toc-summary {
+  display: none;
 }
 
 .toc .label {
@@ -446,14 +468,16 @@ h3 {
 
 .tbl {
   width: 100%;
+  max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   margin: 22px 0;
   border: 1px solid var(--line);
   border-radius: 10px;
-  overflow: hidden;
   background: var(--bg-surface);
   font-size: 14.5px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tbl caption {
@@ -521,13 +545,14 @@ pre.code, figure.code {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg-surface);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 pre.code code {
   display: block;
   padding: 16px 20px;
-  overflow-x: auto;
   font-family: var(--mono);
   font-size: 13.5px;
   line-height: 1.68;
@@ -602,24 +627,148 @@ footer.site .legal a {
   color: var(--ink-soft);
 }
 
-/* ---------------- responsive ---------------- */
+/* ---------------- responsive optimization ---------------- */
 
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
-    gap: 32px;
+    gap: 24px;
+    padding-top: 24px;
+    padding-bottom: 48px;
   }
   .toc {
     position: static;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .toc-details {
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .toc-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-bright);
+    cursor: pointer;
+    background: var(--bg-surface-elevated);
+    list-style: none;
+    user-select: none;
+  }
+  .toc-summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc-summary::after {
+    content: "▾";
+    font-size: 12px;
+    color: var(--accent);
+    transition: transform 160ms ease;
+  }
+  .toc-details[open] .toc-summary::after {
+    transform: rotate(180deg);
+  }
+  .toc-content {
+    padding: 12px 14px;
   }
 }
 
-@media (max-width: 640px) {
-  .wrap { padding: 0 18px; }
-  header.site .wrap { min-height: 56px; gap: 12px; }
-  nav.top { margin-left: auto; justify-content: flex-end; gap: 4px 8px; }
-  nav.top a { font-size: 11px; padding: 6px 8px; }
-  .cards { grid-template-columns: 1fr; }
-  .tbl { font-size: 13.5px; }
-  .tbl th, .tbl td { padding: 9px 12px; }
+@media (min-width: 901px) {
+  .toc-summary {
+    display: none !important;
+  }
+  .toc-content {
+    display: block !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .wrap {
+    padding: 0 16px;
+  }
+  header.site .wrap {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    min-height: auto;
+  }
+  nav.top {
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    margin: 0 -4px;
+    padding: 2px 2px 4px;
+  }
+  nav.top::-webkit-scrollbar {
+    display: none;
+  }
+  nav.top a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 11.5px;
+    padding: 5px 9px;
+  }
+  .page h1 {
+    font-size: clamp(1.85rem, 6.5vw, 2.4rem);
+    line-height: 1.15;
+  }
+  .subline {
+    font-size: 15px;
+    margin: 12px 0 8px;
+  }
+  .doc {
+    margin-top: 36px;
+    padding-top: 20px;
+  }
+  .doc h2 {
+    font-size: 1.35rem;
+  }
+  .cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card {
+    padding: 16px 18px;
+  }
+  .tbl {
+    display: block;
+    width: 100%;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+  .tbl th, .tbl td {
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+  .tbl td:last-child {
+    white-space: normal;
+    min-width: 160px;
+  }
+  pre.code code {
+    font-size: 12px;
+    padding: 12px 14px;
+  }
+  .note {
+    padding: 12px 14px;
+    font-size: 13.5px;
+    margin: 16px 0;
+  }
+  footer.site {
+    padding: 28px 0;
+    margin-top: 40px;
+  }
 }
