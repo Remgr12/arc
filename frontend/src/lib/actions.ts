@@ -58,6 +58,7 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     if (overview.active) {
       useArcStore.getState().setScene(await ipc.getScene(overview.active));
     }
+    useArcStore.getState().setView("editor");
   }),
 
   openDocument: guard(async () => {
@@ -125,10 +126,19 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({
       title: "Import geometry",
-      filters: [{ name: "Geometry (STL / OBJ / DXF)", extensions: ["stl", "obj", "dxf"] }],
+      filters: [
+        {
+          name: "Geometry (STEP / STL / OBJ / DXF)",
+          extensions: ["step", "stp", "stl", "obj", "dxf"],
+        },
+      ],
     });
     if (!path) return;
-    const docId = requireDoc();
+    let docId = useArcStore.getState().overview?.active ?? null;
+    if (!docId) {
+      const created = await ipc.newDocument();
+      docId = created.id;
+    }
     const result = await ipc.importFile(docId, path as string);
     const overview = await ipc.getState();
     useArcStore.getState().setOverview(overview);
@@ -252,30 +262,40 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     await ipc.setSelection(id, [], null);
   }),
 
-  /** Toggle isolation: hide everything not selected; off shows everything. */
+  /** Toggle isolation: hide everything not selected; off restores previously visible items. */
   isolateSelection: guard(async () => {
     const id = requireDoc();
     const store = useArcStore.getState();
     const scene = store.scene;
     if (!scene) return;
     if (store.isolated) {
+      const toRestore =
+        store.isolatedHiddenIds.length > 0
+          ? new Set(store.isolatedHiddenIds)
+          : new Set(scene.entities.map((e) => e.id));
       for (const entity of scene.entities) {
-        if (!entity.visible) {
+        if (!entity.visible && toRestore.has(entity.id)) {
           await ipc.setEntityProps(id, entity.id, { visible: true });
         }
       }
+      store.setIsolatedHiddenIds([]);
       store.setIsolated(false);
+      store.setStatusMessage("Exited isolate mode");
       return;
     }
     if (scene.selection.length === 0) {
       store.setStatusMessage("Select something to isolate");
       return;
     }
+    const hiddenIds: string[] = [];
     for (const entity of scene.entities) {
-      const hidden = !scene.selection.includes(entity.id);
-      if (entity.visible === !hidden) continue;
-      await ipc.setEntityProps(id, entity.id, { visible: entity.visible && false });
+      const shouldHide = !scene.selection.includes(entity.id);
+      if (shouldHide && entity.visible) {
+        hiddenIds.push(entity.id);
+        await ipc.setEntityProps(id, entity.id, { visible: false });
+      }
     }
+    store.setIsolatedHiddenIds(hiddenIds);
     store.setIsolated(true);
     store.setStatusMessage(`Isolated ${scene.selection.length} entities`);
   }),
@@ -299,7 +319,14 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     const fmt = (format ?? "obj") as string;
     const id = requireDoc();
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const ext = fmt === "gltf" ? "gltf" : fmt === "obj" ? "obj" : "stl";
+    const ext =
+      fmt === "step"
+        ? "step"
+        : fmt === "gltf"
+          ? "gltf"
+          : fmt === "obj"
+            ? "obj"
+            : "stl";
     const path = await save({
       title: `Export ${fmt === "stl_ascii" ? "STL ASCII" : fmt.toUpperCase()}`,
       filters: [{ name: fmt === "stl_ascii" ? "STL ASCII" : fmt.toUpperCase(), extensions: [ext] }],

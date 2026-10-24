@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Lock, LockOpen, Plus, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, FileText, Layers, Lock, LockOpen, Plus, Shapes, Trash2, X } from "lucide-react";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
@@ -34,12 +34,13 @@ function DocumentRow({
   return (
     <div
       className={cn(
-        "group flex h-6 items-center gap-1.5 rounded px-1.5",
-        active ? "bg-base-200" : "hover:bg-base-200",
+        "group flex h-7 items-center gap-1.5 rounded-md px-2 transition-colors",
+        active ? "bg-accent-500/15 text-base-800" : "text-base-600 hover:bg-base-200 hover:text-base-800",
       )}
     >
       <button
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
         onClick={() => actions.switchDocument(doc.id)}
       >
         <span
@@ -48,7 +49,7 @@ function DocumentRow({
             active ? "bg-accent-500" : "bg-base-400",
           )}
         />
-        <span className={cn("truncate text-[12px]", active ? "text-base-800" : "text-base-600")}>
+        <span className={cn("truncate text-[12px]", active ? "font-medium text-base-800" : "text-base-600")}>
           {doc.name}
         </span>
         {doc.dirty && <span className="shrink-0 text-[10px] text-accent-500">•</span>}
@@ -57,7 +58,7 @@ function DocumentRow({
         icon={<X size={11} strokeWidth={1.75} />}
         title="Close document"
         size="sm"
-        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        className="h-5 w-5 opacity-0 group-hover:opacity-100"
         onClick={() => void ipc.closeDocument(doc.id).catch(() => undefined)}
       />
     </div>
@@ -78,39 +79,68 @@ function EntityRow({
   const layer = scene.layers.find((l) => l.id === entity.layer);
   const hidden = !entity.visible || (layer ? !layer.visible : false);
 
+  const handleSelect = (e: React.MouseEvent) => {
+    useArcStore.getState().setSelectionRef(null);
+    let next: string[];
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      next = selected
+        ? scene.selection.filter((id) => id !== entity.id)
+        : [...scene.selection, entity.id];
+    } else {
+      next = [entity.id];
+    }
+    const nextPrimary = next[next.length - 1] ?? null;
+    void ipc.setSelection(docId, next, nextPrimary).catch(() => undefined);
+  };
+
+  const handleDelete = () => {
+    const nextSel = scene.selection.filter((id) => id !== entity.id);
+    const nextPrimary = nextSel[nextSel.length - 1] ?? null;
+    void ipc
+      .deleteEntities(docId, [entity.id])
+      .then(() => {
+        if (selected) {
+          useArcStore.getState().setSelectionRef(null);
+          return ipc.setSelection(docId, nextSel, nextPrimary);
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
+  };
+
   return (
     <div
       className={cn(
-        "group flex h-6 items-center gap-1.5 rounded px-1.5",
+        "group flex h-7 items-center gap-1.5 rounded-md px-2 transition-colors",
         primary
-          ? "bg-accent-700/30 text-base-800"
+          ? "bg-accent-500/20 text-base-800"
           : selected
             ? "bg-base-200 text-base-800"
-            : "text-base-600 hover:bg-base-200",
+            : "text-base-600 hover:bg-base-200/70 hover:text-base-800",
       )}
     >
       <button
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-        onClick={() =>
-          void ipc
-            .setSelection(docId, selected ? scene.selection : [entity.id], entity.id)
-            .catch(() => undefined)
-        }
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        onClick={handleSelect}
         onDoubleClick={() => actions.focusEntity(entity.id)}
       >
         <span
-          className="h-2 w-2 shrink-0 rounded-sm"
+          className="h-2.5 w-2.5 shrink-0 rounded-sm border border-black/20"
           style={{ backgroundColor: toCss(entity.color ?? layer?.color ?? [0.62, 0.62, 0.65, 1]) }}
         />
-        <span className="truncate text-[12px]">{entity.name}</span>
-        {entity.locked && <Lock size={9} strokeWidth={1.75} className="shrink-0 text-base-500" />}
+        <span className={cn("truncate text-[12px]", selected && "font-medium")}>{entity.name}</span>
+        <span className="ml-auto shrink-0 font-mono text-[10px] text-base-500 opacity-0 group-hover:opacity-100">
+          {entity.kind}
+        </span>
+        {entity.locked && <Lock size={10} strokeWidth={1.75} className="shrink-0 text-base-500" />}
         {hidden && <EyeOff size={10} strokeWidth={1.75} className="shrink-0 text-base-500" />}
       </button>
       <IconButton
         icon={entity.visible ? <Eye size={11} strokeWidth={1.75} /> : <EyeOff size={11} strokeWidth={1.75} />}
         title={entity.visible ? "Hide" : "Show"}
         size="sm"
-        className={cn("h-4.5 w-4.5", entity.visible ? "opacity-0 group-hover:opacity-100" : "opacity-70")}
+        className={cn("h-5 w-5", entity.visible ? "opacity-0 group-hover:opacity-100" : "opacity-80")}
         onClick={() =>
           void ipc
             .setEntityProps(docId, entity.id, { visible: !entity.visible })
@@ -121,7 +151,7 @@ function EntityRow({
         icon={entity.locked ? <Lock size={11} strokeWidth={1.75} /> : <LockOpen size={11} strokeWidth={1.75} />}
         title={entity.locked ? "Unlock" : "Lock"}
         size="sm"
-        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        className={cn("h-5 w-5", entity.locked ? "opacity-80" : "opacity-0 group-hover:opacity-100")}
         onClick={() =>
           void ipc
             .setEntityProps(docId, entity.id, { locked: !entity.locked })
@@ -132,8 +162,8 @@ function EntityRow({
         icon={<Trash2 size={11} strokeWidth={1.75} />}
         title="Delete"
         size="sm"
-        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
-        onClick={() => void ipc.deleteEntities(docId, [entity.id]).catch(() => undefined)}
+        className="h-5 w-5 opacity-0 hover:text-danger-500 group-hover:opacity-100"
+        onClick={handleDelete}
       />
     </div>
   );
@@ -159,8 +189,8 @@ function LayerRow({
   return (
     <div
       className={cn(
-        "group flex h-6 items-center gap-1.5 rounded px-1.5",
-        active ? "bg-base-200" : "hover:bg-base-200",
+        "group flex h-7 items-center gap-1.5 rounded-md px-2 transition-colors",
+        active ? "bg-accent-500/15 text-base-800" : "hover:bg-base-200/70",
       )}
     >
       <input
@@ -203,29 +233,32 @@ function LayerRow({
         />
       ) : (
         <button
+          type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           title="Set active layer (double-click to rename)"
           onClick={() => void ipc.setActiveLayer(docId, layer.id).catch(() => undefined)}
           onDoubleClick={() => setEditing(true)}
         >
-          <span className={cn("truncate text-[12px]", active ? "text-base-800" : "text-base-600")}>
+          <span className={cn("truncate text-[12px]", active ? "font-medium text-base-800" : "text-base-600")}>
             {layer.name}
           </span>
-          <span className="shrink-0 text-[10px] tabular-nums text-base-500">{count}</span>
+          <span className="ml-auto shrink-0 rounded bg-base-200 px-1.5 py-0.5 text-[10px] tabular-nums text-base-500">
+            {count}
+          </span>
         </button>
       )}
       <IconButton
         icon={layer.visible ? <Eye size={11} strokeWidth={1.75} /> : <EyeOff size={11} strokeWidth={1.75} />}
         title={layer.visible ? "Hide layer" : "Show layer"}
         size="sm"
-        className={cn("h-4.5 w-4.5", layer.visible ? "opacity-0 group-hover:opacity-100" : "opacity-70")}
+        className={cn("h-5 w-5", layer.visible ? "opacity-0 group-hover:opacity-100" : "opacity-80")}
         onClick={() => void ipc.setLayerVisible(docId, layer.id, !layer.visible).catch(() => undefined)}
       />
       <IconButton
         icon={layer.locked ? <Lock size={11} strokeWidth={1.75} /> : <LockOpen size={11} strokeWidth={1.75} />}
         title={layer.locked ? "Unlock layer" : "Lock layer"}
         size="sm"
-        className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+        className={cn("h-5 w-5", layer.locked ? "opacity-80" : "opacity-0 group-hover:opacity-100")}
         onClick={() => void ipc.setLayerLocked(docId, layer.id, !layer.locked).catch(() => undefined)}
       />
       {canDelete && (
@@ -233,7 +266,7 @@ function LayerRow({
           icon={<Trash2 size={11} strokeWidth={1.75} />}
           title="Delete layer"
           size="sm"
-          className="h-4.5 w-4.5 opacity-0 group-hover:opacity-100"
+          className="h-5 w-5 opacity-0 hover:text-danger-500 group-hover:opacity-100"
           onClick={() => void ipc.deleteLayer(docId, layer.id).catch(() => undefined)}
         />
       )}
@@ -241,17 +274,11 @@ function LayerRow({
   );
 }
 
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <div className="px-1.5 pb-0.5 pt-2 text-[10.5px] font-medium text-base-500 first:pt-0">{children}</div>
-  );
-}
-
-/** Right panel: open documents plus an item outline (or layer list) with visibility toggles. */
+/** Right panel: tabbed browser for scene Items, Layers, and Open Documents. */
 export function ProjectPanel() {
   const overview = useArcStore((s) => s.overview);
   const scene = useArcStore((s) => s.scene);
-  const [mode, setMode] = useState<"items" | "layers">("items");
+  const [mode, setMode] = useState<"items" | "layers" | "docs">("items");
   const docId = overview?.active ?? "";
   const documents = overview?.documents ?? [];
 
@@ -260,103 +287,127 @@ export function ProjectPanel() {
     entities: (scene?.entities ?? []).filter((e) => e.category === category),
   })).filter((g) => g.entities.length > 0);
 
-  const addLayerOrDoc = () => (mode === "layers" ? void actions.addLayer() : void actions.newDocument());
+  const itemCount = scene?.entities.length ?? 0;
+  const layerCount = scene?.layers.length ?? 0;
+  const docCount = documents.length;
+
+  const handlePlus = () => {
+    if (mode === "layers") {
+      void actions.addLayer();
+    } else if (mode === "docs") {
+      void actions.newDocument();
+    } else {
+      useArcStore.getState().enterSketchMode({ tool: "line" });
+    }
+  };
+
+  const plusTitle =
+    mode === "layers" ? "Add layer" : mode === "docs" ? "New document" : "Start new sketch";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-50 px-3">
-        <div className="flex items-center gap-2">
-          {(["items", "layers"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={cn(
-                "-mb-px border-b-2 border-transparent px-2 py-0.5 text-[12px] font-medium transition-colors",
-                mode === m ? "border-accent-500 text-base-800" : "text-base-600 hover:text-base-700",
-              )}
-            >
-              {m === "items" ? "Items" : "Layers"}
-            </button>
-          ))}
+    <div className="flex h-full min-h-0 flex-col bg-base-50">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-2">
+        <div className="flex items-center gap-0.5">
+          {(
+            [
+              { id: "items", label: "Items", count: itemCount, icon: Shapes },
+              { id: "layers", label: "Layers", count: layerCount, icon: Layers },
+              { id: "docs", label: "Docs", count: docCount, icon: FileText },
+            ] as const
+          ).map((tab) => {
+            const Icon = tab.icon;
+            const active = mode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setMode(tab.id)}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors",
+                  active
+                    ? "bg-base-200 text-base-800 shadow-xs"
+                    : "text-base-600 hover:bg-base-200/50 hover:text-base-800",
+                )}
+              >
+                <Icon size={12} strokeWidth={1.75} className={active ? "text-accent-500" : "text-base-500"} />
+                <span>{tab.label}</span>
+                <span className="rounded bg-base-300/60 px-1 text-[10px] tabular-nums text-base-600">
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <IconButton
           icon={<Plus size={14} strokeWidth={1.75} />}
-          title={mode === "layers" ? "Add layer" : "New document"}
+          title={plusTitle}
           disabled={mode === "layers" && docId === ""}
           size="sm"
-          onClick={addLayerOrDoc}
+          onClick={handlePlus}
           className="hover:bg-base-200"
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-base-200 bg-base-50 shadow-lg transition-all duration-300 hover:shadow-xl">
-        <div className="flex min-h-0 w-[240px] shrink-0 flex-col border-r border-base-200 bg-base-50 transition-all duration-300 hover:bg-base-100">
-          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-base-200 bg-base-100 px-3 transition-all duration-300">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" />
-            <span className="text-[11.5px] font-medium text-base-700">Documents</span>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto transition-all duration-300">
-            <div className="w-full space-y-0.5 py-1 transition-all duration-300">
-              {documents.map((d) => (
-                <DocumentRow key={d.id} doc={d} active={overview?.active === d.id} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden transition-all duration-300">
-          {mode === "items" ? (
-            <div className="mt-3 flex min-h-0 flex-col transition-all duration-300">
-              <SectionLabel>Items</SectionLabel>
-              {!scene || scene.entities.length === 0 ? (
-                <div className="px-2 text-[12px] text-base-500">
-                  Nothing here yet. Pick a tool and click in the viewport.
-                </div>
-              ) : (
-                grouped.map((group) => (
-                  <div key={group.category} className="transition-all duration-300">
-                    <div className="mt-2.5 flex items-baseline justify-between px-2 pb-0.5 first:mt-0 transition-all duration-300">
-                      <span className="text-[11px] font-medium text-base-500 transition-all duration-300">
-                        {CATEGORY_LABELS[group.category]}
-                      </span>
-                      <span className="text-[10px] tabular-nums text-base-500/70 transition-all duration-300">
-                        {group.entities.length}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1 transition-all duration-300">
-                      {group.entities.map((entity) => (
-                        <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
-                      ))}
-                    </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {mode === "items" && (
+          <div className="flex flex-col gap-2">
+            {!scene || scene.entities.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-base-300 px-3 py-6 text-center text-[12px] text-base-500">
+                No items in scene yet. Select a sketch or primitive tool on the left rail and click in the viewport.
+              </div>
+            ) : (
+              grouped.map((group) => (
+                <div key={group.category} className="flex flex-col gap-0.5">
+                  <div className="flex items-baseline justify-between px-2 py-0.5">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
+                      {CATEGORY_LABELS[group.category]}
+                    </span>
+                    <span className="text-[10px] tabular-nums text-base-500">
+                      {group.entities.length}
+                    </span>
                   </div>
-                ))
-              )}
-            </div>
-          ) : (
-            <div className="mt-3 flex min-h-0 flex-col transition-all duration-300">
-              <SectionLabel>Layers</SectionLabel>
-              {!scene || scene.layers.length === 0 ? (
-                <div className="px-2 text-[12px] text-base-500">No layers.</div>
-              ) : (
-                <div className="flex flex-col gap-1 transition-all duration-300">
-                  {scene.layers.map((layer) => (
-                    <LayerRow
-                      key={layer.id}
-                      layer={layer}
-                      docId={docId}
-                      active={scene.activeLayer === layer.id}
-                      count={scene.entities.filter((e) => e.layer === layer.id).length}
-                      canDelete={scene.layers.length > 1}
-                      onRename={(name) => void ipc.renameLayer(docId, layer.id, name).catch(() => undefined)}
-                    />
-                  ))}
+                  <div className="flex flex-col gap-0.5">
+                    {group.entities.map((entity) => (
+                      <EntityRow key={entity.id} entity={entity} docId={docId} scene={scene} />
+                    ))}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {mode === "layers" && (
+          <div className="flex flex-col gap-0.5">
+            {!scene || scene.layers.length === 0 ? (
+              <div className="px-2 py-4 text-center text-[12px] text-base-500">No layers.</div>
+            ) : (
+              scene.layers.map((layer) => (
+                <LayerRow
+                  key={layer.id}
+                  layer={layer}
+                  docId={docId}
+                  active={scene.activeLayer === layer.id}
+                  count={scene.entities.filter((e) => e.layer === layer.id).length}
+                  canDelete={scene.layers.length > 1}
+                  onRename={(name) => void ipc.renameLayer(docId, layer.id, name).catch(() => undefined)}
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {mode === "docs" && (
+          <div className="flex flex-col gap-0.5">
+            {documents.length === 0 ? (
+              <div className="px-2 py-4 text-center text-[12px] text-base-500">No open documents.</div>
+            ) : (
+              documents.map((d) => (
+                <DocumentRow key={d.id} doc={d} active={overview?.active === d.id} />
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

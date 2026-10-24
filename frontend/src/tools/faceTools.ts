@@ -24,8 +24,10 @@ interface Param {
   kind: ParamKey;
   /** Local axis pointing outward from the picked face. */
   axis: THREE.Vector3;
-  /** True for centered-local kinds (box, extrude): param change shifts origin. */
+  /** True for centered-local kinds (box, extrude) or base-shifted kinds: param change shifts origin. */
   recenters: boolean;
+  /** Fraction of delta to shift along `axis` when `recenters` is true (default 0.5). */
+  shiftFactor?: number;
   label: string;
 }
 
@@ -49,10 +51,19 @@ interface ToolState {
 
 const tool: ToolState = { gizmo: null, attached: null, drag: null, input: null };
 
-const BOX_KINDS = new Set(["box"]);
+const BOX_KINDS = new Set(["box", "beam", "slab"]);
 const EXTRUDE_KINDS = new Set(["extrude"]);
 const CYL_KINDS = new Set(["cylinder", "cone", "column"]);
-const FILLET_KINDS = new Set(["box"]);
+const FILLET_KINDS = new Set([
+  "box",
+  "extrude",
+  "cylinder",
+  "column",
+  "beam",
+  "slab",
+  "solid_fillet",
+  "csg",
+]);
 
 function faceEditable(kind: string): boolean {
   return BOX_KINDS.has(kind) || EXTRUDE_KINDS.has(kind) || CYL_KINDS.has(kind);
@@ -71,6 +82,7 @@ function faceParam(entity: EntityData, faceIndex: number): Param | null {
         kind: "height",
         axis: axisFor(0, Math.sign(ny) || 1, 0),
         recenters: true,
+        shiftFactor: 0.5,
         label: "Height",
       };
     }
@@ -78,8 +90,14 @@ function faceParam(entity: EntityData, faceIndex: number): Param | null {
       if (ny >= 0) {
         return { kind: "height", axis: axisFor(0, 1, 0), recenters: false, label: "Height" };
       }
-      // cylinder base cap: only a position move makes sense
-      return { kind: "none", axis: axisFor(0, -1, 0), recenters: false, label: "Height" };
+      // Cylinder/cone/column base cap at local y = 0: pulling along -Y increases height and shifts base by delta.
+      return {
+        kind: "height",
+        axis: axisFor(0, -1, 0),
+        recenters: true,
+        shiftFactor: 1.0,
+        label: "Height",
+      };
     }
   }
   if (BOX_KINDS.has(entity.kind)) {
@@ -263,9 +281,23 @@ function showNumberInput(
 // ------------------------------------------------------------ pick/arming
 
 /** Arm the face/edge ref from the pointer (returns true when armed). */
-function armFromPick(event: PointerEvent, ctx: ToolContext): boolean {
+function armFromPick(event: PointerEvent, ctx: ToolContext, preferEdge = false): boolean {
+  if (preferEdge) {
+    const edge = ctx.pickEdge(event, 10);
+    if (edge) {
+      ctx.setSelectionRef({
+        entityId: edge.entityId,
+        kind: "edge",
+        face: null,
+        edge: edge.key,
+        point: edge.point,
+        normal: [0, 0, 0],
+      });
+      return true;
+    }
+  }
   const face = ctx.pickFace(event);
-  if (face) {
+  if (face && !preferEdge) {
     ctx.setSelectionRef({
       entityId: face.entityId,
       kind: "face",
@@ -339,7 +371,8 @@ function commitValue(
     const obj = ctx.objectFor(entityId);
     if (obj) {
       const worldAxis = param.axis.clone().transformDirection(obj.matrixWorld);
-      const shift = worldAxis.multiplyScalar(delta / 2);
+      const factor = param.shiftFactor ?? 0.5;
+      const shift = worldAxis.multiplyScalar(delta * factor);
       const current = entity.transform.position;
       void ctx.setTransform(
         entityId,
@@ -369,9 +402,11 @@ function commitFillet(
   void world.updateMatrixWorld();
   // Backend expects the edge in source payload (local) coordinates.
   const payload: Geometry = {
+    type: "solid_fillet",
+    source: entity.geometry,
     edge: selEdgeKeyToPoints(entity, selEdge.key) ?? [[0, 0, 0], [0, 0, 0]],
     radius: Math.max(0.05, Math.round(radius * 100) / 100),
-  } as unknown as Geometry;
+  };
   if (!payload_edge_points(payload)) {
     store.setStatusMessage("Fillet Edge · edge endpoints unavailable");
     return;
@@ -592,16 +627,26 @@ export const filletEdgeTool: ToolHandler = {
   },
     onPointerDown(event, ctx) {
       if (event.button !== 0) return false;
-      const store = useArcStore.getState();
-      if (!store.selEdge) {
-        if (!armFromPick(event, ctx)) return false;
+      // Always allow picking an edge directly (or re-picking another edge).
+      const pickedEdge = ctx.pickEdge(event, 10);
+      if (pickedEdge) {
+        ctx.setSelectionRef({
+          entityId: pickedEdge.entityId,
+          kind: "edge",
+          face: null,
+          edge: pickedEdge.key,
+          point: pickedEdge.point,
+          normal: [0, 0, 0],
+        });
+      } else if (!useArcStore.getState().selEdge) {
+        if (!armFromPick(event, ctx, true)) return false;
       }
       const fresh = useArcStore.getState();
       const selEdge = fresh.selEdge;
       const entity = selEdge ? ctx.entityById(selEdge.entityId) : null;
-      if (!entity) return true;
+      if (!entity || !selEdge) return true;
       if (!FILLET_KINDS.has(entity.kind)) {
-        ctx.setStatus(`Fillet Edge · "${entity.kind}" fillets land later (box first)`);
+        ctx.setStatus(`Fillet Edge · "${entity.kind}" cannot be filleted`);
         return true;
       }
       ensureEntitySelected(ctx, entity.id);
@@ -612,63 +657,68 @@ export const filletEdgeTool: ToolHandler = {
       const screenUnitVec = (() => {
         const obj = ctx.objectFor(entity.id);
         obj?.updateMatrixWorld();
-        if (!selEdge) return null;
         const parts = selEdge.key.split(":");
         const seg = Number(parts[parts.length - 1]);
         const geometry = edgeOverlayGeometry(entity, seg);
-        if (!obj) return null;
-        if (!geometry) return null;
+        if (!obj || !geometry) return null;
         const pos = geometry.getAttribute("position");
         const a = new THREE.Vector3().fromBufferAttribute(pos, 0).applyMatrix4(obj.matrixWorld);
         const b = new THREE.Vector3().fromBufferAttribute(pos, 1).applyMatrix4(obj.matrixWorld);
         geometry.dispose();
         return { a, b };
       })();
-      if (!screenUnitVec) return true;
-      const { screenAnchor, screenUnit, pxToWorld } =
-        screenAxisGeometry(
-          ctx,
-          gizmo.position.clone(),
-          screenUnitVec.b.clone().sub(screenUnitVec.a).normalize(),
-        ) ?? {
+      const { screenUnit, pxToWorld } =
+        (screenUnitVec
+          ? screenAxisGeometry(
+              ctx,
+              gizmo.position.clone(),
+              screenUnitVec.b.clone().sub(screenUnitVec.a).normalize(),
+            )
+          : null) ?? {
           screenAnchor: mouseScreen,
           screenUnit: { x: 1, y: 0 },
           pxToWorld: 0.1,
         };
-      const axisDistancePx = Math.hypot(
-        (mouseScreen.x - screenAnchor.x) * screenUnit.y -
-          (mouseScreen.y - screenAnchor.y) * screenUnit.x,
-      );
-      if (axisDistancePx > 14) {
-        // Clicked elsewhere on the edge: re-arm instead of dragging.
-        return true;
-      }
       ctx.capturePointer(event);
       tool.drag = {
         param: { kind: "radius", axis: new THREE.Vector3(), recenters: false, label: "Radius" },
         entityId: entity.id,
         startValue: 0,
         delta: 0,
-        screenAnchor,
+        screenAnchor: mouseScreen,
         screenUnit,
         pxToWorld,
       };
-      ctx.setStatus("Fillet Edge · drag outward for radius, release to commit");
+      ctx.setStatus("Fillet Edge · drag outward for radius, release to commit (or double-click to type)");
       return true;
     },
   onPointerMove(event, ctx) {
     const store = useArcStore.getState();
     if (store.selEdge) updateGizmo(ctx, store.selEdge.entityId);
-    void event;
+    const drag = tool.drag;
+    if (!drag) return;
+    const mouseScreen = ctx.screenPoint(event);
+    const distPx = Math.hypot(
+      mouseScreen.x - drag.screenAnchor.x,
+      mouseScreen.y - drag.screenAnchor.y,
+    );
+    drag.delta = distPx * drag.pxToWorld;
+    if (distPx > 3) {
+      ctx.showMeasure(
+        `R ${fmt(Math.max(0.05, drag.delta))}`,
+        { x: mouseScreen.x, y: mouseScreen.y - 24 },
+      );
+    }
   },
   onPointerUp(event, ctx) {
     const drag = tool.drag;
     if (!drag) return;
-    const radius = Math.max(0.05, drag.delta);
     ctx.releasePointer(event);
     ctx.showMeasure(null);
-    commitFillet(ctx, drag.entityId, radius);
     tool.drag = null;
+    if (drag.delta >= 0.05) {
+      commitFillet(ctx, drag.entityId, drag.delta);
+    }
   },
   onDoubleClick(event, ctx) {
     const store = useArcStore.getState();

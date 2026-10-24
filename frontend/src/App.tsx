@@ -21,7 +21,6 @@ import { CommandLine } from "./components/CommandLine";
 
 import { ContextDock } from "./components/ContextDock";
 import { ModeBanner } from "./components/ModeBanner";
-import { StatusPill } from "./components/StatusPill";
 import { UtilityRail } from "./components/UtilityRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { Dashboard } from "./components/Dashboard";
@@ -65,10 +64,9 @@ export default function App() {
 
   return (
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
-      <TopBar />
+      {view === "editor" && <TopBar />}
       <div className="relative flex min-h-0 flex-1">
-        {/* The editor stays mounted at all times — re-mounting the WebGL
-            viewport is expensive, so the dashboard simply covers it. */}
+        {/* Keep the WebGL viewport mounted at all times; cover with dashboard when in home view. */}
         <div
           className={
             "flex min-h-0 min-w-0 flex-1 " +
@@ -80,30 +78,30 @@ export default function App() {
             <Viewport />
             <ContextDock />
             <ModeBanner />
-            <StatusPill />
-            <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
-              <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 px-1.5 py-1.5 shadow-lg shadow-black/10 backdrop-blur-md">
+            {/* Positioned below the top-right 3D ViewCube (112px + 14px margin) */}
+            <div className="pointer-events-none absolute right-3 top-[140px] z-30">
+              <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md">
                 <UtilityRail />
               </div>
             </div>
             <ContextMenu />
           </div>
-          <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-200 bg-base-100">
+          <aside className="flex w-[280px] shrink-0 flex-col border-l border-base-200 bg-base-50">
             <div className="min-h-0 flex-1">
               <ProjectPanel />
             </div>
-            <div className="h-[300px] shrink-0 border-t border-base-200">
+            <div className="h-[320px] shrink-0 border-t border-base-200">
               <PropertiesPanel />
             </div>
           </aside>
         </div>
         {view === "dashboard" && (
-          <div className="view-fade-in absolute inset-0 z-10 overflow-hidden bg-base-50">
+          <div className="view-fade-in absolute inset-0 z-20 overflow-hidden bg-base-50">
             <Dashboard />
           </div>
         )}
       </div>
-      <StatusBar />
+      {view === "editor" && <StatusBar />}
       <CommandLine />
       <CommandPalette />
       <SettingsDialog />

@@ -90,7 +90,7 @@ function Menu({
                 className={cn(
                   "flex w-full items-center justify-between gap-6 rounded px-2 py-1 text-left text-[12px] transition-colors",
                   "disabled:pointer-events-none disabled:opacity-35",
-                  "text-base-600 hover:bg-base-300 hover:text-base-200",
+                  "text-base-700 hover:bg-base-200 hover:text-base-900",
                 )}
               >
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -153,8 +153,8 @@ export function TopBar({ children }: { children?: ReactNode }) {
       : []),
     "-",
     ...EXPORT_FORMATS.map<MenuEntry>((f) => ({
-      label: f.label.replace("Export ", "Export "),
-      keys: bindingHint("doc:export"),
+      label: f.label,
+      keys: f.id === "obj" ? bindingHint("doc:export") : undefined,
       disabled: !hasDoc,
       onSelect: () => void actions.exportActive(f.id),
     })),

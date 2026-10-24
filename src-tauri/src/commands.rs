@@ -1508,13 +1508,13 @@ pub fn csg_apply(
         })?;
     let first = parse_one(&first_id)?;
     let second = parse_one(&second_id)?;
-    let (first_kind, second_kind) = doc_ref(&state, &document_id, |d| {
-        let a = d.get(&first).map(|e| e.kind.clone());
-        let b = d.get(&second).map(|e| e.kind.clone());
+    let (first_pair, second_pair) = doc_ref(&state, &document_id, |d| {
+        let a = d.get(&first).map(|e| (e.kind.clone(), e.transform));
+        let b = d.get(&second).map(|e| (e.kind.clone(), e.transform));
         (a, b)
     })?;
-    let first_kind = first_kind.ok_or("first entity not found")?;
-    let second_kind = second_kind.ok_or("second entity not found")?;
+    let (first_kind, first_t) = first_pair.ok_or("first entity not found")?;
+    let (second_kind, second_t) = second_pair.ok_or("second entity not found")?;
     for (label, kind) in [("first", &first_kind), ("second", &second_kind)] {
         if !kind.has_triangles() {
             return Err(format!("{label} entity has no solid geometry to boolean"));
@@ -1524,18 +1524,33 @@ pub fn csg_apply(
         operation: op,
         first: Box::new(first_kind),
         second: Box::new(second_kind),
+        first_transform: Some(first_t),
+        second_transform: Some(second_t),
     };
-    let json = serde_json::to_value(&geometry).map_err(|e| format!("serialize: {e}"))?;
+    crate::kernel::meshgen::generate(&geometry)?;
     let label = match op {
         CsgOperation::Union => "Union",
         CsgOperation::Difference => "Difference",
         CsgOperation::Intersection => "Intersection",
     };
-    let id = helpers_add_entity(&app, &state, &document_id, &json, Some(label))?;
-    let entity_id = parse_one(&id)?;
-    let name = doc_ref(&state, &document_id, |d| {
-        d.get(&entity_id).map(|e| e.name.clone())
-    })?
-    .unwrap_or_default();
+    let mut created: Option<(String, String)> = None;
+    doc_mut(&state, &document_id, label, |doc| {
+        let entity = Entity::new(
+            EntityId::new(),
+            label.to_string(),
+            doc.active_layer,
+            geometry.clone(),
+        );
+        let (id, res) = doc.add_entity(entity);
+        if res.is_ok() {
+            doc.remove_entity(&first);
+            doc.remove_entity(&second);
+            doc.select(vec![id], Some(id));
+            let name = doc.get(&id).map(|e| e.name.clone()).unwrap_or_default();
+            created = Some((id.as_string(), name));
+        }
+    })?;
+    let (id, name) = created.ok_or("geometry rejected by kernel")?;
+    emit_scene(&app, &state, &document_id);
     Ok(CreateEntityOut { id, name })
 }

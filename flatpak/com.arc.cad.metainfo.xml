@@ -30,6 +30,11 @@
     <binary>arc</binary>
   </provides>
   <releases>
+    <release version="0.14.0" date="2026-10-24">
+      <description>
+        <p>CAD UI and tool overhaul: 3D ViewCube with face/edge/corner hit zones, dedicated Sketch Mode, tool preview parity with B-rep solids, transform-aware CSG, and unified layout.</p>
+      </description>
+    </release>
     <release version="0.12.1" date="2026-10-22">
       <description>
         <p>Truck kernel STEP import/export, bundling fixes, and zero-warning build.</p>

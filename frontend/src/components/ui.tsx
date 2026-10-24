@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import {
   useEffect,
   useRef,
+  useState,
   type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -147,17 +148,41 @@ export function TextField({
   className?: string;
   mono?: boolean;
 }) {
+  const [draft, setDraft] = useState(value);
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(value);
+  }, [value]);
+
   return (
     <input
       type="text"
-      value={value}
+      value={draft}
       spellCheck={false}
       placeholder={placeholder}
-      onChange={(e: ChangeEvent<HTMLInputElement>) => onChange?.(e.target.value)}
-      onBlur={(e) => onCommit?.(e.target.value)}
+      onFocus={() => {
+        focusedRef.current = true;
+        uiCapture.active = true;
+      }}
+      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+        setDraft(e.target.value);
+        onChange?.(e.target.value);
+      }}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        uiCapture.active = false;
+        onCommit?.(e.target.value);
+      }}
       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") onCommit?.(e.currentTarget.value);
-        if (e.key === "Escape") e.currentTarget.blur();
+        if (e.key === "Enter") {
+          onCommit?.(e.currentTarget.value);
+          e.currentTarget.blur();
+        }
+        if (e.key === "Escape") {
+          setDraft(value);
+          e.currentTarget.blur();
+        }
         e.stopPropagation();
       }}
       onPointerDown={(e) => e.stopPropagation()}
@@ -189,64 +214,79 @@ export function NumField({
   max?: number;
   suffix?: string;
 }) {
-  const dragRef = useRef<{ y: number; v: number } | null>(null);
   const clamp = (n: number) => {
     if (min !== undefined) n = Math.max(min, n);
     if (max !== undefined) n = Math.min(max, n);
     return n;
   };
-  const num = Number.isFinite(value) ? formatNum(value) : "";
+  const formatted = Number.isFinite(value) ? formatNum(value) : "";
+  const [draft, setDraft] = useState(formatted);
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setDraft(Number.isFinite(value) ? formatNum(value) : "");
+    }
+  }, [value]);
+
+  const commitDraft = (raw: string) => {
+    const parsed = parseFloat(raw);
+    if (Number.isFinite(parsed)) {
+      const next = clamp(parsed);
+      setDraft(formatNum(next));
+      onCommit?.(next);
+    } else {
+      setDraft(Number.isFinite(value) ? formatNum(value) : "");
+    }
+  };
+
   return (
     <div className="relative min-w-0">
       <input
         type="text"
-        value={num}
+        value={draft}
         spellCheck={false}
+        onFocus={(e) => {
+          focusedRef.current = true;
+          uiCapture.active = true;
+          e.currentTarget.select();
+        }}
         onChange={(e: ChangeEvent<HTMLInputElement>) => {
-          const parsed = parseFloat(e.target.value);
-          if (e.target.value === "") return;
-          if (Number.isFinite(parsed)) onChange?.(parsed);
+          const raw = e.target.value;
+          setDraft(raw);
+          const parsed = parseFloat(raw);
+          if (raw !== "" && Number.isFinite(parsed)) {
+            onChange?.(clamp(parsed));
+          }
         }}
         onBlur={(e) => {
-          const parsed = parseFloat(e.target.value);
-          if (Number.isFinite(parsed)) onCommit?.(clamp(parsed));
-          else e.target.value = formatNum(value);
+          focusedRef.current = false;
+          uiCapture.active = false;
+          commitDraft(e.target.value);
         }}
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === "Enter") {
-            const parsed = parseFloat(e.currentTarget.value);
-            if (Number.isFinite(parsed)) onCommit?.(clamp(parsed));
-          }
-          if (e.key === "Escape") e.currentTarget.blur();
-          e.stopPropagation();
-        }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          if (e.button !== 0) return;
-          dragRef.current = { y: e.clientY, v: value };
-          const move = (ev: PointerEvent) => {
-            const drag = dragRef.current;
-            if (!drag) return;
-            const fine = ev.shiftKey ? 0.2 : 1;
-            const delta = (drag.y - ev.clientY) * step * fine * 0.25;
-            const next = clamp(drag.v + delta);
-            dragRef.current = { y: ev.clientY, v: next };
+            commitDraft(e.currentTarget.value);
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            setDraft(Number.isFinite(value) ? formatNum(value) : "");
+            e.currentTarget.blur();
+          } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const delta = (e.key === "ArrowUp" ? 1 : -1) * step * (e.shiftKey ? 0.1 : 1);
+            const current = parseFloat(draft);
+            const base = Number.isFinite(current) ? current : value;
+            const next = clamp(Math.round((base + delta) * 1000) / 1000);
+            setDraft(formatNum(next));
             onChange?.(next);
-          };
-          const up = () => {
-            const drag = dragRef.current;
-            dragRef.current = null;
-            window.removeEventListener("pointermove", move);
-            window.removeEventListener("pointerup", up);
-            if (drag && drag.v !== value) onCommit?.(drag.v);
-          };
-          window.addEventListener("pointermove", move);
-          window.addEventListener("pointerup", up);
+            onCommit?.(next);
+          }
+          e.stopPropagation();
         }}
-        onFocus={(e) => e.currentTarget.select()}
+        onPointerDown={(e) => e.stopPropagation()}
         data-step={step}
         className={cn(
-          "h-8 w-full min-w-0 cursor-ew-resize rounded-lg border border-base-300 bg-base-100 px-3 text-right font-mono text-[12px] text-base-800 outline-none transition-all focus:cursor-text focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20",
+          "h-8 w-full min-w-0 rounded-lg border border-base-300 bg-base-100 px-3 text-right font-mono text-[12px] text-base-800 outline-none transition-all focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20",
           className,
         )}
       />

@@ -195,19 +195,22 @@ pub fn cone_solid(radius: f64, height: f64) -> Result<Solid, String> {
 
 /// Torus lying in the XZ plane (major `radius`, tube `tube`).
 pub fn torus_solid(radius: f64, tube: f64) -> Result<Solid, String> {
-    if radius <= 0.0 || tube <= 0.0 || tube >= radius {
-        return Err("torus requires 0 < tube < radius".into());
+    if radius <= 0.0 || tube <= 0.0 {
+        return Err("torus requires radius > 0 and tube > 0".into());
     }
-    // upstream torus recipe: tube circle swept into a ring
-    let v = at(radius, 0.0, tube);
+    let tube = tube.min(radius * 0.95);
+    // Tube cross-section circle in the XY plane centered at (radius, 0, 0),
+    // then swept around the Y axis so the major ring lies in the XZ plane
+    // with outward-facing normals.
+    let v = at(radius + tube, 0.0, 0.0);
     let w: Wire = builder::rsweep(
         &v,
         cgmath::Point3::new(radius, 0.0, 0.0),
-        unit_y(),
+        -unit_z(),
         WHOLE,
         2,
     );
-    let shell = builder::rsweep(&w, cgmath_zero_pt(), unit_z(), WHOLE, 2);
+    let shell = builder::rsweep(&w, cgmath_zero_pt(), unit_y(), WHOLE, 2);
     Ok(Solid::new(vec![shell]))
 }
 
@@ -221,7 +224,7 @@ pub fn extrude_solid(polygon: &[[f64; 2]], height: f64) -> Result<Solid, String>
     if height <= 0.0 {
         return Err("extrude height must be positive".into());
     }
-    let centered = recenter_polygon(polygon);
+    let centered = clean_and_orient_xz(polygon)?;
     let pts3: Vec<[f64; 3]> = centered.iter().map(|p| [p[0], 0.0, p[1]]).collect();
     let face = polygon_face(&pts3, "extrude profile")?;
     let solid: Solid = builder::tsweep(&face, unit_y() * height);
@@ -238,7 +241,7 @@ pub fn slab_solid(polygon: &[[f64; 2]], height: f64) -> Result<Solid, String> {
     if height <= 0.0 {
         return Err("slab height must be positive".into());
     }
-    let centered = recenter_polygon(polygon);
+    let centered = clean_and_orient_xz(polygon)?;
     let pts3: Vec<[f64; 3]> = centered.iter().map(|p| [p[0], 0.0, p[1]]).collect();
     let face = polygon_face(&pts3, "slab profile")?;
     let solid: Solid = builder::tsweep(&face, unit_y() * height);
@@ -308,6 +311,45 @@ pub fn beam_solid(length: f64, width: f64, height: f64) -> Result<Solid, String>
     let f = builder::tsweep(&e, unit_y() * height);
     let solid: Solid = builder::tsweep(&f, unit_x() * length);
     Ok(solid)
+}
+
+fn clean_and_orient_xz(polygon: &[[f64; 2]]) -> Result<Vec<[f64; 2]>, String> {
+    let mut deduped: Vec<[f64; 2]> = Vec::with_capacity(polygon.len());
+    for &pt in polygon {
+        if let Some(&last) = deduped.last() {
+            if ((pt[0] - last[0]).powi(2) + (pt[1] - last[1]).powi(2)).sqrt() <= 1e-5 {
+                continue;
+            }
+        }
+        deduped.push(pt);
+    }
+    while deduped.len() >= 2 {
+        let first = deduped[0];
+        let last = deduped[deduped.len() - 1];
+        if ((first[0] - last[0]).powi(2) + (first[1] - last[1]).powi(2)).sqrt() <= 1e-5 {
+            deduped.pop();
+        } else {
+            break;
+        }
+    }
+    if deduped.len() < 3 {
+        return Err("polygon needs at least 3 distinct points".into());
+    }
+    let mut centered = recenter_polygon(&deduped);
+    let n = centered.len();
+    let signed_area2: f64 = (0..n)
+        .map(|i| {
+            let p0 = centered[i];
+            let p1 = centered[(i + 1) % n];
+            p0[0] * p1[1] - p1[0] * p0[1]
+        })
+        .sum();
+    // In 3D [x, 0, z], the Newell normal Y component is sum(z0*x1 - x0*z1) = -signed_area2.
+    // Reverse when signed_area2 > 0 so polygon_face has a +Y normal before tsweep along +Y.
+    if signed_area2 > 0.0 {
+        centered.reverse();
+    }
+    Ok(centered)
 }
 
 fn recenter_polygon(polygon: &[[f64; 2]]) -> Vec<[f64; 2]> {

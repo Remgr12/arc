@@ -23,7 +23,7 @@ function commitRefSelection(
     selection = selection.includes(entityId)
       ? selection.filter((id) => id !== entityId)
       : [...selection, entityId];
-  } else if (!selection.includes(entityId)) {
+  } else {
     selection = [entityId];
   }
   const primary = selection[selection.length - 1] ?? null;
@@ -38,8 +38,24 @@ function commitRefSelection(
 }
 
 export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
-  // Face pick first (tagged entities only), then nearby edges, then the
-  // whole entity. Failing all three falls back to the marquee.
+  // Check nearby edges first (since edges lie on face boundaries), then tagged
+  // faces, then whole entities. Failing all three falls back to the marquee.
+  const edge = ctx.pickEdge(event, 7);
+  if (edge) {
+    commitRefSelection(
+      {
+        entityId: edge.entityId,
+        kind: "edge",
+        face: null,
+        edge: edge.key,
+        point: edge.point,
+        normal: [0, 0, 0],
+      },
+      event,
+      ctx,
+    );
+    return;
+  }
   const face = ctx.pickFace(event);
   if (face) {
     commitRefSelection(
@@ -50,22 +66,6 @@ export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
         edge: null,
         point: face.point,
         normal: face.normal,
-      },
-      event,
-      ctx,
-    );
-    return;
-  }
-  const edge = ctx.pickEdge(event);
-  if (edge) {
-    commitRefSelection(
-      {
-        entityId: edge.entityId,
-        kind: "edge",
-        face: null,
-        edge: edge.key,
-        point: edge.point,
-        normal: [0, 0, 0],
       },
       event,
       ctx,

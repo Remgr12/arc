@@ -197,6 +197,10 @@ pub enum Geometry {
         operation: CsgOperation,
         first: Box<Geometry>,
         second: Box<Geometry>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first_transform: Option<crate::core::Transform>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        second_transform: Option<crate::core::Transform>,
     },
     /// Fillet applied to a picked edge of a source solid. The edge is stored
     /// as its two endpoints in source-local coordinates and matched
@@ -362,7 +366,9 @@ impl Geometry {
                 }
             }
             Geometry::Revolve { profile, steps, .. } => {
-                check_poly(profile, "revolve profile")?;
+                if profile.len() < 2 {
+                    return Err("revolve profile needs at least 2 points".into());
+                }
                 if *steps < 3 {
                     return Err("revolve steps must be >= 3".into());
                 }

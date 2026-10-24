@@ -1,6 +1,6 @@
 {
   "name": "arc-frontend",
-  "version": "0.10.6",
+  "version": "0.14.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

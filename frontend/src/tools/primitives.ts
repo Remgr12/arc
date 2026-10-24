@@ -9,12 +9,23 @@ import type { ToolContext, ToolHandler } from "./types";
 interface PrimState {
   anchor: THREE.Vector3 | null;
   second: THREE.Vector3 | null;
+  lastCursor: THREE.Vector3 | null;
+  lastScreen: { x: number; y: number } | undefined;
   press: { x: number; y: number } | null;
   dragged: boolean;
+  typed: string;
 }
 
 function fresh(): PrimState {
-  return { anchor: null, second: null, press: null, dragged: false };
+  return {
+    anchor: null,
+    second: null,
+    lastCursor: null,
+    lastScreen: undefined,
+    press: null,
+    dragged: false,
+    typed: "",
+  };
 }
 
 function reset(ctx: ToolContext): PrimState {
@@ -30,9 +41,25 @@ export function previewMaterial(ctx: ToolContext): THREE.MeshStandardMaterial {
     roughness: 0.55,
     metalness: 0.05,
     depthWrite: false,
+    side: THREE.DoubleSide,
   });
   mat.color.copy(ctx.palette.hover);
   return mat;
+}
+
+function decoratePreviewMesh(mesh: THREE.Mesh, ctx: ToolContext): THREE.Mesh {
+  const edges = new THREE.EdgesGeometry(mesh.geometry, 25);
+  const lineMat = new THREE.LineBasicMaterial({
+    color: ctx.palette.hover,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  });
+  const wire = new THREE.LineSegments(edges, lineMat);
+  wire.renderOrder = 998;
+  mesh.add(wire);
+  mesh.renderOrder = 997;
+  return mesh;
 }
 
 /** Cursor height above the base point using a camera-facing vertical plane. */
@@ -45,7 +72,7 @@ function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: 
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, base);
   const out = new THREE.Vector3();
   const hit = ctx.rayAt(event).intersectPlane(plane, out);
-  return hit ? Math.max(0.5, out.y) : 20;
+  return hit ? Math.max(0.5, out.y - base.y) : 20;
 }
 
 function isDrag(state: PrimState, event: PointerEvent): boolean {
@@ -53,7 +80,30 @@ function isDrag(state: PrimState, event: PointerEvent): boolean {
 }
 
 function footprintRadius(a: THREE.Vector3, b: THREE.Vector3): number {
-  return Math.max(2, Math.hypot(b.x - a.x, b.z - a.z));
+  return Math.max(0.5, Math.hypot(b.x - a.x, b.z - a.z));
+}
+
+function pointAtTypedSimple(
+  id: "sphere" | "torus" | "plane",
+  a: THREE.Vector3,
+  cursor: THREE.Vector3 | null,
+  typed: string,
+): THREE.Vector3 | null {
+  const parts = typed
+    .trim()
+    .split(/[\s,x×]+/i)
+    .map((s) => Number.parseFloat(s))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (parts.length === 0) return null;
+  if (id === "plane") {
+    const w = parts[0];
+    const d = parts[1] ?? parts[0];
+    const sx = cursor && cursor.x < a.x ? -1 : 1;
+    const sz = cursor && cursor.z < a.z ? -1 : 1;
+    return new THREE.Vector3(a.x + sx * w, a.y, a.z + sz * d);
+  }
+  const r = parts[0];
+  return new THREE.Vector3(a.x + r, a.y, a.z);
 }
 
 interface Built {
@@ -74,6 +124,19 @@ function makeSimpleTool(
     void ctx.createEntity(built.geometry as never, built.position);
     ctx.setStatus("Placed");
   };
+  const refreshTypedPreview = (ctx: ToolContext) => {
+    if (!state.anchor) return;
+    const target =
+      (state.typed ? pointAtTypedSimple(id, state.anchor, state.lastCursor, state.typed) : null) ??
+      state.lastCursor;
+    if (!target) return;
+    const built = build(state.anchor, target, ctx);
+    if (built) {
+      ctx.setPreview(built.preview, "draft");
+      const label = state.typed ? `${built.label} [${state.typed}|]` : built.label;
+      ctx.showMeasure(label, state.lastScreen);
+    }
+  };
   return {
     id,
     cursor: "crosshair",
@@ -86,92 +149,152 @@ function makeSimpleTool(
     },
     hasActivity: () => state.anchor !== null,
     onPointerDown(event, ctx) {
-      const raw = ctx.planePoint(event, 0);
+      const raw = state.anchor ? ctx.planePoint(event, state.anchor.y) : ctx.planePoint(event);
       if (!raw) return true;
       const p = ctx.snap(raw).point;
       if (!state.anchor) {
         state.anchor = p;
+        state.lastCursor = p.clone();
+        state.lastScreen = ctx.screenPoint(event);
         state.press = { x: event.clientX, y: event.clientY };
         ctx.capturePointer(event);
         return true;
       }
-      const built = build(state.anchor, p, ctx);
+      const target =
+        (state.typed ? pointAtTypedSimple(id, state.anchor, p, state.typed) : null) ?? p;
+      const built = build(state.anchor, target, ctx);
       if (built) place(built, ctx);
       state = reset(ctx);
       return true;
     },
     onPointerMove(event, ctx) {
-      const raw = ctx.planePoint(event, 0);
+      const raw = state.anchor ? ctx.planePoint(event, state.anchor.y) : ctx.planePoint(event);
       if (!raw) return;
       const cursor = ctx.snap(raw).point;
+      state.lastCursor = cursor;
+      state.lastScreen = ctx.screenPoint(event);
       if (isDrag(state, event)) state.dragged = true;
       if (!state.anchor) {
         ctx.showMeasure(null);
         return;
       }
-      const built = build(state.anchor, cursor, ctx);
+      const target =
+        (state.typed ? pointAtTypedSimple(id, state.anchor, cursor, state.typed) : null) ?? cursor;
+      const built = build(state.anchor, target, ctx);
       if (built) {
         ctx.setPreview(built.preview, "draft");
-        ctx.showMeasure(built.label, ctx.screenPoint(event));
+        const label = state.typed ? `${built.label} [${state.typed}|]` : built.label;
+        ctx.showMeasure(label, state.lastScreen);
       }
     },
     onPointerUp(event, ctx) {
-      if (!state.anchor || !state.dragged) return;
-      const raw = ctx.planePoint(event, 0);
+      if (!state.anchor) return;
+      if (!state.dragged) {
+        state.press = null;
+        ctx.releasePointer(event);
+        return;
+      }
+      const raw = ctx.planePoint(event, state.anchor.y);
       if (raw) {
-        const built = build(state.anchor, ctx.snap(raw).point, ctx);
+        const cursor = ctx.snap(raw).point;
+        const target =
+          (state.typed ? pointAtTypedSimple(id, state.anchor, cursor, state.typed) : null) ?? cursor;
+        const built = build(state.anchor, target, ctx);
         if (built) place(built, ctx);
       }
       state = reset(ctx);
       ctx.releasePointer(event);
     },
+    onKey(event, ctx) {
+      if (!state.anchor) return false;
+      if (/^[0-9.]$/.test(event.key)) {
+        state.typed += event.key;
+        refreshTypedPreview(ctx);
+        return true;
+      }
+      if ((event.key === "," || event.key === "Tab") && id === "plane") {
+        event.preventDefault();
+        if (!state.typed.includes(",")) state.typed += ",";
+        refreshTypedPreview(ctx);
+        return true;
+      }
+      return false;
+    },
+    onBackspace(ctx) {
+      if (state.anchor && state.typed.length > 0) {
+        state.typed = state.typed.slice(0, -1);
+        refreshTypedPreview(ctx);
+      }
+    },
+    onEnter(ctx) {
+      if (!state.anchor) return false;
+      const target =
+        (state.typed ? pointAtTypedSimple(id, state.anchor, state.lastCursor, state.typed) : null) ??
+        state.lastCursor;
+      if (!target) return false;
+      const built = build(state.anchor, target, ctx);
+      if (built) place(built, ctx);
+      state = reset(ctx);
+      return true;
+    },
     onCancel(ctx) {
       state = reset(ctx);
     },
     hint: () =>
-      id === "plane" ? "Plane · drag or click two corners" : "Drag or click center, then radius",
+      id === "plane"
+        ? "Plane · drag or click two corners (or type W,D + Enter)"
+        : "Drag or click center, then radius (or type R + Enter)",
   };
 }
 
 export const sphereTool = makeSimpleTool("sphere", (a, b, ctx) => {
   const r = footprintRadius(a, b);
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), previewMaterial(ctx));
-  mesh.position.set(a.x, r, a.z);
+  const mesh = decoratePreviewMesh(
+    new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), previewMaterial(ctx)),
+    ctx,
+  );
+  mesh.position.set(a.x, a.y + r, a.z);
   return {
     geometry: { type: "sphere", radius: r, segments: 32 },
-    position: [a.x, r, a.z],
+    position: [a.x, a.y + r, a.z],
     preview: mesh,
     label: `R ${Math.round(r * 100) / 100}`,
   };
 });
 
 export const torusTool = makeSimpleTool("torus", (a, b, ctx) => {
-  const r = Math.max(6, Math.hypot(b.x - a.x, b.z - a.z));
+  const r = Math.max(2, Math.hypot(b.x - a.x, b.z - a.z));
   const tube = Math.min(8, r / 3);
-  const mesh = new THREE.Mesh(
-    new THREE.TorusGeometry(r, tube, 14, 48).rotateX(Math.PI / 2),
-    previewMaterial(ctx),
+  const mesh = decoratePreviewMesh(
+    new THREE.Mesh(
+      new THREE.TorusGeometry(r, tube, 14, 48).rotateX(Math.PI / 2),
+      previewMaterial(ctx),
+    ),
+    ctx,
   );
-  mesh.position.set(a.x, tube, a.z);
+  mesh.position.set(a.x, a.y + tube, a.z);
   return {
     geometry: { type: "torus", radius: r, tube, segments: 32, tubular_segments: 16 },
-    position: [a.x, tube, a.z],
+    position: [a.x, a.y + tube, a.z],
     preview: mesh,
     label: `R ${Math.round(r * 100) / 100}`,
   };
 });
 
 export const planeTool = makeSimpleTool("plane", (a, b, ctx) => {
-  const w = Math.max(8, Math.abs(b.x - a.x));
-  const d = Math.max(8, Math.abs(b.z - a.z));
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
-    previewMaterial(ctx),
+  const w = Math.max(1, Math.abs(b.x - a.x));
+  const d = Math.max(1, Math.abs(b.z - a.z));
+  const mesh = decoratePreviewMesh(
+    new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
+      previewMaterial(ctx),
+    ),
+    ctx,
   );
-  mesh.position.set((a.x + b.x) / 2, 0.02, (a.z + b.z) / 2);
+  mesh.position.set((a.x + b.x) / 2, a.y + 0.02, (a.z + b.z) / 2);
   return {
     geometry: { type: "plane", width: w, depth: d },
-    position: [(a.x + b.x) / 2, 0, (a.z + b.z) / 2],
+    position: [(a.x + b.x) / 2, a.y + 0.02, (a.z + b.z) / 2],
     preview: mesh,
     label: `${Math.round(w * 100) / 100} × ${Math.round(d * 100) / 100}`,
   };
@@ -182,32 +305,106 @@ export const planeTool = makeSimpleTool("plane", (a, b, ctx) => {
 interface HeightTool {
   id: "box" | "cylinder" | "cone";
   footprint: (a: THREE.Vector3, b: THREE.Vector3) => { w: number; d: number; r: number };
-  mesh: (fp: { w: number; d: number; r: number }, h: number, ctx: ToolContext) => THREE.Mesh;
+  mesh: (
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    fp: { w: number; d: number; r: number },
+    h: number,
+    ctx: ToolContext,
+  ) => THREE.Mesh;
+  position: (
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    fp: { w: number; d: number; r: number },
+    h: number,
+  ) => [number, number, number];
   geometry: (fp: { w: number; d: number; r: number }, h: number) => Record<string, unknown>;
   label: (fp: { w: number; d: number; r: number }, h: number) => string;
+}
+
+function secondFromTypedFootprint(
+  id: "box" | "cylinder" | "cone",
+  a: THREE.Vector3,
+  cursor: THREE.Vector3 | null,
+  typed: string,
+): { second: THREE.Vector3; extraHeight?: number } | null {
+  const parts = typed
+    .trim()
+    .split(/[\s,x×]+/i)
+    .map((s) => Number.parseFloat(s))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (parts.length === 0) return null;
+  if (id === "box") {
+    const w = parts[0];
+    const d = parts[1] ?? parts[0];
+    const sx = cursor && cursor.x < a.x ? -1 : 1;
+    const sz = cursor && cursor.z < a.z ? -1 : 1;
+    return {
+      second: new THREE.Vector3(a.x + sx * w, a.y, a.z + sz * d),
+      extraHeight: parts[2],
+    };
+  }
+  const r = parts[0];
+  return {
+    second: new THREE.Vector3(a.x + r, a.y, a.z),
+    extraHeight: parts[1],
+  };
 }
 
 function makeHeightTool(spec: HeightTool): ToolHandler {
   let state = fresh();
   let height = 20;
 
-  const previewFor = (ctx: ToolContext, event: PointerEvent): void => {
+  const commitAt = (a: THREE.Vector3, b: THREE.Vector3, h: number, ctx: ToolContext): void => {
+    const fp = spec.footprint(a, b);
+    void ctx.createEntity(
+      spec.geometry(fp, h) as never,
+      spec.position(a, b, fp, h),
+    );
+    ctx.setStatus("Placed");
+    state = reset(ctx);
+  };
+
+  const previewFor = (ctx: ToolContext, event?: PointerEvent): void => {
     if (!state.anchor) return;
+    if (event) {
+      state.lastScreen = ctx.screenPoint(event);
+    }
     if (!state.second) {
-      const raw = ctx.planePoint(event, 0);
-      if (!raw) return;
-      const fp = spec.footprint(state.anchor, ctx.snap(raw).point);
-      const mesh = spec.mesh(fp, height, ctx);
-      mesh.position.y = 0;
+      if (event) {
+        const raw = ctx.planePoint(event, state.anchor.y);
+        if (!raw) return;
+        state.lastCursor = ctx.snap(raw).point;
+      }
+      const typedFoot = state.typed
+        ? secondFromTypedFootprint(spec.id, state.anchor, state.lastCursor, state.typed)
+        : null;
+      const b = typedFoot?.second ?? state.lastCursor ?? state.anchor;
+      const previewH = typedFoot?.extraHeight ?? 2;
+      const fp = spec.footprint(state.anchor, b);
+      const mesh = spec.mesh(state.anchor, b, fp, previewH, ctx);
       ctx.setPreview(mesh, "draft");
-      ctx.showMeasure(spec.label(fp, height), ctx.screenPoint(event));
+      const baseLabel = spec.label(fp, previewH);
+      ctx.showMeasure(
+        state.typed ? `${baseLabel} [${state.typed}|]` : baseLabel,
+        state.lastScreen,
+      );
       return;
     }
-    height = cursorHeight(ctx, event, state.second);
+    if (state.typed) {
+      const parsed = Number.parseFloat(state.typed);
+      if (Number.isFinite(parsed) && parsed > 0) height = parsed;
+    } else if (event) {
+      height = cursorHeight(ctx, event, state.second);
+    }
     const fp = spec.footprint(state.anchor, state.second);
-    const mesh = spec.mesh(fp, height, ctx);
+    const mesh = spec.mesh(state.anchor, state.second, fp, height, ctx);
     ctx.setPreview(mesh, "draft");
-    ctx.showMeasure(spec.label(fp, height), ctx.screenPoint(event));
+    const baseLabel = spec.label(fp, height);
+    ctx.showMeasure(
+      state.typed ? `${baseLabel} [${state.typed}|]` : baseLabel,
+      state.lastScreen,
+    );
   };
 
   return {
@@ -223,26 +420,33 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
     },
     hasActivity: () => state.anchor !== null,
     onPointerDown(event, ctx) {
-      const raw = ctx.planePoint(event, 0);
+      const raw = state.anchor ? ctx.planePoint(event, state.anchor.y) : ctx.planePoint(event);
       if (!raw) return true;
       const p = ctx.snap(raw).point;
       if (!state.anchor) {
         state.anchor = p;
+        state.lastCursor = p.clone();
+        state.lastScreen = ctx.screenPoint(event);
         state.press = { x: event.clientX, y: event.clientY };
         ctx.capturePointer(event);
         return true;
       }
       if (!state.second) {
-        state.second = p;
-        height = 20;
-        ctx.setStatus("Move to set height · click to place · Esc restarts footprint");
+        const typedFoot = state.typed
+          ? secondFromTypedFootprint(spec.id, state.anchor, p, state.typed)
+          : null;
+        state.second = typedFoot?.second ?? p;
+        state.typed = "";
+        height = typedFoot?.extraHeight ?? 20;
+        if (typedFoot?.extraHeight) {
+          commitAt(state.anchor, state.second, height, ctx);
+          return true;
+        }
+        ctx.setStatus("Move to set height (or type H + Enter) · click to place · Esc restarts footprint");
         previewFor(ctx, event);
         return true;
       }
-      const fp = spec.footprint(state.anchor, state.second);
-      void ctx.createEntity(spec.geometry(fp, height) as never, [state.anchor.x, 0, state.anchor.z]);
-      ctx.setStatus("Placed");
-      state = reset(ctx);
+      commitAt(state.anchor, state.second, height, ctx);
       return true;
     },
     onPointerMove(event, ctx) {
@@ -252,42 +456,98 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
     onPointerUp(event, ctx) {
       if (!state.anchor) return;
       if (!state.second && state.dragged) {
-        const raw = ctx.planePoint(event, 0);
+        const raw = ctx.planePoint(event, state.anchor.y);
         if (raw) {
           state.second = ctx.snap(raw).point;
+          state.typed = "";
           height = 20;
-          ctx.setStatus("Move to set height · click to place");
+          ctx.setStatus("Move to set height (or type H + Enter) · click to place");
           previewFor(ctx, event);
         }
         state.dragged = false;
         state.press = null;
         ctx.releasePointer(event);
+      } else if (!state.second) {
+        state.press = null;
+        ctx.releasePointer(event);
       }
+    },
+    onKey(event, ctx) {
+      if (!state.anchor) return false;
+      if (/^[0-9.]$/.test(event.key)) {
+        state.typed += event.key;
+        previewFor(ctx);
+        return true;
+      }
+      if ((event.key === "," || event.key === "Tab") && !state.second) {
+        event.preventDefault();
+        state.typed += ",";
+        previewFor(ctx);
+        return true;
+      }
+      return false;
+    },
+    onBackspace(ctx) {
+      if (state.anchor && state.typed.length > 0) {
+        state.typed = state.typed.slice(0, -1);
+        previewFor(ctx);
+      }
+    },
+    onEnter(ctx) {
+      if (!state.anchor) return false;
+      if (!state.second) {
+        const typedFoot = state.typed
+          ? secondFromTypedFootprint(spec.id, state.anchor, state.lastCursor, state.typed)
+          : null;
+        const b = typedFoot?.second ?? state.lastCursor;
+        if (!b) return false;
+        state.second = b;
+        state.typed = "";
+        if (typedFoot?.extraHeight) {
+          commitAt(state.anchor, state.second, typedFoot.extraHeight, ctx);
+          return true;
+        }
+        height = 20;
+        ctx.setStatus("Move to set height (or type H + Enter) · click to place");
+        previewFor(ctx);
+        return true;
+      }
+      if (state.typed) {
+        const parsed = Number.parseFloat(state.typed);
+        if (Number.isFinite(parsed) && parsed > 0) height = parsed;
+      }
+      commitAt(state.anchor, state.second, height, ctx);
+      return true;
     },
     onCancel(ctx) {
       if (state.second) {
         state.second = null;
+        state.typed = "";
         ctx.setStatus("Height cancelled · set the footprint again");
         return;
       }
       state = reset(ctx);
     },
-    hint: () => "Click (or drag) the footprint, then set height",
+    hint: () => "Click (or drag) the footprint, then set height (type dimensions + Enter at any step)",
   };
 }
 
 export const boxTool = makeHeightTool({
   id: "box",
   footprint: (a, b) => ({
-    w: Math.max(4, Math.abs(b.x - a.x)),
-    d: Math.max(4, Math.abs(b.z - a.z)),
+    w: Math.max(0.5, Math.abs(b.x - a.x)),
+    d: Math.max(0.5, Math.abs(b.z - a.z)),
     r: 0,
   }),
-  mesh: (fp, h, ctx) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(fp.w, h, fp.d), previewMaterial(ctx));
-    mesh.position.y = h / 2;
+  mesh: (a, b, fp, h, ctx) => {
+    const mesh = decoratePreviewMesh(
+      new THREE.Mesh(new THREE.BoxGeometry(fp.w, h, fp.d), previewMaterial(ctx)),
+      ctx,
+    );
+    mesh.position.set((a.x + b.x) / 2, a.y + h / 2, (a.z + b.z) / 2);
     return mesh;
   },
+  position: (a, b, _fp, h) => [(a.x + b.x) / 2, a.y + h / 2, (a.z + b.z) / 2],
   geometry: (fp, h) => ({ type: "box", width: fp.w, depth: fp.d, height: h, corner_radius: 0 }),
   label: (fp, h) =>
     `${Math.round(fp.w * 10) / 10} × ${Math.round(fp.d * 10) / 10} × ${Math.round(h * 10) / 10}`,
@@ -296,11 +556,15 @@ export const boxTool = makeHeightTool({
 export const cylinderTool = makeHeightTool({
   id: "cylinder",
   footprint: (a, b) => ({ w: 0, d: 0, r: footprintRadius(a, b) }),
-  mesh: (fp, h, ctx) => {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(fp.r, fp.r, h, 32), previewMaterial(ctx));
-    mesh.position.y = h / 2;
+  mesh: (a, _b, fp, h, ctx) => {
+    const mesh = decoratePreviewMesh(
+      new THREE.Mesh(new THREE.CylinderGeometry(fp.r, fp.r, h, 32), previewMaterial(ctx)),
+      ctx,
+    );
+    mesh.position.set(a.x, a.y + h / 2, a.z);
     return mesh;
   },
+  position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cylinder", radius: fp.r, height: h, segments: 32 }),
   label: (fp, h) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10}`,
 });
@@ -308,11 +572,15 @@ export const cylinderTool = makeHeightTool({
 export const coneTool = makeHeightTool({
   id: "cone",
   footprint: (a, b) => ({ w: 0, d: 0, r: footprintRadius(a, b) }),
-  mesh: (fp, h, ctx) => {
-    const mesh = new THREE.Mesh(new THREE.ConeGeometry(fp.r, h, 32), previewMaterial(ctx));
-    mesh.position.y = h / 2;
+  mesh: (a, _b, fp, h, ctx) => {
+    const mesh = decoratePreviewMesh(
+      new THREE.Mesh(new THREE.ConeGeometry(fp.r, h, 32), previewMaterial(ctx)),
+      ctx,
+    );
+    mesh.position.set(a.x, a.y + h / 2, a.z);
     return mesh;
   },
+  position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cone", radius: fp.r, height: h, segments: 32 }),
   label: (fp, h) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10}`,
 });

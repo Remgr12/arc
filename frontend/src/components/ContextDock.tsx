@@ -1,6 +1,6 @@
-import { Combine, Layers, Paintbrush, Scissors, Trash2, X } from "lucide-react";
+import { Combine, Copy, Layers, Paintbrush, PencilRuler, Scissors, Trash2 } from "lucide-react";
 import { useArcStore } from "../lib/store";
-import { deriveSelectionContext, type SelectionContext } from "../lib/selectionContext";
+import { deriveSelectionContext, SKETCH_ENTITY_KINDS, type SelectionContext } from "../lib/selectionContext";
 import { actions } from "../lib/actions";
 import { TOOL_BY_ID } from "../data/tools";
 import { bindingHint } from "../lib/keybinds";
@@ -9,9 +9,9 @@ import { cn, Tip } from "./ui";
 import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
-// Shapr-style floating contextual tool dock. Contents follow the selection:
-// face → move/rotate/scale + face tools, edge → fillet, body → booleans etc.,
-// sketch mode → sketch tools, nothing/multi → base modeling groups.
+// Contextual action dock that appears next to the tool rail ONLY when an
+// entity, face, edge, sketch profile, or multi-selection is active.
+// Avoids duplicating the base ToolRail when nothing is selected.
 // ---------------------------------------------------------------------------
 
 interface DockItem {
@@ -22,7 +22,6 @@ interface DockItem {
   tip?: string;
   disabled?: boolean;
   run: () => void;
-  /** True when the item needs a face/edge ref to act on. */
   needsRef?: boolean;
 }
 
@@ -38,7 +37,7 @@ function toolItem(id: ToolId, overrideKeys?: string, needsRef?: boolean): DockIt
   return {
     key: id,
     label: def.label,
-    icon: <Icon size={16} strokeWidth={1.75} />,
+    icon: <Icon size={15} strokeWidth={1.75} />,
     keys: overrideKeys ?? (bindingHint(`tool:${id}`) || undefined),
     tip: def.tip,
     run: () => useArcStore.getState().setTool(id),
@@ -52,8 +51,9 @@ function actionItem(
   icon: ReactNode,
   run: () => void,
   tip?: string,
+  disabled?: boolean,
 ): DockItem {
-  return { key, label, icon, run, tip };
+  return { key, label, icon, run, tip, disabled };
 }
 
 function deleteItem(): DockItem {
@@ -66,130 +66,129 @@ function deleteItem(): DockItem {
   );
 }
 
-function fitItem(): DockItem {
+function duplicateItem(): DockItem {
   return actionItem(
-    "fit",
-    "Fit view",
-    <Layers size={15} strokeWidth={1.6} />,
-    () => actions.fitView(),
-    "Fit view",
+    "duplicate",
+    "Duplicate",
+    <Copy size={15} strokeWidth={1.6} />,
+    () => void actions.duplicateSelection(),
+    "Duplicate selection (Ctrl+D)",
   );
 }
 
-function dockGroups(context: SelectionContext): DockGroup[] {
-  const isFace = context === "face";
-  const isEdge = context === "edge";
-  const isBody = context === "body";
-  const isSketch = context === "sketch";
-  const showBase = !isFace && !isEdge && !isSketch;
+function sketchOnFaceItem(faceHeight: number): DockItem {
+  return actionItem(
+    "sketch-on-face",
+    "Sketch on Face",
+    <PencilRuler size={15} strokeWidth={1.6} />,
+    () => {
+      useArcStore.getState().enterSketchMode({
+        height: faceHeight,
+        label: `Face Plane (Y = ${Math.round(faceHeight * 100) / 100})`,
+        tool: "rectangle",
+      });
+      window.dispatchEvent(
+        new CustomEvent("arc-focus-plane", { detail: { normal: [0, 1, 0] } }),
+      );
+    },
+    "Start 2D sketch on this face's elevation plane",
+  );
+}
 
+function dockGroups(
+  context: SelectionContext,
+  selectionCount: number,
+  hasSketchSelected: boolean,
+  faceElevation: number,
+): DockGroup[] {
   const groups: DockGroup[] = [];
 
-  if (isFace) {
+  if (context === "face") {
     groups.push({
-      title: "Face",
+      title: "Face Actions",
       items: [
-        toolItem("move"),
-        toolItem("rotate"),
-        toolItem("scale"),
+        sketchOnFaceItem(faceElevation),
         toolItem("extrude-face", "E", true),
         toolItem("offset-face", undefined, true),
-        toolItem("fillet-edge", "F", true),
-        deleteItem(),
-      ].filter((item): item is DockItem => item !== null),
-    });
-  } else if (isEdge) {
-    groups.push({
-      title: "Edge",
-      items: [
-        toolItem("fillet-edge", "F", true),
-        toolItem("offset-face", undefined, undefined),
-        toolItem("move"),
-        deleteItem(),
-      ].filter((item): item is DockItem => item !== null),
-    });
-  } else if (isBody) {
-    groups.push({
-      title: "Body",
-      items: [
         toolItem("move", "M"),
-        toolItem("extrude-face", "E"),
-        toolItem("offset-face"),
-        toolItem("fillet-edge", "F"),
+        toolItem("rotate"),
+        toolItem("scale"),
         deleteItem(),
       ].filter((item): item is DockItem => item !== null),
     });
+  } else if (context === "edge") {
     groups.push({
-      title: "Booleans & materials",
+      title: "Edge Actions",
+      items: [
+        toolItem("fillet-edge", "F", true),
+        toolItem("move", "M"),
+        deleteItem(),
+      ].filter((item): item is DockItem => item !== null),
+    });
+  } else if (context === "multi") {
+    groups.push({
+      title: `Combine (${selectionCount})`,
       items: [
         actionItem(
           "union",
-          "Union",
+          "Boolean Union",
           <Combine size={15} strokeWidth={1.6} />,
           () => void actions.booleanApply("union"),
-          "Boolean union (two solids selected)",
+          "Fuse selected solids together",
         ),
         actionItem(
           "difference",
-          "Difference",
+          "Boolean Subtract",
           <Scissors size={15} strokeWidth={1.6} />,
           () => void actions.booleanApply("difference"),
-          "Boolean difference",
+          "Subtract second solid from first",
         ),
         actionItem(
           "intersection",
-          "Intersect",
+          "Boolean Intersect",
           <Layers size={15} strokeWidth={1.6} />,
           () => void actions.booleanApply("intersection"),
-          "Boolean intersection",
+          "Keep shared volume of solids",
         ),
+        duplicateItem(),
+        deleteItem(),
+      ],
+    });
+  } else if (context === "body") {
+    groups.push({
+      title: "Solid Body",
+      items: [
+        toolItem("move", "M"),
+        toolItem("rotate"),
+        toolItem("scale"),
         actionItem(
           "materials",
-          "Materials",
+          "Material…",
           <Paintbrush size={15} strokeWidth={1.6} />,
           () =>
             window.dispatchEvent(
               new CustomEvent("arc-materials-toggle", { detail: true }),
             ),
-          "Materials panel",
+          "Assign PBR material",
         ),
-      ],
-    });
-  } else if (isSketch) {
-    groups.push({
-      title: "Sketching",
-      items: [
-        actionItem(
-          "exit",
-          "Exit Sketching",
-          <X size={15} strokeWidth={1.6} />,
-          () => useArcStore.getState().setTool("select"),
-          "Exit sketch mode (Esc)",
-        ),
-        toolItem("line", "L"),
-        toolItem("arc", "A"),
-        toolItem("rectangle", "R"),
-        toolItem("circle", "C"),
-        toolItem("trim", "T"),
+        duplicateItem(),
         deleteItem(),
       ].filter((item): item is DockItem => item !== null),
     });
-  }
-
-  if (showBase) {
+  } else if (context === "sketch" && hasSketchSelected) {
     groups.push({
-      title: "Modeling",
+      title: "Sketch Profile",
       items: [
-        toolItem("select", "Esc"),
-        toolItem("move", "M"),
         toolItem("extrude", "E"),
+        toolItem("revolve", "V"),
         toolItem("sweep", "S"),
-        toolItem("box", "B"),
-        toolItem("sphere", "G"),
-        toolItem("cylinder", "Q"),
-        toolItem("cone", "Z"),
-        toolItem("torus", "Y"),
-        fitItem(),
+        toolItem("loft", "K"),
+        toolItem("offset", "O"),
+        toolItem("trim", "T"),
+        toolItem("fillet", "F"),
+        toolItem("mirror", "I"),
+        duplicateItem(),
+        deleteItem(),
       ].filter((item): item is DockItem => item !== null),
     });
   }
@@ -198,36 +197,58 @@ function dockGroups(context: SelectionContext): DockGroup[] {
 }
 
 export function ContextDock() {
-  const scene = useArcStore((s) => s.scene) as any;
+  const scene = useArcStore((s) => s.scene);
   const tool = useArcStore((s) => s.tool) as ToolId;
   const selKind = useArcStore((s) => s.selKind);
   const selFace = useArcStore((s) => s.selFace);
   const selEdge = useArcStore((s) => s.selEdge);
   const drafting = useArcStore((s) => s.drafting);
+  const sketchMode = useArcStore((s) => s.sketchMode);
 
   const selection = scene?.selection ?? [];
   const primaryId = selection[selection.length - 1] ?? null;
-  const primaryKind = primaryId
-    ? scene?.entities.find((e: { id: string; kind?: string }) => e.id === primaryId)?.kind ?? null
+  const primaryEntity = primaryId
+    ? scene?.entities.find((e) => e.id === primaryId) ?? null
     : null;
+  const primaryKind = primaryEntity?.kind ?? null;
+
   const context = deriveSelectionContext(
     selKind,
     selection.length,
     primaryKind,
     tool,
     drafting,
+    sketchMode,
   );
-  const groups = dockGroups(context);
+
+  const hasSketchSelected = Boolean(
+    primaryKind && (SKETCH_ENTITY_KINDS.has(primaryKind) || primaryEntity?.category === "sketch"),
+  );
+
+  // Estimate the top elevation of the selected entity for "Sketch on Face"
+  let faceElevation = 0;
+  if (primaryEntity) {
+    const py = primaryEntity.transform.position[1] ?? 0;
+    const geom = primaryEntity.geometry as Record<string, unknown>;
+    const h = typeof geom.height === "number" ? geom.height : 0;
+    if (primaryEntity.kind === "box" || primaryEntity.kind === "extrude") {
+      faceElevation = py + h / 2;
+    } else {
+      faceElevation = py + h;
+    }
+  }
+
+  const groups = dockGroups(context, selection.length, hasSketchSelected, faceElevation);
   const hasRef = selFace !== null || selEdge !== null;
 
   if (!scene || groups.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute left-3 top-1/2 z-40 flex max-h-[92%] -translate-y-1/2 flex-col items-start gap-2 overflow-y-auto">
+    <div className="pointer-events-none absolute left-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-start gap-2">
       {groups.map((group) => (
         <div
           key={group.title}
-          className="pointer-events-auto w-fit max-w-[13rem] rounded-2xl border border-base-200 bg-base-50/95 px-1.5 py-1.5 shadow-lg shadow-black/10 backdrop-blur-md"
+          className="pointer-events-auto w-fit rounded-xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md"
         >
           <div className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-base-500">
             {group.title}
@@ -242,7 +263,7 @@ export function ContextDock() {
                   key={item.key}
                   label={item.tip ?? item.label}
                   keys={item.keys}
-                  side="bottom"
+                  side="right"
                   className="w-full"
                 >
                   <button
@@ -250,11 +271,11 @@ export function ContextDock() {
                     disabled={disabled}
                     onClick={() => item.run()}
                     className={cn(
-                      "flex h-8 w-full min-w-[9.5rem] items-center gap-2 rounded-xl px-2.5 text-[12.5px] font-medium transition-all",
+                      "flex h-7.5 w-full min-w-[8.75rem] items-center gap-2 rounded-lg px-2.5 text-[12px] font-medium transition-colors",
                       "disabled:pointer-events-none disabled:opacity-35",
                       active
-                        ? "bg-accent-500 text-white shadow-sm ring-2 ring-accent-500/20"
-                        : "text-base-600 hover:bg-base-100 hover:text-base-800",
+                        ? "bg-accent-500 text-white shadow-xs"
+                        : "text-base-600 hover:bg-base-200 hover:text-base-800",
                     )}
                   >
                     {item.icon}

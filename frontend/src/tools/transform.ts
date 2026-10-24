@@ -12,9 +12,8 @@ function centeredGizmoTool(id: string, mode: GizmoMode, label: string, tip: stri
   return {
     id: id as ToolHandler["id"],
     onActivate(ctx) {
-      const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
-      ctx.setGizmo(primary ? mode : null);
-      ctx.setStatus(`${label} · drag the gizmo · click empty space to reselect`);
+      ctx.setGizmo(mode);
+      ctx.setStatus(`${label} · drag the gizmo · click an entity to select`);
     },
     onDeactivate(ctx) {
       ctx.setGizmo(null);
@@ -23,8 +22,8 @@ function centeredGizmoTool(id: string, mode: GizmoMode, label: string, tip: stri
       if (event.button !== 0 || ctx.gizmoActive()) return false;
       const had = ctx.selection().length;
       selectUnderCursor(event, ctx);
+      ctx.setGizmo(mode);
       const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
-      ctx.setGizmo(primary ? mode : null);
       if (primary && ctx.selection().length === 1 && had <= 1) {
         ctx.setStatus(`${label} · drag the gizmo`);
       }

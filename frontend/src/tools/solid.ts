@@ -53,7 +53,7 @@ function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: 
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, base);
   const out = new THREE.Vector3();
   const hit = ctx.rayAt(event).intersectPlane(plane, out);
-  return hit ? Math.max(1, out.y) : 20;
+  return hit ? Math.max(0.5, out.y - base.y) : 20;
 }
 
 /** Camera ray ∩ plane; null when the ray is parallel or misses. */
@@ -145,39 +145,85 @@ function previewMaterial(ctx: ToolContext): THREE.MeshStandardMaterial {
 interface ExtrudeDraft {
   points: THREE.Vector3[];
   centroid: THREE.Vector3;
+  height: number;
+  typed: string;
+  lastScreen: { x: number; y: number } | undefined;
 }
 
 let ext: ExtrudeDraft | null = null;
 
+function updateExtrudePreview(d: ExtrudeDraft, ctx: ToolContext): void {
+  const h = d.height;
+  const shape = new THREE.Shape(
+    d.points.map((p) => new THREE.Vector2(p.x - d.centroid.x, -(p.z - d.centroid.z))),
+  );
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // +Z (extrusion) → +Y; shape XY → world XZ
+  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+  const edges = new THREE.EdgesGeometry(geo, 25);
+  const wire = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: ctx.palette.hover, transparent: true, opacity: 0.9, depthTest: false }),
+  );
+  wire.renderOrder = 998;
+  mesh.add(wire);
+  mesh.position.set(d.centroid.x, d.centroid.y, d.centroid.z);
+  mesh.renderOrder = 997;
+  mesh.frustumCulled = false;
+  showDraft(mesh, ctx);
+  ctx.showMeasure(
+    d.typed ? `H ${d.typed}|` : `H ${formatNum(h)}`,
+    d.lastScreen,
+  );
+}
+
 function startExtrude(chain: Chain, ctx: ToolContext): void {
   const points = chain.points.map((p) => p.clone());
   let cx = 0;
+  let cy = 0;
   let cz = 0;
   for (const p of points) {
     cx += p.x;
+    cy += p.y;
     cz += p.z;
   }
   cx /= points.length;
+  cy /= points.length;
   cz /= points.length;
-  ext = { points, centroid: new THREE.Vector3(cx, 0, cz) };
-  ctx.setStatus("Move up · click to set height");
+  ext = {
+    points,
+    centroid: new THREE.Vector3(cx, cy, cz),
+    height: 20,
+    typed: "",
+    lastScreen: undefined,
+  };
+  updateExtrudePreview(ext, ctx);
+  ctx.setStatus("Move up · click to set height (or type H + Enter)");
 }
 
-function commitExtrude(event: PointerEvent, ctx: ToolContext): void {
+function commitExtrudeHeight(h: number, ctx: ToolContext): void {
   const d = ext;
   if (!d) return;
-  const h = cursorHeight(ctx, event, d.centroid);
   const polygon = d.points.map(
     (p) => [p.x - d.centroid.x, p.z - d.centroid.z] as [number, number],
   );
+  const baseY = d.centroid.y;
   void ctx.createEntity(
     { type: "extrude", polygon, height: h },
-    [d.centroid.x, h / 2, d.centroid.z],
+    [d.centroid.x, baseY + h / 2, d.centroid.z],
   );
   ext = null;
   clearDraft(ctx);
   ctx.showMeasure(null);
   ctx.setStatus(`Extruded H ${formatNum(h)} · pick another closed profile`);
+}
+
+function commitExtrude(event: PointerEvent, ctx: ToolContext): void {
+  const d = ext;
+  if (!d) return;
+  const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
+  const h = Number.isFinite(parsed) && parsed > 0 ? parsed : cursorHeight(ctx, event, d.centroid);
+  commitExtrudeHeight(h, ctx);
 }
 
 export const extrudeTool: ToolHandler = {
@@ -187,6 +233,16 @@ export const extrudeTool: ToolHandler = {
     ext = null;
     clearDraft(ctx);
     ctx.showMeasure(null);
+    // If a closed sketch profile is already selected, immediately start extruding it!
+    for (const id of ctx.selection()) {
+      const entity = ctx.entityById(id);
+      if (!entity || entity.category !== "sketch") continue;
+      const chain = chainFromEntity(entity, ctx.objectFor(id));
+      if (chain && chain.closed && chain.points.length >= 3) {
+        startExtrude(chain, ctx);
+        return;
+      }
+    }
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate(ctx) {
@@ -218,18 +274,39 @@ export const extrudeTool: ToolHandler = {
       ctx.showMeasure(null);
       return;
     }
-    const h = cursorHeight(ctx, event, d.centroid);
-    const shape = new THREE.Shape(
-      d.points.map((p) => new THREE.Vector2(p.x - d.centroid.x, -(p.z - d.centroid.z))),
-    );
-    const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
-    geo.rotateX(-Math.PI / 2); // +Z (extrusion) → +Y; shape XY → world XZ
-    const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
-    mesh.position.set(d.centroid.x, 0, d.centroid.z);
-    mesh.renderOrder = 997;
-    mesh.frustumCulled = false;
-    showDraft(mesh, ctx);
-    ctx.showMeasure(`H ${formatNum(h)}`, ctx.screenPoint(event));
+    d.lastScreen = ctx.screenPoint(event);
+    const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
+    d.height = Number.isFinite(parsed) && parsed > 0 ? parsed : cursorHeight(ctx, event, d.centroid);
+    updateExtrudePreview(d, ctx);
+  },
+  onKey(event, ctx) {
+    const d = ext;
+    if (!d) return false;
+    if (/^[0-9.]$/.test(event.key)) {
+      d.typed += event.key;
+      const parsed = Number.parseFloat(d.typed);
+      if (Number.isFinite(parsed) && parsed > 0) d.height = parsed;
+      updateExtrudePreview(d, ctx);
+      return true;
+    }
+    return false;
+  },
+  onBackspace(ctx) {
+    const d = ext;
+    if (d && d.typed.length > 0) {
+      d.typed = d.typed.slice(0, -1);
+      const parsed = Number.parseFloat(d.typed);
+      if (Number.isFinite(parsed) && parsed > 0) d.height = parsed;
+      updateExtrudePreview(d, ctx);
+    }
+  },
+  onEnter(ctx) {
+    const d = ext;
+    if (!d) return false;
+    const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
+    const h = Number.isFinite(parsed) && parsed > 0 ? parsed : d.height;
+    commitExtrudeHeight(h, ctx);
+    return true;
   },
   onCancel(ctx) {
     if (ext) {
@@ -239,7 +316,7 @@ export const extrudeTool: ToolHandler = {
       ctx.setStatus("Extrude cancelled · pick a closed profile");
     }
   },
-  hint: () => "Extrude · click a closed sketch profile, then click to set height",
+  hint: () => "Extrude · click a closed sketch profile, then click or type height + Enter",
 };
 
 // ----------------------------------------------------------------- revolve
@@ -251,20 +328,45 @@ interface RevolveDraft {
   axis: THREE.Vector3 | null;
   startX: number;
   angle: number;
+  typed: string;
+  lastScreen: { x: number; y: number } | undefined;
 }
 
 let rev: RevolveDraft | null = null;
 
-function frameQuat(axis: THREE.Vector3): THREE.Quaternion {
-  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+/**
+ * Compute the local-to-world orientation quaternion for a revolve solid so that:
+ * - Local +Y aligns with `axis`
+ * - Local +Z aligns with the radial direction from the axis toward the profile
+ *   (matching `shapes::revolve_solid` and `THREE.LatheGeometry` which place
+ *   phi = 0 at `[0, y, r]` in the +Z / Y half-plane).
+ */
+function frameQuat(axis: THREE.Vector3, profile: THREE.Vector3[], origin: THREE.Vector3): THREE.Quaternion {
+  const yAxis = axis.clone().normalize();
+  let radial = new THREE.Vector3();
+  for (const q of profile) {
+    const v = q.clone().sub(origin);
+    v.addScaledVector(yAxis, -v.dot(yAxis));
+    if (v.lengthSq() > radial.lengthSq()) {
+      radial.copy(v);
+    }
+  }
+  if (radial.lengthSq() < EPS) {
+    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), yAxis);
+  }
+  const zAxis = radial.normalize();
+  const xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();
+  const m = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+  return new THREE.Quaternion().setFromRotationMatrix(m);
 }
 
 function latheProfile(points: [number, number][]): [number, number][] {
-  // Sort so the lathe profile runs bottom → top along the axis.
-  return [...points].sort((a, b) => a[1] - b[1]);
+  // Preserve vertex order along the profile chain so non-monotonic profiles
+  // (arcs, C-shapes, multi-segment polylines) are not scrambled!
+  return [...points];
 }
 
-function revolvePreview(d: RevolveDraft, event: PointerEvent, ctx: ToolContext): void {
+function revolvePreview(d: RevolveDraft, ctx: ToolContext): void {
   const p1 = d.p1;
   const axis = d.axis;
   if (!p1 || !axis) return;
@@ -277,11 +379,14 @@ function revolvePreview(d: RevolveDraft, event: PointerEvent, ctx: ToolContext):
   );
   const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
   mesh.position.copy(p1);
-  mesh.quaternion.copy(frameQuat(axis));
+  mesh.quaternion.copy(frameQuat(axis, d.profile, p1));
   mesh.renderOrder = 997;
   mesh.frustumCulled = false;
   showDraft(mesh, ctx);
-  ctx.showMeasure(`∠${formatNum(d.angle)}°`, ctx.screenPoint(event));
+  ctx.showMeasure(
+    d.typed ? `∠${d.typed}|°` : `∠${formatNum(d.angle)}°`,
+    d.lastScreen,
+  );
 }
 
 function commitRevolve(ctx: ToolContext): void {
@@ -291,20 +396,25 @@ function commitRevolve(ctx: ToolContext): void {
   const axis = d.axis;
   if (!p1 || !axis) return;
   const profile = latheProfile(axisFrame(d.profile, p1, axis));
-  const quat = frameQuat(axis);
+  const quat = frameQuat(axis, d.profile, p1);
   const position: [number, number, number] = [p1.x, p1.y, p1.z];
   const rotation: [number, number, number, number] = [quat.x, quat.y, quat.z, quat.w];
+  const isIdentityQuat =
+    Math.abs(quat.x) < 1e-6 &&
+    Math.abs(quat.y) < 1e-6 &&
+    Math.abs(quat.z) < 1e-6 &&
+    Math.abs(quat.w - 1) < 1e-6;
   void ctx
     .createEntity(
       { type: "revolve", profile, steps: 64, angle_deg: d.angle },
       position,
     )
     .then((id) => {
-      if (id) {
+      if (id && !isIdentityQuat) {
         void ctx.setTransform(
           id,
           { position, rotation, scale: [1, 1, 1] },
-          true,
+          false,
         );
       }
     });
@@ -344,7 +454,16 @@ export const revolveTool: ToolHandler = {
         ctx.setStatus("Degenerate profile");
         return true;
       }
-      rev = { profile: picked.chain.points.map((p) => p.clone()), plane, p1: null, axis: null, startX: 0, angle: 120 };
+      rev = {
+        profile: picked.chain.points.map((p) => p.clone()),
+        plane,
+        p1: null,
+        axis: null,
+        startX: 0,
+        angle: 360,
+        typed: "",
+        lastScreen: ctx.screenPoint(event),
+      };
       ctx.setStatus("Click the first point on the revolve axis");
       return true;
     }
@@ -367,7 +486,10 @@ export const revolveTool: ToolHandler = {
       dir.normalize();
       rev.axis = dir;
       rev.startX = event.clientX;
-      ctx.setStatus("Drag to set the sweep angle · click to commit");
+      rev.angle = 360;
+      rev.lastScreen = ctx.screenPoint(event);
+      revolvePreview(rev, ctx);
+      ctx.setStatus("Move to set the sweep angle (or type angle + Enter) · click to commit");
       return true;
     }
     // Phase 3: click commits.
@@ -381,15 +503,51 @@ export const revolveTool: ToolHandler = {
       if (!d) ctx.showMeasure(null);
       return;
     }
-    const dx = event.clientX - d.startX;
-    d.angle = Math.max(10, Math.min(360, 360 * (dx / 300)));
-    revolvePreview(d, event, ctx);
+    d.lastScreen = ctx.screenPoint(event);
+    if (!d.typed) {
+      const dx = event.clientX - d.startX;
+      d.angle = Math.max(10, Math.min(360, dx <= 0 ? 360 : 360 * (dx / 300)));
+    }
+    revolvePreview(d, ctx);
+  },
+  onKey(event, ctx) {
+    const d = rev;
+    if (!d || !d.axis) return false;
+    if (/^[0-9.]$/.test(event.key)) {
+      d.typed += event.key;
+      const parsed = Number.parseFloat(d.typed);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        d.angle = Math.max(1, Math.min(360, parsed));
+      }
+      revolvePreview(d, ctx);
+      return true;
+    }
+    return false;
+  },
+  onBackspace(ctx) {
+    const d = rev;
+    if (d && d.axis && d.typed.length > 0) {
+      d.typed = d.typed.slice(0, -1);
+      const parsed = Number.parseFloat(d.typed);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        d.angle = Math.max(1, Math.min(360, parsed));
+      }
+      revolvePreview(d, ctx);
+    }
+  },
+  onEnter(ctx) {
+    const d = rev;
+    if (!d || !d.axis) return false;
+    commitRevolve(ctx);
+    ctx.setStatus("Revolved · pick another open profile");
+    return true;
   },
   onCancel(ctx) {
     const d = rev;
     if (!d) return;
     if (d.axis) {
       d.axis = null; // back to re-picking the second axis point
+      d.typed = "";
       clearDraft(ctx);
       ctx.showMeasure(null);
       ctx.setStatus("Angle cancelled · click the second axis point again");
@@ -402,18 +560,35 @@ export const revolveTool: ToolHandler = {
       ctx.setStatus("Revolve cancelled · pick an open profile");
     }
   },
-  hint: () => "Revolve · click an open profile, two axis points, then drag the angle",
+  hint: () => "Revolve · click an open profile, two axis points, then set angle",
 };
 
 // ------------------------------------------------------------------- sweep
 
 let sweepPath: THREE.Vector3[] | null = null;
 let sweepRadius = 1;
+let sweepTyped = "";
+let sweepScreen: { x: number; y: number } | undefined;
 
 function sweepLength(path: THREE.Vector3[]): number {
   let total = 0;
   for (let i = 1; i < path.length; i++) total += path[i].distanceTo(path[i - 1]);
   return total;
+}
+
+function updateSweepPreview(ctx: ToolContext): void {
+  const path = sweepPath;
+  if (!path || path.length < 2) return;
+  const curve = new THREE.CatmullRomCurve3(path, false, "centripetal");
+  const geo = new THREE.TubeGeometry(curve, 64, sweepRadius, 16, false);
+  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+  mesh.renderOrder = 997;
+  mesh.frustumCulled = false;
+  showDraft(mesh, ctx);
+  ctx.showMeasure(
+    sweepTyped ? `R ${sweepTyped}|` : `R ${formatNum(sweepRadius)}`,
+    sweepScreen,
+  );
 }
 
 function commitSweep(ctx: ToolContext): void {
@@ -424,6 +599,7 @@ function commitSweep(ctx: ToolContext): void {
     [0, 0, 0],
   );
   sweepPath = null;
+  sweepTyped = "";
   clearDraft(ctx);
   ctx.showMeasure(null);
   ctx.setStatus(`Swept R ${formatNum(sweepRadius)} · pick another open path`);
@@ -434,12 +610,14 @@ export const sweepTool: ToolHandler = {
   cursor: "crosshair",
   onActivate(ctx) {
     sweepPath = null;
+    sweepTyped = "";
     clearDraft(ctx);
     ctx.showMeasure(null);
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate(ctx) {
     sweepPath = null;
+    sweepTyped = "";
     clearDraft(ctx);
     ctx.showMeasure(null);
   },
@@ -456,8 +634,11 @@ export const sweepTool: ToolHandler = {
         return true;
       }
       sweepPath = picked.chain.points.map((p) => p.clone());
-      sweepRadius = 1;
-      ctx.setStatus("Move to size the tube · click to commit · Esc re-picks");
+      sweepRadius = 2;
+      sweepTyped = "";
+      sweepScreen = ctx.screenPoint(event);
+      updateSweepPreview(ctx);
+      ctx.setStatus("Move to size the tube (or type R + Enter) · click to commit · Esc re-picks");
       return true;
     }
     commitSweep(ctx);
@@ -469,27 +650,49 @@ export const sweepTool: ToolHandler = {
       ctx.showMeasure(null);
       return;
     }
-    const cursor = ctx.planePoint(event, path[0].y);
-    if (!cursor) return;
-    const maxRadius = Math.max(1, sweepLength(path) / 3);
-    sweepRadius = Math.max(1, Math.min(maxRadius, cursor.distanceTo(path[0])));
-    const curve = new THREE.CatmullRomCurve3(path, false, "centripetal");
-    const geo = new THREE.TubeGeometry(curve, 64, sweepRadius, 16, false);
-    const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
-    mesh.renderOrder = 997;
-    mesh.frustumCulled = false;
-    showDraft(mesh, ctx);
-    ctx.showMeasure(`R ${formatNum(sweepRadius)}`, ctx.screenPoint(event));
+    sweepScreen = ctx.screenPoint(event);
+    if (!sweepTyped) {
+      const cursor = ctx.planePoint(event, path[0].y);
+      if (!cursor) return;
+      const maxRadius = Math.max(1, sweepLength(path) / 3);
+      sweepRadius = Math.max(0.5, Math.min(maxRadius, cursor.distanceTo(path[0])));
+    }
+    updateSweepPreview(ctx);
+  },
+  onKey(event, ctx) {
+    if (!sweepPath) return false;
+    if (/^[0-9.]$/.test(event.key)) {
+      sweepTyped += event.key;
+      const parsed = Number.parseFloat(sweepTyped);
+      if (Number.isFinite(parsed) && parsed > 0) sweepRadius = parsed;
+      updateSweepPreview(ctx);
+      return true;
+    }
+    return false;
+  },
+  onBackspace(ctx) {
+    if (sweepPath && sweepTyped.length > 0) {
+      sweepTyped = sweepTyped.slice(0, -1);
+      const parsed = Number.parseFloat(sweepTyped);
+      if (Number.isFinite(parsed) && parsed > 0) sweepRadius = parsed;
+      updateSweepPreview(ctx);
+    }
+  },
+  onEnter(ctx) {
+    if (!sweepPath) return false;
+    commitSweep(ctx);
+    return true;
   },
   onCancel(ctx) {
     if (sweepPath) {
       sweepPath = null;
+      sweepTyped = "";
       clearDraft(ctx);
       ctx.showMeasure(null);
       ctx.setStatus("Sweep cancelled · pick an open path");
     }
   },
-  hint: () => "Sweep · click an open path, then move to size the tube radius",
+  hint: () => "Sweep · click an open path, then move or type radius + Enter",
 };
 
 // -------------------------------------------------------------------- loft
@@ -513,8 +716,28 @@ function ribbonGeometry(sections: THREE.Vector3[][]): THREE.BufferGeometry | nul
       positions.push(a.x, a.y, a.z, c.x, c.y, c.z, dd.x, dd.y, dd.z);
     }
   }
+  // Add fan caps on the first and last sections so the preview looks solid
+  const addCap = (ring: THREE.Vector3[], flip: boolean) => {
+    if (ring.length < 3) return;
+    const center = new THREE.Vector3();
+    for (const p of ring) center.add(p);
+    center.divideScalar(ring.length);
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      if (flip) {
+        positions.push(center.x, center.y, center.z, b.x, b.y, b.z, a.x, a.y, a.z);
+      } else {
+        positions.push(center.x, center.y, center.z, a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    }
+  };
+  addCap(sections[0], true);
+  addCap(sections[sections.length - 1], false);
+
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
   return geo;
 }
 

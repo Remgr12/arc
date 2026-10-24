@@ -19,6 +19,7 @@ import {
   faceOverlayGeometry,
   pickEdgeScreen,
 } from "../tools/topology";
+import { uiCapture } from "../lib/uiCapture";
 
 interface ViewAnim {
   start: number;
@@ -67,6 +68,9 @@ interface ViewportRefs {
   lastCommitAt: number;
   lastScene: SceneData | null;
   lastHover: string | null;
+  lastDisplayMode: "shaded" | "wireframe";
+  lastSectionView: boolean;
+  lastSectionOffset: number;
   lastCursorAt: number;
   disposed: boolean;
   gizmo: ViewCube;
@@ -83,6 +87,7 @@ interface ViewportRefs {
   selOverlay: THREE.Mesh | null;
   hoverEdgeOverlay: THREE.LineSegments | null;
   selEdgeOverlay: THREE.LineSegments | null;
+  sectionPlane: THREE.Plane;
   overlayKey: string;
   ctx: ToolContext;
 }
@@ -150,6 +155,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(host.clientWidth || 800, host.clientHeight || 600);
   renderer.autoClear = false;
+  renderer.localClippingEnabled = true;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -262,6 +268,9 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     lastCommitAt: 0,
     lastScene: null,
     lastHover: null,
+    lastDisplayMode: "shaded",
+    lastSectionView: false,
+    lastSectionOffset: 0,
     lastCursorAt: 0,
     disposed: false,
     gizmo: null as unknown as ViewCube,
@@ -275,6 +284,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     selOverlay: null,
     hoverEdgeOverlay: null,
     selEdgeOverlay: null,
+    sectionPlane: new THREE.Plane(new THREE.Vector3(0, -1, 0), 15),
     overlayKey: "",
     ctx: null as unknown as ToolContext,
   };
@@ -407,8 +417,8 @@ function slerpDir(from: THREE.Vector3, to: THREE.Vector3, k: number): THREE.Vect
 function focusPlane(ref: ViewportRefs, normal: THREE.Vector3): void {
   const dirTo = normal.clone().normalize();
   if (Math.abs(dirTo.y) > 0.9999) {
-    // Keep OrbitControls happy: nudge the pole slightly off-axis.
-    dirTo.set(0.0008, dirTo.y > 0 ? 1 : -1, 0).normalize();
+    // Keep OrbitControls happy: nudge along +Z/-Z so +X stays horizontal (right).
+    dirTo.set(0, dirTo.y > 0 ? 1 : -1, dirTo.y > 0 ? 0.0008 : -0.0008).normalize();
   }
   const current = ref.camera.position.clone().sub(ref.controls.target);
   if (current.lengthSq() < 1e-8) return;
@@ -446,9 +456,21 @@ function syncSceneToThree(ref: ViewportRefs): void {
   const scene = state.scene;
   const hoverChanged = state.hoverEntity !== ref.lastHover;
   const sceneChanged = scene !== ref.lastScene;
+  const displayModeChanged = state.displayMode !== ref.lastDisplayMode;
+  const sectionChanged =
+    state.sectionView !== ref.lastSectionView ||
+    state.sectionOffset !== ref.lastSectionOffset;
 
-  if (sceneChanged) {
+  if (sectionChanged) {
+    ref.lastSectionView = state.sectionView;
+    ref.lastSectionOffset = state.sectionOffset;
+    ref.sectionPlane.constant = state.sectionOffset + 15;
+    ref.renderer.clippingPlanes = state.sectionView ? [ref.sectionPlane] : [];
+  }
+
+  if (sceneChanged || displayModeChanged) {
     ref.lastScene = scene;
+    ref.lastDisplayMode = state.displayMode;
     if (scene) rebuildEntities(ref, scene);
     ref.overlayKey = "";
     // A face/edge ref on an entity that is no longer selected is stale.
@@ -480,6 +502,7 @@ function syncSceneToThree(ref: ViewportRefs): void {
 
   const settings = state.settings;
   ref.gridNode.visible = settings?.show_grid ?? true;
+  ref.gridNode.position.y = state.sketchMode ? state.sketchPlaneHeight : 0;
   ref.axes.visible = settings?.show_axes ?? true;
   const tool = state.tool;
   if (tool !== ref.lastTool) switchTool(ref, tool);
@@ -600,27 +623,41 @@ function switchTool(ref: ViewportRefs, tool: ToolId): void {
 
 function updateGizmoAttachment(ref: ViewportRefs): void {
   const state = useArcStore.getState();
-  if (state.tool !== "move") {
+  const gizmoMode: GizmoMode | null =
+    state.tool === "move"
+      ? "translate"
+      : state.tool === "rotate"
+        ? "rotate"
+        : state.tool === "scale"
+          ? "scale"
+          : null;
+  if (!gizmoMode) {
     if (ref.tc.object) ref.tc.detach();
+    ref.tc.getHelper().visible = false;
     return;
   }
+  ref.tc.setMode(gizmoMode);
   const scene = state.scene;
   const primary = scene?.selection[scene.selection.length - 1] ?? null;
   if (!primary) {
     if (ref.tc.object) ref.tc.detach();
+    ref.tc.getHelper().visible = false;
     return;
   }
   const entity = scene?.entities.find((e) => e.id === primary);
   if (!entity || entity.locked) {
     if (ref.tc.object) ref.tc.detach();
+    ref.tc.getHelper().visible = false;
     return;
   }
   const obj = ref.objects.get(primary);
   if (!obj || !obj.visible) {
     if (ref.tc.object) ref.tc.detach();
+    ref.tc.getHelper().visible = false;
     return;
   }
   if (ref.tc.object !== obj) ref.tc.attach(obj);
+  ref.tc.getHelper().visible = true;
 }
 
 /** Commit the transform the gizmo left on the attached object back to the store. */
@@ -666,6 +703,72 @@ function rebuildEntities(ref: ViewportRefs, scene: SceneData): void {
   }
 }
 
+function makeDimensionBadge(text: string): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 160;
+  canvas.height = 48;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "rgba(18, 22, 31, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 152, 40, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(33, 179, 237, 0.7)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "600 20px JetBrains Mono, monospace, system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 80, 25);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(16, 4.8, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
+function buildClosedSketchFill(lineData: number[], entityId: string, color: THREE.Color): THREE.Mesh | null {
+  // lineData is segment pairs: [x0,y0,z0, x1,y1,z1, x1,y1,z1, x2,y2,z2, ...]
+  if (lineData.length < 18) return null;
+  const nSegs = Math.floor(lineData.length / 6);
+  const fx = lineData[0];
+  const fz = lineData[2];
+  const lx = lineData[(nSegs - 1) * 6 + 3];
+  const lz = lineData[(nSegs - 1) * 6 + 5];
+  if (Math.hypot(fx - lx, fz - lz) > 0.5) return null;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(fx, -fz);
+  for (let s = 0; s < nSegs; s++) {
+    const px = lineData[s * 6 + 3];
+    const pz = lineData[s * 6 + 5];
+    shape.lineTo(px, -pz);
+  }
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  const y = lineData[1] ?? 0;
+  if (Math.abs(y) > 1e-4) geo.translate(0, y, 0);
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.1,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
+  const fillMesh = new THREE.Mesh(geo, mat);
+  fillMesh.userData.isProfileFill = true;
+  fillMesh.userData.entityId = entityId;
+  return fillMesh;
+}
+
 function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D | null {
   const tris =
     entity.triPositions && entity.triPositions.length > 0 ? entity.triPositions : null;
@@ -676,6 +779,19 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData.slice(), 3));
     const material = ref.lineMaterial.clone();
     obj = new THREE.LineSegments(geometry, material);
+    if (entity.category === "sketch") {
+      const fill = buildClosedSketchFill(lineData, entity.id, ref.palette.selection);
+      if (fill) obj.add(fill);
+    } else if (entity.kind === "dimension" && entity.geometry?.type === "dimension") {
+      const s = entity.geometry.start as [number, number, number] | undefined;
+      const e = entity.geometry.end as [number, number, number] | undefined;
+      if (s && e) {
+        const dist = Math.hypot(e[0] - s[0], e[1] - s[1], e[2] - s[2]);
+        const badge = makeDimensionBadge(`${Math.round(dist * 100) / 100}`);
+        badge.position.set((s[0] + e[0]) / 2, Math.max(s[1], e[1]) + 2.5, (s[2] + e[2]) / 2);
+        obj.add(badge);
+      }
+    }
   } else {
     if (!tris) return null;
     const geometry = new THREE.BufferGeometry();
@@ -692,6 +808,24 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     obj = new THREE.Mesh(geometry, ref.columnMaterial.clone());
     obj.castShadow = true;
     obj.receiveShadow = true;
+
+    // Subtle CAD edge outline for B-rep solids
+    const edgeGeo = lineData
+      ? new THREE.BufferGeometry().setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(lineData.slice(), 3),
+        )
+      : new THREE.EdgesGeometry(geometry, 28);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0x11151f,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+    });
+    const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+    edgeLines.userData.isSolidOutline = true;
+    edgeLines.userData.entityId = entity.id;
+    obj.add(edgeLines);
   }
   // Entry animation metadata; present() and the render loop animate from here.
   obj.userData.spawnAt = performance.now();
@@ -717,6 +851,7 @@ function present(
   const colorHex = color.getHex();
   const visible = entity.visible && layerVisible(layer);
   const material = MATERIALS.find((m) => m.id === entity.material) ?? null;
+  const displayMode = st.displayMode;
 
   // Cheap diff: skip material/transform churn when nothing changed.
   const pos = entity.transform.position;
@@ -730,6 +865,7 @@ function present(
         locked: boolean;
         visible: boolean;
         material: string | null;
+        displayMode: "shaded" | "wireframe";
         pos: [number, number, number];
         rot: [number, number, number, number];
         scl: [number, number, number];
@@ -743,6 +879,7 @@ function present(
     cache.locked !== entity.locked ||
     cache.visible !== visible ||
     cache.material !== entity.material ||
+    cache.displayMode !== displayMode ||
     cache.pos[0] !== pos[0] ||
     cache.pos[1] !== pos[1] ||
     cache.pos[2] !== pos[2] ||
@@ -766,6 +903,7 @@ function present(
     locked: entity.locked,
     visible,
     material: entity.material ?? null,
+    displayMode,
     pos: [...pos] as [number, number, number],
     rot: [...rot] as [number, number, number, number],
     scl: [...scl] as [number, number, number],
@@ -792,7 +930,6 @@ function present(
   if (mesh.isMesh) {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.copy(color);
-    const displayMode = useArcStore.getState().displayMode;
     mat.wireframe = displayMode === "wireframe";
     if (material) {
       mat.roughness = material.roughness;
@@ -808,9 +945,16 @@ function present(
     mat.emissiveIntensity = selected ? 0.45 : hovered ? 0.16 : 0;
   } else if ((obj as THREE.Line).isLine) {
     const mat = (obj as THREE.Line).material as THREE.LineBasicMaterial;
-    mat.color.copy(selected ? ref.palette.line : color);
+    mat.color.copy(selected ? ref.palette.line : hovered ? ref.palette.hover : color);
     mat.opacity = entity.locked ? 0.5 : 1;
     mat.transparent = entity.locked;
+    for (const child of obj.children) {
+      if (child.userData.isProfileFill) {
+        const fillMat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        fillMat.color.copy(selected ? ref.palette.selection : ref.palette.line);
+        fillMat.opacity = selected ? 0.24 : hovered ? 0.18 : 0.09;
+      }
+    }
   }
 }
 
@@ -981,34 +1125,39 @@ function pickEdgeAt(
   thresholdPx = 8,
 ): EdgeHit | null {
   if (!scene) return null;
-  // Edges live on the entity the cursor is over (or within reach of): look at
-  // the raycast entity first, fall back to a nearest-entity screen search.
   const hostRect = ref.host.getBoundingClientRect();
   const mousePx = {
     x: (point.x * 0.5 + 0.5) * hostRect.width,
     y: (-point.y * 0.5 + 0.5) * hostRect.height,
   };
-  const entityId = pickEntityAt(ref, point);
-  const entity = entityFromId(scene, entityId);
-  if (!entity) return null;
-  const obj = ref.objects.get(entity.id);
-  if (!obj || !obj.visible) return null;
-  const seg = pickEdgeScreen(entity, obj, ref.camera, mousePx, hostRect, thresholdPx);
-  if (!seg) return null;
-  return {
-    entityId: entity.id,
-    segIndex: seg.segIndex,
-    key: `${entity.id}:${seg.segIndex}`,
-    distance: seg.distance,
-    point: [seg.point.x, seg.point.y, seg.point.z],
-  };
-}
+  const faceHit = pickFaceAt(ref, point, scene);
+  let bestHit: EdgeHit | null = null;
+  let bestScreenDist = thresholdPx;
 
-function entityFromId(
-  scene: SceneData,
-  id: string | null,
-): EntityData | null {
-  return id ? scene.entities.find((e) => e.id === id) ?? null : null;
+  for (const entity of scene.entities) {
+    if (!entity.visible || entity.locked || !entity.lines || entity.lines.length < 6) continue;
+    if (entity.category === "sketch") continue;
+    const obj = ref.objects.get(entity.id);
+    if (!obj || !obj.visible) continue;
+    const seg = pickEdgeScreen(entity, obj, ref.camera, mousePx, hostRect, bestScreenDist);
+    if (!seg) continue;
+    // Reject back-facing edges that are occluded behind the hit front face.
+    if (faceHit) {
+      const edgeCamDist = seg.point.distanceTo(ref.camera.position);
+      if (edgeCamDist > faceHit.distance + Math.max(3, faceHit.distance * 0.04)) {
+        continue;
+      }
+    }
+    bestScreenDist = seg.distance;
+    bestHit = {
+      entityId: entity.id,
+      segIndex: seg.segIndex,
+      key: `${entity.id}:${seg.segIndex}`,
+      distance: seg.distance,
+      point: [seg.point.x, seg.point.y, seg.point.z],
+    };
+  }
+  return bestHit;
 }
 
 function pickEntityAt(
@@ -1016,9 +1165,16 @@ function pickEntityAt(
   point: { x: number; y: number },
 ): string | null {
   ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
-  const hits = ref.raycaster.intersectObjects(Array.from(ref.objects.values()), false);
-  const hit = hits.find((candidate) => candidate.object.visible);
-  return hit ? (hit.object.userData.entityId as string) : null;
+  const hits = ref.raycaster.intersectObjects(Array.from(ref.objects.values()), true);
+  for (const candidate of hits) {
+    if (!candidate.object.visible) continue;
+    if (candidate.object.userData.isSolidOutline) continue;
+    const id =
+      (candidate.object.userData.entityId as string | undefined) ??
+      (candidate.object.parent?.userData.entityId as string | undefined);
+    if (id) return id;
+  }
+  return null;
 }
 
 function snapCoord(value: number, gridSize: number, enabled: boolean): number {
@@ -1148,7 +1304,13 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.contextPress = { x: event.clientX, y: event.clientY };
     }
     if (event.button !== 0) return;
-    // The move gizmo owns its own pointer stream while hovered/dragging.
+    // Check the 3D ViewCube gizmo first so clicks/drags on it navigate the camera.
+    const w = ref.host.clientWidth;
+    const h = ref.host.clientHeight;
+    if (ref.gizmo.onPointerDown(event, w, h, ref.controls.target, ref.camera)) {
+      return;
+    }
+    // The move/rotate/scale gizmo owns its own pointer stream while hovered/dragging.
     if (ref.gizmoDragging || ref.tc.axis) {
       if (useArcStore.getState().hoverEntity) useArcStore.getState().setHoverEntity(null);
       return;
@@ -1163,6 +1325,12 @@ function attachHandlers(ref: ViewportRefs): () => void {
   };
   const move = (event: PointerEvent) => {
     const store = useArcStore.getState();
+    const w = ref.host.clientWidth;
+    const h = ref.host.clientHeight;
+    if (ref.gizmo.onPointerMove(event, w, h, ref.controls.target, ref.camera)) {
+      if (store.hoverEntity || store.hoverObj) store.setHoverEntity(null);
+      return;
+    }
     if (ref.marquee) {
       moveMarquee(ref, event);
       return;
@@ -1173,39 +1341,48 @@ function attachHandlers(ref: ViewportRefs): () => void {
     }
     if (store.scene) {
       const handler = handlerFor(store.tool);
-      if (handler && (store.tool === "select" || store.tool === "move")) {
+      if (
+        handler &&
+        (store.tool === "select" ||
+          store.tool === "move" ||
+          store.tool === "rotate" ||
+          store.tool === "scale")
+      ) {
         const point = ndcPoint(event);
-        const face = pickFaceAt(ref, point, store.scene);
-        if (face) {
+        const edge = pickEdgeAt(ref, point, store.scene, 7);
+        if (edge) {
           store.setHoverObj({
-            entityId: face.entityId,
-            kind: "face",
-            face: face.faceIndex,
-            edge: null,
-            point: face.point,
-            normal: face.normal,
+            entityId: edge.entityId,
+            kind: "edge",
+            face: null,
+            edge: edge.key,
+            point: edge.point,
+            normal: [0, 0, 0],
           });
         } else {
-          const edge = pickEdgeAt(ref, point, store.scene);
-          if (edge) {
+          const face = pickFaceAt(ref, point, store.scene);
+          if (face) {
             store.setHoverObj({
-              entityId: edge.entityId,
-              kind: "edge",
-              face: null,
-              edge: edge.key,
-              point: edge.point,
-              normal: [0, 0, 0],
+              entityId: face.entityId,
+              kind: "face",
+              face: face.faceIndex,
+              edge: null,
+              point: face.point,
+              normal: face.normal,
             });
           } else {
             const id = pickEntityAt(ref, point);
-            if (id !== store.hoverEntity) store.setHoverEntity(id);
+            if (id !== store.hoverEntity || store.hoverObj !== null) {
+              store.setHoverEntity(id);
+            }
           }
         }
       }
       const now = performance.now();
       if (now - ref.lastCursorAt > 80) {
         ref.lastCursorAt = now;
-        const world = pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), 0);
+        const planeY = store.sketchMode ? store.sketchPlaneHeight : 0;
+        const world = pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), planeY);
         if (world) store.setCursorWorld([world.x, world.y, world.z]);
       }
     }
@@ -1213,6 +1390,11 @@ function attachHandlers(ref: ViewportRefs): () => void {
     syncDrafting(ref);
   };
   const up = (event: PointerEvent) => {
+    const w = ref.host.clientWidth;
+    const h = ref.host.clientHeight;
+    if (ref.gizmo.onPointerUp(event, w, h)) {
+      return;
+    }
     if (ref.marquee) {
       finishMarquee(ref, event);
       return;
@@ -1232,7 +1414,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
     }
     const handler = handlerFor(useArcStore.getState().tool);
     handler?.onCancel?.(ctx);
-    if (handler?.hasActivity?.(ctx)) useArcStore.getState().setDrafting(false);
+    syncDrafting(ref);
   };
   const dbl = (event: MouseEvent) => {
     const handler = handlerFor(useArcStore.getState().tool);
@@ -1273,6 +1455,37 @@ function attachHandlers(ref: ViewportRefs): () => void {
     handlerFor(useArcStore.getState().tool)?.onBackspace?.(ctx);
     syncDrafting(ref);
   };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (uiCapture.active) return;
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const store = useArcStore.getState();
+    if (
+      store.view !== "editor" ||
+      store.paletteOpen ||
+      store.commandLineOpen ||
+      store.settingsOpen ||
+      store.startupOpen ||
+      store.onboardingOpen
+    ) {
+      return;
+    }
+    const handler = handlerFor(store.tool);
+    if (handler?.onKey?.(event, ctx)) {
+      event.preventDefault();
+      event.stopPropagation();
+      syncDrafting(ref);
+    }
+  };
 
   el.addEventListener("pointerdown", down);
   el.addEventListener("pointermove", move);
@@ -1281,6 +1494,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
   el.addEventListener("dblclick", dbl);
   el.addEventListener("wheel", wheel, { passive: true });
   el.addEventListener("contextmenu", ctx_);
+  window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("arc-draft-cancel", draftCancel);
   window.addEventListener("arc-draft-enter", draftEnter);
   window.addEventListener("arc-draft-backspace", draftBackspace);
@@ -1292,6 +1506,11 @@ function attachHandlers(ref: ViewportRefs): () => void {
     if (id) fitEntities(ref, [id]);
   };
   window.addEventListener("arc-focus-entity", focus);
+  const focusPlaneEv = (event: Event) => {
+    const n = (event as CustomEvent<{ normal?: [number, number, number] }>).detail?.normal ?? [0, 1, 0];
+    focusPlane(ref, new THREE.Vector3(n[0], n[1], n[2]));
+  };
+  window.addEventListener("arc-focus-plane", focusPlaneEv);
 
   return () => {
     el.removeEventListener("pointerdown", down);
@@ -1301,11 +1520,13 @@ function attachHandlers(ref: ViewportRefs): () => void {
     el.removeEventListener("dblclick", dbl);
     el.removeEventListener("wheel", wheel);
     el.removeEventListener("contextmenu", ctx_);
+    window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("arc-draft-cancel", draftCancel);
     window.removeEventListener("arc-draft-enter", draftEnter);
     window.removeEventListener("arc-draft-backspace", draftBackspace);
     window.removeEventListener("arc-fit-view", fit);
     window.removeEventListener("arc-focus-entity", focus);
+    window.removeEventListener("arc-focus-plane", focusPlaneEv);
   };
 }
 
@@ -1354,8 +1575,9 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     selection: () => useArcStore.getState().scene?.selection ?? [],
     docId: activeDoc,
 
-    planePoint(event, height = 0) {
-      return pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), height);
+    planePoint(event, height) {
+      const h = height ?? (useArcStore.getState().sketchMode ? useArcStore.getState().sketchPlaneHeight : 0);
+      return pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), h);
     },
     rayAt(event) {
       return rayAt(ref, ndcPoint(event));
@@ -1398,20 +1620,14 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       if (world.distanceTo(origin) <= tolerance) {
         return { point: origin.clone(), kind: "origin" };
       }
-      if (Math.abs(world.z) <= tolerance) {
-        return { point: new THREE.Vector3(world.x, world.y, 0), kind: "axis" };
-      }
-      if (Math.abs(world.x) <= tolerance) {
-        return { point: new THREE.Vector3(0, world.y, world.z), kind: "axis" };
-      }
 
+      // Check sketch & solid vertices BEFORE axis lines so endpoints near axes are never skipped!
       const endpointTolerance = tolerance * 2.2;
       let best: THREE.Vector3 | null = null;
       let bestDist = endpointTolerance;
       const scene = useArcStore.getState().scene;
       if (scene && snapEnabled) {
         for (const entity of scene.entities) {
-          if (entity.category !== "sketch") continue;
           if (!entity.visible || !entity.lines || entity.lines.length < 3) continue;
           const obj = ref.objects.get(entity.id);
           if (!obj || !obj.visible) continue;
@@ -1425,10 +1641,23 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
               best = local.clone();
             }
           }
-          if (bestDist < tolerance * 0.5) break; // close enough, stop scanning
+          if (bestDist < tolerance * 0.5) break;
         }
       }
       if (best) return { point: best, kind: "endpoint" };
+
+      if (Math.abs(world.z) <= tolerance) {
+        return {
+          point: new THREE.Vector3(snapCoord(world.x, gridSize, snapEnabled), world.y, 0),
+          kind: "axis",
+        };
+      }
+      if (Math.abs(world.x) <= tolerance) {
+        return {
+          point: new THREE.Vector3(0, world.y, snapCoord(world.z, gridSize, snapEnabled)),
+          kind: "axis",
+        };
+      }
 
       return {
         point: new THREE.Vector3(
@@ -1539,9 +1768,11 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     setGizmo(mode: GizmoMode | null) {
       if (!mode) {
         if (ref.tc.object) ref.tc.detach();
+        ref.tc.getHelper().visible = false;
         return;
       }
       ref.tc.setMode(mode);
+      updateGizmoAttachment(ref);
     },
     gizmoActive: () => ref.gizmoDragging || ref.tc.axis !== null,
     gizmoBusy: () => ref.gizmoDragging,

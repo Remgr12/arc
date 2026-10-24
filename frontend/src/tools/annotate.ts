@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { ToolContext, ToolHandler } from "./types";
 import { previewLine } from "./sketch";
+import { previewMaterial } from "./primitives";
 
 // ---------------------------------------------------------------------------
 // Annotation tools: dimension and wall. Both collect points on the ground
@@ -13,10 +14,14 @@ function flat(p: THREE.Vector3): [number, number, number] {
 
 // ----------------------------------------------------------------- dimension
 
-let dim: { points: THREE.Vector3[] } = { points: [] };
+let dim: {
+  points: THREE.Vector3[];
+  press: { x: number; y: number } | null;
+  dragged: boolean;
+} = { points: [], press: null, dragged: false };
 
 function resetDimension(ctx: ToolContext): void {
-  dim = { points: [] };
+  dim = { points: [], press: null, dragged: false };
   ctx.clearPreview("draft");
   ctx.showMeasure(null);
 }
@@ -42,17 +47,29 @@ export const dimensionTool: ToolHandler = {
   onDeactivate: resetDimension,
   hasActivity: () => dim.points.length > 0,
   onPointerDown(event, ctx) {
-    const raw = ctx.planePoint(event, 0);
+    const raw = ctx.planePoint(event, dim.points[0]?.y);
     if (!raw) return true;
     const snapped = ctx.snap(raw).point;
-    dim.points = [snapped];
-    ctx.capturePointer(event);
-    ctx.setStatus("Dimension · click the second point");
+    if (dim.points.length === 0) {
+      dim.points = [snapped];
+      dim.press = { x: event.clientX, y: event.clientY };
+      dim.dragged = false;
+      ctx.capturePointer(event);
+      ctx.setStatus("Dimension · click the second point");
+      return true;
+    }
+    if (snapped.distanceTo(dim.points[0]) > 1e-3) {
+      dim.points.push(snapped);
+      commitDimension(ctx);
+    }
     return true;
   },
   onPointerMove(event, ctx) {
-    const raw = ctx.planePoint(event, 0);
+    const raw = ctx.planePoint(event, dim.points[0]?.y);
     if (!raw || dim.points.length === 0) return;
+    if (dim.press && Math.hypot(event.clientX - dim.press.x, event.clientY - dim.press.y) > 5) {
+      dim.dragged = true;
+    }
     const cursor = ctx.snap(raw).point;
     const [a] = dim.points;
     ctx.setPreview(previewLine([a, cursor], ctx), "draft");
@@ -60,8 +77,14 @@ export const dimensionTool: ToolHandler = {
   },
   onPointerUp(event, ctx) {
     if (dim.points.length === 0) return;
-    const raw = ctx.planePoint(event, 0);
     ctx.releasePointer(event);
+    if (!dim.dragged) {
+      dim.press = null;
+      return;
+    }
+    const raw = ctx.planePoint(event, dim.points[0]?.y);
+    dim.press = null;
+    dim.dragged = false;
     if (!raw) return;
     const cursor = ctx.snap(raw).point;
     if (cursor.distanceTo(dim.points[0]) < 1e-3) return;
@@ -72,10 +95,13 @@ export const dimensionTool: ToolHandler = {
     if (dim.points.length > 0) resetDimension(ctx);
   },
   onBackspace: resetDimension,
-  hint: () => "Dimension · click two points",
+  hint: () => "Dimension · click or drag two points",
 };
 
 // ---------------------------------------------------------------------- wall
+
+const WALL_WIDTH = 10;
+const WALL_HEIGHT = 80;
 
 let wall: { points: THREE.Vector3[] } = { points: [] };
 
@@ -85,10 +111,31 @@ function resetWall(ctx: ToolContext): void {
   ctx.showMeasure(null);
 }
 
+function buildWallPreview(points: THREE.Vector3[], ctx: ToolContext): THREE.Object3D {
+  const group = new THREE.Group();
+  group.add(previewLine(points, ctx));
+  const mat = previewMaterial(ctx);
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-3) continue;
+    const geo = new THREE.BoxGeometry(len, WALL_HEIGHT, WALL_WIDTH);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((a.x + b.x) / 2, a.y + WALL_HEIGHT / 2, (a.z + b.z) / 2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    mesh.renderOrder = 997;
+    group.add(mesh);
+  }
+  return group;
+}
+
 function commitWall(ctx: ToolContext): boolean {
   if (wall.points.length < 2) return false;
   const path = wall.points.map((p) => [p.x, p.z] as [number, number]);
-  void ctx.createEntity({ type: "wall", path, width: 10, height: 80 }, [0, 0, 0]);
+  void ctx.createEntity({ type: "wall", path, width: WALL_WIDTH, height: WALL_HEIGHT }, [0, 0, 0]);
   ctx.setStatus("Wall created");
   resetWall(ctx);
   return true;
@@ -131,7 +178,7 @@ export const wallTool: ToolHandler = {
     if (!raw || wall.points.length === 0) return;
     const cursor = ctx.snap(raw).point;
     const pts = [...wall.points, cursor];
-    ctx.setPreview(previewLine(pts, ctx), "draft");
+    ctx.setPreview(buildWallPreview(pts, ctx), "draft");
     ctx.showMeasure(wallTotal(pts).toFixed(2), ctx.screenPoint(event));
   },
   onPointerUp(event, ctx) {
@@ -151,7 +198,7 @@ export const wallTool: ToolHandler = {
         ctx.clearPreview("draft");
         ctx.showMeasure(null);
       } else {
-        ctx.setPreview(previewLine(wall.points, ctx), "draft");
+        ctx.setPreview(buildWallPreview(wall.points, ctx), "draft");
       }
     }
   },
@@ -162,7 +209,7 @@ export const wallTool: ToolHandler = {
         ctx.clearPreview("draft");
         ctx.showMeasure(null);
       } else {
-        ctx.setPreview(previewLine(wall.points, ctx), "draft");
+        ctx.setPreview(buildWallPreview(wall.points, ctx), "draft");
       }
     }
   },

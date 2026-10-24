@@ -172,7 +172,7 @@ function createOffsetEntity(ctx: ToolContext, entry: OffsetSet, distance: number
     const center = object
       ? new THREE.Vector3().setFromMatrixPosition(object.matrixWorld)
       : chain.points.reduce((acc, p) => acc.add(p), new THREE.Vector3()).divideScalar(chain.points.length);
-    void ctx.createEntity({ type: "circle_curve", radius: r, segments: 64 }, [center.x, 0, center.z]);
+    void ctx.createEntity({ type: "circle_curve", radius: r, segments: 64 }, [center.x, center.y, center.z]);
     return true;
   }
   const offset = offsetPolyline(chain.points, chain.closed, distance);
@@ -225,7 +225,7 @@ export const offsetTool: ToolHandler = defineTool({
           offsetSet = [...offsetSet, { id: picked, entity, chain }];
           ctx.setStatus(`${offsetSet.length} curve(s) in offset set · move to preview, empty-space click commits`);
         }
-        const after = ctx.planePoint(event, 0);
+        const after = ctx.planePoint(event, offsetSet[0]?.chain.points[0]?.y);
         if (after) offsetPreview(ctx, after);
         else clearDraft(ctx);
         return true;
@@ -235,7 +235,7 @@ export const offsetTool: ToolHandler = defineTool({
       ctx.setStatus("Offset · click sketch curves to add them first");
       return true;
     }
-    const cursor = ctx.planePoint(event, 0);
+    const cursor = ctx.planePoint(event, offsetSet[0]?.chain.points[0]?.y);
     if (!cursor) return true;
     const distance = signedOffsetDistance(offsetSet[0].chain, cursor);
     if (Math.abs(distance) < 1e-3) {
@@ -245,11 +245,11 @@ export const offsetTool: ToolHandler = defineTool({
     let ok = 0;
     for (const entry of offsetSet) if (createOffsetEntity(ctx, entry, distance)) ok++;
     ctx.setStatus(ok === 1 ? "Offset created" : `${ok} offsets created`);
-    clearDraft(ctx);
+    resetOffset(ctx);
     return true;
   },
   onPointerMove(event, ctx) {
-    const cursor = ctx.planePoint(event, 0);
+    const cursor = ctx.planePoint(event, offsetSet[0]?.chain.points[0]?.y);
     if (!cursor) {
       clearDraft(ctx);
       return;
@@ -313,8 +313,9 @@ function chainHits(
 function pointAtU(points: THREE.Vector3[], u: number, closed: boolean): THREE.Vector3 {
   const n = points.length;
   let uu = u;
-  if (closed) uu = u < 0 ? (-u) % n : u % n;
-  const i = Math.max(0, Math.min(n - 2, Math.floor(uu)));
+  if (closed) uu = ((u % n) + n) % n;
+  const maxIdx = closed ? n - 1 : n - 2;
+  const i = Math.max(0, Math.min(maxIdx, Math.floor(uu)));
   const t = Math.max(0, Math.min(1, uu - i));
   const a = points[i];
   const b = points[(i + 1) % n];
@@ -419,7 +420,7 @@ export const trimTool: ToolHandler = defineTool({
       ctx.setStatus(this.hint!(ctx));
       return true;
     }
-    const cursor = ctx.planePoint(event, 0);
+    const cursor = ctx.planePoint(event, chain.points[0]?.y);
     if (!cursor) return true;
     const plan = trimPlan(chain, cursor, collectChains(ctx, picked));
     if (!plan) {
@@ -441,7 +442,7 @@ export const trimTool: ToolHandler = defineTool({
     const picked = ctx.pickEntity(event);
     const entity = ctx.entityById(picked ?? "");
     const chain = !isSketchEntity(entity) ? null : chainOf(ctx, picked);
-    const cursor = ctx.planePoint(event, 0);
+    const cursor = ctx.planePoint(event, chain?.points[0]?.y);
     if (!chain || !picked || !cursor) {
       clearDraft(ctx);
       return;
@@ -618,14 +619,14 @@ function resetFillet(ctx: ToolContext): void {
 }
 
 /** Corner vertices a fillet may address: polyline interiors, all corners of
- * closed loops (rotation fixes the seam) and rectangle corners. */
+ * closed loops (rotation fixes the seam), polygon corners, and rectangle corners. */
 function filletHover(ctx: ToolContext, event: PointerEvent | MouseEvent): VertexHover | null {
   const sp = ctx.screenPoint(event);
   let best: VertexHover | null = null;
   for (const ref of collectChains(ctx, null)) {
     const g = ref.entity.geometry as Record<string, unknown>;
     const type = String(g.type);
-    if (type !== "polyline_curve" && type !== "rectangle_curve") continue;
+    if (type !== "polyline_curve" && type !== "rectangle_curve" && type !== "polygon_curve") continue;
     const maxIdx = type === "rectangle_curve" ? 4 : ref.points.length;
     for (let i = 0; i < maxIdx; i++) {
       if (type === "polyline_curve" && !ref.closed && (i === 0 || i === ref.points.length - 1)) continue;
@@ -691,12 +692,13 @@ function filletResult(
   ctx: ToolContext,
   armed: ArmedFillet,
   radius: number,
+  allCorners = false,
 ): { points: THREE.Vector3[]; closed: boolean } | null {
   const chain = chainOf(ctx, armed.id);
   if (!chain) return null;
   const g = ctx.entityById(armed.id)?.geometry as Record<string, unknown> | undefined;
   if (!g) return null;
-  if (String(g.type) === "rectangle_curve") {
+  if (allCorners && String(g.type) === "rectangle_curve") {
     if (chain.points.length !== 4) return null;
     const rect = filletRectangleWorld(chain.points, radius);
     return rect ? { points: rect, closed: true } : null;
@@ -719,8 +721,9 @@ function commitFillet(ctx: ToolContext, event: PointerEvent | MouseEvent): void 
     resetFillet(ctx);
     return;
   }
-  const cursor = ctx.planePoint(event, 0);
   const chain = chainOf(ctx, armedFillet.id);
+  const planeY = chain?.points[0]?.y ?? 0;
+  const cursor = ctx.planePoint(event, planeY);
   if (!cursor || !chain) {
     resetFillet(ctx);
     return;
@@ -731,7 +734,7 @@ function commitFillet(ctx: ToolContext, event: PointerEvent | MouseEvent): void 
     ctx.setStatus("Fillet radius is too small · move away from the corner");
     return;
   }
-  const result = filletResult(ctx, armedFillet, radius);
+  const result = filletResult(ctx, armedFillet, radius, event.shiftKey);
   if (!result) {
     ctx.setStatus("Can't fillet this corner · its sides are collinear or the radius overflows");
     return;
@@ -787,20 +790,20 @@ export const filletTool: ToolHandler = defineTool({
       ctx.showMeasure(null);
       return;
     }
-    const cursor = ctx.planePoint(event, 0);
-    if (!cursor) {
+    const chain = chainOf(ctx, armed.id);
+    if (!chain) {
       clearDraft(ctx);
       return;
     }
-    const chain = chainOf(ctx, armed.id);
-    if (!chain) {
+    const cursor = ctx.planePoint(event, chain.points[0]?.y ?? 0);
+    if (!cursor) {
       clearDraft(ctx);
       return;
     }
     const vertex = chain.points[Math.min(armed.vertexIndex, chain.points.length - 1)];
     const radius = distXZ(vertex, cursor);
     const parts: THREE.Object3D[] = [vertexMarker(vertex, ctx)];
-    const result = filletResult(ctx, armed, radius);
+    const result = filletResult(ctx, armed, radius, event.shiftKey);
     if (result) {
       const mat = accentMaterial(ctx);
       parts.push(polylineObject(result.points, mat, result.closed));
@@ -860,7 +863,7 @@ export const mirrorTool: ToolHandler = defineTool({
   onDeactivate: resetMirror,
   hasActivity: () => mirrorAxis !== null,
   onPointerDown(event, ctx) {
-    const raw = ctx.planePoint(event, 0);
+    const raw = ctx.planePoint(event, mirrorAxis?.y);
     if (!raw) return true;
     const point = ctx.snap(raw).point;
     if (mirrorSelection(ctx).length === 0) {
@@ -901,7 +904,7 @@ export const mirrorTool: ToolHandler = defineTool({
       clearDraft(ctx);
       return;
     }
-    const raw = ctx.planePoint(event, 0);
+    const raw = ctx.planePoint(event, mirrorAxis.y);
     if (!raw) {
       clearDraft(ctx);
       return;

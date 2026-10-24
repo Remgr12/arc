@@ -80,7 +80,8 @@ export function deriveFaces(entity: EntityData): FaceGroup[] {
       }
     }
     const [nx, ny, nz] = best.split(",").map(Number);
-    out.push({ index: tag, triCount: g.count, normal: [nx, ny, nz] });
+    const len = Math.hypot(nx, ny, nz) || 1;
+    out.push({ index: tag, triCount: g.count, normal: [nx / len, ny / len, nz / len] });
   }
   return out;
 }

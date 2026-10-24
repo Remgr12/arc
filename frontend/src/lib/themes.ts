@@ -196,7 +196,11 @@ export function applyThemeCss(theme: Theme): void {
     styleEl.id = "arc-theme-overrides";
     document.head.appendChild(styleEl);
   }
-  const rule = THEME_COLOR_KEYS.map((key) => `${CS_VARS[key]}: ${theme.colors[key]};`).join(" ");
+  const light = isLightColor(theme.colors["base-50"]);
+  const base900 = light ? "#090d14" : "#f4f7fb";
+  const rule =
+    THEME_COLOR_KEYS.map((key) => `${CS_VARS[key]}: ${theme.colors[key]};`).join(" ") +
+    ` --color-base-900: ${base900}; --color-danger-500: #ef4444; --color-danger-600: #dc2626;`;
   styleEl.textContent = `:root{${rule}}`;
 }
 

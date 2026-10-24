@@ -9,23 +9,11 @@ import type { ToolId } from "../lib/types";
 const HISTORY_LIMIT = 50;
 const commandHistory: string[] = [];
 
-const TOOL_COMMANDS: ReadonlySet<string> = new Set([
-  "box",
-  "sphere",
-  "cylinder",
-  "cone",
-  "torus",
-  "plane",
-  "line",
-  "polyline",
-  "wall",
-  "dimension",
-]);
-
 const HELP_TEXT =
-  "Commands: box sphere cylinder cone torus plane | line polyline wall dimension | " +
-  "undo redo delete duplicate select all | fit | union subtract intersect | " +
-  "new save open import | export obj|stl|stl_ascii|gltf|step | material <id|label> | help";
+  "Tools: select move rotate scale | line polyline rectangle circle arc polygon | " +
+  "offset trim extend fillet mirror | extrude revolve sweep loft extrude-face offset-face fillet-edge | " +
+  "box sphere cylinder cone torus plane | dimension wall | " +
+  "Actions: undo redo delete duplicate fit union subtract intersect new save open import export help";
 
 type RunResult = "close" | "clear" | "keep";
 
@@ -36,7 +24,7 @@ function runCommand(raw: string): RunResult {
   if (tokens.length === 0) return "clear";
   const [cmd, ...args] = tokens;
 
-  if (TOOL_COMMANDS.has(cmd)) {
+  if (TOOL_BY_ID.has(cmd as ToolId) && !(cmd === "select" && args[0] === "all")) {
     const tool = cmd as ToolId;
     const def = TOOL_BY_ID.get(tool);
     actions.setTool(tool);
@@ -51,6 +39,9 @@ function runCommand(raw: string): RunResult {
         return "clear";
       }
       break;
+    case "sketch":
+      st.enterSketchMode({ tool: "line" });
+      return "close";
     case "undo":
       void actions.undo();
       return "clear";
@@ -169,14 +160,14 @@ export function CommandLine() {
   };
 
   return (
-    <div className="fixed bottom-16 left-1/2 z-40 flex w-[560px] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-[12.5px] shadow-2xl">
+    <div className="fixed bottom-10 left-1/2 z-40 flex w-[560px] -translate-x-1/2 items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-[12.5px] shadow-2xl">
       <Terminal size={13} className="shrink-0 text-base-500" />
       <input
         ref={inputRef}
         type="text"
         spellCheck={false}
         value={value}
-        placeholder="Type a command — help lists them …"
+        placeholder="Type a tool or command — help lists them …"
         onChange={(e) => {
           setValue(e.target.value);
           historyIndexRef.current = -1;

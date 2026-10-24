@@ -3,7 +3,7 @@
 
 use cgmath::prelude::*;
 use truck_meshalgo::tessellation::RobustMeshableShape;
-use truck_polymesh::PolygonMesh;
+use truck_polymesh::{Invertible, PolygonMesh};
 
 /// `[x, y, z]` -> cgmath point.
 pub fn arr_to_pt(a: [f64; 3]) -> cgmath::Point3<f64> {
@@ -97,15 +97,32 @@ fn tri_normal(pts: &[[f64; 3]]) -> [f64; 3] {
 /// Tessellate a solid B-rep face-by-face, tagging each triangulated group with
 /// the B-rep face's index so the frontend can pick individual faces.
 pub fn solid_to_buffer(solid: &truck_modeling::Solid, tol: f64) -> crate::core::mesh::MeshBuffer {
+    use std::collections::HashSet;
     let mut mb = crate::core::mesh::MeshBuilder::new();
     let mut face_id: u32 = 0;
+    let mut seen_edges = HashSet::new();
     for shell in solid.boundaries() {
         for face in shell.face_iter() {
             let single: truck_modeling::Shell = std::iter::once(face.clone()).collect();
             let tessellated = single.robust_triangulation(tol);
             for tess_face in tessellated.face_iter() {
-                if let Some(polygon) = tess_face.surface() {
+                if let Some(mut polygon) = tess_face.surface() {
+                    if !tess_face.orientation() {
+                        polygon.invert();
+                    }
                     append_polygon(&mut mb, &polygon, face_id);
+                }
+            }
+            for edge in face.edge_iter() {
+                if seen_edges.insert(edge.id()) {
+                    let p0 = pt_to_arr(edge.front().point());
+                    let p1 = pt_to_arr(edge.back().point());
+                    if ((p0[0] - p1[0]).powi(2) + (p0[1] - p1[1]).powi(2) + (p0[2] - p1[2]).powi(2))
+                        .sqrt()
+                        > 1e-5
+                    {
+                        mb.push_line(p0, p1);
+                    }
                 }
             }
             face_id += 1;

@@ -125,7 +125,7 @@ export function KeybindSettings() {
                               onClick={
                                 editable ? () => setCapturing({ action: def.id, replacing: binding }) : undefined
                               }
-                              className={cn(editable && "cursor-pointer hover:text-base-50")}
+                              className={cn(editable && "cursor-pointer hover:text-base-900")}
                             >
                               {formatBinding(binding)}
                             </button>
@@ -135,7 +135,7 @@ export function KeybindSettings() {
                                 onClick={() =>
                                   useKeybindStore.getState().clearBinding(profile.id, def.id, binding)
                                 }
-                                className="text-base-500 opacity-0 transition-opacity hover:text-base-50 group-hover/chip:opacity-100"
+                                className="text-base-500 opacity-0 transition-opacity hover:text-base-900 group-hover/chip:opacity-100"
                               >
                                 <X size={11} />
                               </button>
@@ -218,7 +218,7 @@ function CaptureRow({
     <span className="flex items-center gap-2 rounded border border-accent-600 px-2 py-0.5 font-mono text-[10.5px] text-base-700">
       Press keys…
       <span className="font-sans text-[10px] text-base-500">· Esc cancels</span>
-      <button title="Cancel" onClick={onCancel} className="text-base-500 hover:text-base-50">
+      <button title="Cancel" onClick={onCancel} className="text-base-500 hover:text-base-900">
         <X size={11} />
       </button>
     </span>

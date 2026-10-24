@@ -705,7 +705,7 @@ impl Document {
                     } else {
                         None
                     },
-                    if entity.kind.has_lines() {
+                    if !b.lines.is_empty() {
                         Some(b.lines.clone())
                     } else {
                         None

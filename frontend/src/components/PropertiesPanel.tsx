@@ -75,11 +75,11 @@ export function PropertiesPanel() {
 
   if (!entity) {
     return (
-      <div className="flex h-full min-h-0 flex-col bg-base-50/80 backdrop-blur-sm transition-all duration-300">
+      <div className="flex h-full min-h-0 flex-col bg-base-50">
         <PanelHeader title="Properties" />
         <div className="flex flex-1 items-start px-3 pt-3">
-          <p className="text-[12px] leading-relaxed text-base-500/80 transition-all duration-300">
-            Select an item to inspect it. Shift-click to build a multiple selection.
+          <p className="text-[12px] leading-relaxed text-base-500">
+            Select an item to inspect its transform, layer, and parametric dimensions.
           </p>
         </div>
       </div>
@@ -87,9 +87,9 @@ export function PropertiesPanel() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-base-200/60 bg-base-50/80 backdrop-blur-md shadow-lg transition-all duration-300 hover:shadow-xl">
+    <div className="flex h-full min-h-0 flex-col bg-base-50">
       <PanelHeader title="Properties" hint={entity.kind} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 transition-all duration-300">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         <EntityForm docId={docId} entity={entity} scene={scene} />
       </div>
     </div>
@@ -98,10 +98,10 @@ export function PropertiesPanel() {
 
 function PanelHeader({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200/60 bg-base-100/80 px-3 backdrop-blur-sm transition-all duration-300">
-      <span className="text-[12px] font-semibold text-base-800 transition-all duration-300">{title}</span>
+    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-3">
+      <span className="text-[12px] font-semibold text-base-800">{title}</span>
       {hint && (
-        <span className="rounded bg-base-200/60 px-1.5 py-0.5 font-mono text-[10px] text-base-600 transition-all duration-300">{hint}</span>
+        <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{hint}</span>
       )}
     </div>
   );
@@ -324,7 +324,7 @@ function quatToEuler(q: [number, number, number, number]): { x: number; y: numbe
     new THREE.Quaternion(q[0], q[1], q[2], q[3]),
     EULER_ORDER,
   );
-  const d = (r: number) => Math.round((r * 180) / Math.PI);
+  const d = (r: number) => Math.round(((r * 180) / Math.PI) * 10) / 10;
   return { x: d(euler.x), y: d(euler.y), z: d(euler.z) };
 }
 

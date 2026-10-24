@@ -93,9 +93,23 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             operation,
             first,
             second,
+            first_transform,
+            second_transform,
         } => {
-            let a = payload_to_solid(first)?;
-            let b = payload_to_solid(second)?;
+            let mut a = payload_to_solid(first)?;
+            if let Some(t) = first_transform {
+                a = truck_modeling::builder::transformed(
+                    &a,
+                    super::convert::transform_to_cg_matrix(t),
+                );
+            }
+            let mut b = payload_to_solid(second)?;
+            if let Some(t) = second_transform {
+                b = truck_modeling::builder::transformed(
+                    &b,
+                    super::convert::transform_to_cg_matrix(t),
+                );
+            }
             let solid = csg_boolean(*operation, a, b)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
@@ -265,9 +279,23 @@ pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
             operation,
             first,
             second,
+            first_transform,
+            second_transform,
         } => {
-            let a = payload_to_solid(first)?;
-            let b = payload_to_solid(second)?;
+            let mut a = payload_to_solid(first)?;
+            if let Some(t) = first_transform {
+                a = truck_modeling::builder::transformed(
+                    &a,
+                    super::convert::transform_to_cg_matrix(t),
+                );
+            }
+            let mut b = payload_to_solid(second)?;
+            if let Some(t) = second_transform {
+                b = truck_modeling::builder::transformed(
+                    &b,
+                    super::convert::transform_to_cg_matrix(t),
+                );
+            }
             csg_boolean(*operation, a, b)
         }
         Geometry::SolidFillet {
@@ -962,13 +990,13 @@ fn gen_sweep(
             let b = rings[r][j];
             let c = rings[r + 1][j];
             let d = rings[r + 1][i];
-            let n = tri_normal(a, c, b);
-            mb.push_tri(a, c, b, n, 0);
-            let n = tri_normal(a, b, d);
-            mb.push_tri(a, b, d, n, 0);
+            let n = tri_normal(a, b, c);
+            mb.push_tri(a, b, c, n, 0);
+            let n = tri_normal(a, c, d);
+            mb.push_tri(a, c, d, n, 0);
         }
     }
-    for ring in [&rings[0], rings.last().unwrap()] {
+    for (cap_idx, ring) in [&rings[0], rings.last().unwrap()].into_iter().enumerate() {
         let mut center = [0.0f64; 3];
         for v in ring.iter() {
             for k in 0..3 {
@@ -977,10 +1005,16 @@ fn gen_sweep(
         }
         let n = ring.len() as f64;
         center = [center[0] / n, center[1] / n, center[2] / n];
+        let face_id = (cap_idx + 1) as u32;
         for i in 0..ring.len() {
             let j = (i + 1) % ring.len();
-            let normal = tri_normal(center, ring[i], ring[j]);
-            mb.push_tri(center, ring[i], ring[j], normal, 0);
+            let (v0, v1) = if cap_idx == 0 {
+                (ring[j], ring[i])
+            } else {
+                (ring[i], ring[j])
+            };
+            let normal = tri_normal(center, v0, v1);
+            mb.push_tri(center, v0, v1, normal, face_id);
         }
     }
     Ok(())
@@ -1003,10 +1037,10 @@ fn stitch_sections(mb: &mut MeshBuilder, sections: &[Vec<[f64; 3]>]) -> Result<(
             let b = lower[j];
             let c = upper[j];
             let d = upper[i];
-            let n = tri_normal(a, c, b);
-            mb.push_tri(a, c, b, n, 0);
-            let n = tri_normal(a, b, d);
-            mb.push_tri(a, b, d, n, 0);
+            let n = tri_normal(a, b, c);
+            mb.push_tri(a, b, c, n, 0);
+            let n = tri_normal(a, c, d);
+            mb.push_tri(a, c, d, n, 0);
         }
     }
     Ok(())
@@ -1015,15 +1049,49 @@ fn stitch_sections(mb: &mut MeshBuilder, sections: &[Vec<[f64; 3]>]) -> Result<(
 /// Stitch sections + fan caps via XZ earclipping.
 fn gen_loft(mb: &mut MeshBuilder, sections: &[Vec<[f64; 3]>]) -> Result<(), String> {
     stitch_sections(mb, sections)?;
-    for cap in [sections.first().unwrap(), sections.last().unwrap()] {
+    let avg_pt = |ring: &[[f64; 3]]| -> [f64; 3] {
+        let mut c = [0.0; 3];
+        for p in ring {
+            c[0] += p[0];
+            c[1] += p[1];
+            c[2] += p[2];
+        }
+        let n = ring.len() as f64;
+        [c[0] / n, c[1] / n, c[2] / n]
+    };
+    let c_first = avg_pt(sections.first().unwrap());
+    let c_last = avg_pt(sections.last().unwrap());
+    let loft_dir = [
+        c_last[0] - c_first[0],
+        c_last[1] - c_first[1],
+        c_last[2] - c_first[2],
+    ];
+    for (cap_idx, cap) in [sections.first().unwrap(), sections.last().unwrap()]
+        .into_iter()
+        .enumerate()
+    {
         let planar: Vec<[f64; 2]> = cap.iter().map(|p| [p[0], p[2]]).collect();
         let tris = earclip_xz(&planar);
+        let face_id = (cap_idx + 1) as u32;
+        let outward_sign = if cap_idx == 0 { -1.0 } else { 1.0 };
         for t in &tris {
             let a = cap[t[0]];
             let b = cap[t[1]];
             let c = cap[t[2]];
             let n = tri_normal(a, b, c);
-            mb.push_tri(a, b, c, n, 0);
+            let align =
+                (n[0] * loft_dir[0] + n[1] * loft_dir[1] + n[2] * loft_dir[2]) * outward_sign;
+            let flip = if align.abs() > 1e-9 {
+                align < 0.0
+            } else {
+                cap_idx == 0
+            };
+            if flip {
+                let n_rev = tri_normal(a, c, b);
+                mb.push_tri(a, c, b, n_rev, face_id);
+            } else {
+                mb.push_tri(a, b, c, n, face_id);
+            }
         }
     }
     Ok(())
@@ -1339,5 +1407,138 @@ mod tests {
         let result = solid_fillet(&solid, [[30.0, 10.0, 20.0], [30.0, 10.0, -20.0]], 4.0);
         let filleted = result.expect("vertical edge fillet");
         assert_eq!(filleted.boundaries()[0].len(), 7);
+    }
+
+    #[test]
+    fn torus_lies_in_xz_with_outward_normals_and_clamps_tube() {
+        let radius = 30.0;
+        let tube = 8.0;
+        let buffer = generate(&Geometry::Torus {
+            radius,
+            tube,
+            segments: 24,
+            tubular_segments: 16,
+        })
+        .expect("torus mesh");
+        assert!(!buffer.positions.is_empty());
+        for (tri, norm) in buffer.positions.chunks(9).zip(buffer.normals.chunks(9)) {
+            let cx = ((tri[0] + tri[3] + tri[6]) / 3.0) as f64;
+            let cy = ((tri[1] + tri[4] + tri[7]) / 3.0) as f64;
+            let cz = ((tri[2] + tri[5] + tri[8]) / 3.0) as f64;
+            assert!(
+                cy.abs() <= tube + 1e-2,
+                "torus Y should stay within tube radius, got {cy}"
+            );
+            let r_xz = (cx * cx + cz * cz).sqrt();
+            assert!(r_xz > 1e-3);
+            let ring_x = cx * (radius / r_xz);
+            let ring_z = cz * (radius / r_xz);
+            let ox = cx - ring_x;
+            let oy = cy;
+            let oz = cz - ring_z;
+            let dot = (norm[0] as f64) * ox + (norm[1] as f64) * oy + (norm[2] as f64) * oz;
+            assert!(dot > 0.0, "torus normal should point outward, dot={dot}");
+        }
+        // tube >= radius should clamp rather than error
+        assert!(shapes::torus_solid(20.0, 25.0).is_ok());
+    }
+
+    #[test]
+    fn extrude_and_slab_clean_duplicates_and_orient_outward() {
+        // CW vs CCW with repeated closing point
+        let cw_dup = vec![
+            [-20.0, -15.0],
+            [20.0, -15.0],
+            [20.0, -15.0],
+            [20.0, 15.0],
+            [-20.0, 15.0],
+            [-20.0, -15.0],
+        ];
+        let ccw = vec![[-20.0, -15.0], [-20.0, 15.0], [20.0, 15.0], [20.0, -15.0]];
+        for poly in [cw_dup, ccw] {
+            let buf = generate(&Geometry::Extrude {
+                polygon: poly,
+                height: 20.0,
+            })
+            .expect("extrude mesh");
+            for (tri, norm) in buf.positions.chunks(9).zip(buf.normals.chunks(9)) {
+                let cx = ((tri[0] + tri[3] + tri[6]) / 3.0) as f64;
+                let cy = ((tri[1] + tri[4] + tri[7]) / 3.0) as f64;
+                let cz = ((tri[2] + tri[5] + tri[8]) / 3.0) as f64;
+                let dot = (norm[0] as f64) * cx + (norm[1] as f64) * cy + (norm[2] as f64) * cz;
+                assert!(dot > 0.0, "extrude normal should point outward, dot={dot}");
+            }
+        }
+    }
+
+    #[test]
+    fn revolve_two_point_profile_validates_and_generates() {
+        let rev = Geometry::Revolve {
+            profile: vec![[15.0, 0.0], [15.0, 30.0]],
+            steps: 16,
+            angle_deg: 360.0,
+        };
+        rev.validate().expect("2-point revolve profile should validate");
+        let buf = generate(&rev).expect("2-point revolve mesh");
+        assert!(!buf.positions.is_empty());
+    }
+
+    #[test]
+    fn solid_buffer_populates_edge_lines() {
+        let buf = generate(&Geometry::Box {
+            width: 40.0,
+            depth: 30.0,
+            height: 20.0,
+            corner_radius: 0.0,
+        })
+        .expect("box mesh");
+        // 12 edges * 2 points * 3 floats = 72 floats
+        assert_eq!(buf.lines.len(), 72);
+    }
+
+    #[test]
+    fn sweep_and_loft_have_distinct_cap_tags_and_outward_caps() {
+        let sweep = generate(&Geometry::Sweep {
+            path: vec![[0.0, 0.0, 0.0], [0.0, 40.0, 0.0]],
+            radius: 10.0,
+            sides: 12,
+        })
+        .expect("sweep mesh");
+        assert_eq!(face_ids(&sweep), vec![0, 1, 2]);
+
+        let loft = generate(&Geometry::Loft {
+            sections: vec![
+                vec![[-10.0, 0.0, -10.0], [10.0, 0.0, -10.0], [10.0, 0.0, 10.0], [-10.0, 0.0, 10.0]],
+                vec![[-10.0, 30.0, -10.0], [10.0, 30.0, -10.0], [10.0, 30.0, 10.0], [-10.0, 30.0, 10.0]],
+            ],
+        })
+        .expect("loft mesh");
+        assert_eq!(face_ids(&loft), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn csg_respects_child_transforms() {
+        let mut t2 = crate::core::Transform::default();
+        t2.position = [15.0, 0.0, 0.0];
+        let csg = Geometry::Csg {
+            operation: CsgOperation::Difference,
+            first: Box::new(Geometry::Box {
+                width: 30.0,
+                depth: 30.0,
+                height: 30.0,
+                corner_radius: 0.0,
+            }),
+            second: Box::new(Geometry::Box {
+                width: 30.0,
+                depth: 20.0,
+                height: 20.0,
+                corner_radius: 0.0,
+            }),
+            first_transform: None,
+            second_transform: Some(t2),
+        };
+        let buf = generate(&csg).expect("transformed csg difference");
+        assert!(!buf.positions.is_empty());
+        assert!(!buf.lines.is_empty());
     }
 }
