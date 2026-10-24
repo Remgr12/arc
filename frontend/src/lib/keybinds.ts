@@ -146,7 +146,21 @@ export function installKeybinds(): () => void {
         st.setCommandLineOpen(false);
         return;
       }
-      if (st.drafting || st.tool !== "select") {
+      if (st.drafting) {
+        window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
+        st.setDrafting(false);
+        if (!st.sketchMode) {
+          st.setTool("select");
+          st.setSelectionRef(null);
+        }
+        return;
+      }
+      if (st.sketchMode) {
+        window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
+        st.exitSketchMode();
+        return;
+      }
+      if (st.tool !== "select") {
         window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
         st.setTool("select");
         st.setDrafting(false);
@@ -158,6 +172,15 @@ export function installKeybinds(): () => void {
         void actions.clearSelection();
         return;
       }
+      return;
+    }
+
+    if (st.sketchMode && e.code === "Space" && !isInputFocused()) {
+      e.preventDefault();
+      const n = st.sketchPlaneNormal;
+      window.dispatchEvent(
+        new CustomEvent("arc-focus-plane", { detail: { normal: n } }),
+      );
       return;
     }
 

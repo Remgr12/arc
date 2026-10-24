@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { EntityData, ToolId } from "../lib/types";
 import type { ToolContext, ToolHandler } from "./types";
-import { chainFromEntity, resampleLoop, type Chain } from "./geometry2d";
+import { chainFromEntity, resampleLoop, computePlaneBasis, type Chain } from "./geometry2d";
 import { useArcStore } from "../lib/store";
 import { ipc } from "../lib/ipc";
 
@@ -87,18 +87,31 @@ function planeThroughSegment(a: THREE.Vector3, b: THREE.Vector3): THREE.Plane | 
   return new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), a);
 }
 
-/** General plane containing a polyline (first non-collinear triple). */
+/** General plane containing a polyline (Newell's method for arbitrary 3D polygons). */
 function planeThroughPoints(pts: THREE.Vector3[]): THREE.Plane | null {
-  for (let i = 2; i < pts.length; i++) {
-    const normal = new THREE.Vector3()
-      .subVectors(pts[1], pts[0])
-      .cross(new THREE.Vector3().subVectors(pts[i], pts[0]));
-    if (normal.lengthSq() > EPS) {
-      normal.normalize();
-      return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pts[0]);
+  if (pts.length < 3) return null;
+  const normal = new THREE.Vector3();
+  for (let i = 0; i < pts.length; i++) {
+    const cur = pts[i];
+    const next = pts[(i + 1) % pts.length];
+    normal.x += (cur.y - next.y) * (cur.z + next.z);
+    normal.y += (cur.z - next.z) * (cur.x + next.x);
+    normal.z += (cur.x - next.x) * (cur.y + next.y);
+  }
+  if (normal.lengthSq() < 1e-8) {
+    for (let i = 2; i < pts.length; i++) {
+      const n = new THREE.Vector3()
+        .subVectors(pts[1], pts[0])
+        .cross(new THREE.Vector3().subVectors(pts[i], pts[0]));
+      if (n.lengthSq() > 1e-8) {
+        normal.copy(n);
+        break;
+      }
     }
   }
-  return planeThroughSegment(pts[0], pts[pts.length - 1]);
+  if (normal.lengthSq() < 1e-8) return planeThroughSegment(pts[0], pts[pts.length - 1]);
+  normal.normalize();
+  return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, pts[0]);
 }
 
 /** Map world points into the frame of an axis (origin, unit direction). */
@@ -166,6 +179,7 @@ interface ExtrudeDraft {
   height: number;
   forceCut: boolean;
   cutTargetId: string | null;
+  candidateTargets: { id: string; box: THREE.Box3 }[];
   typed: string;
   lastScreen: { x: number; y: number } | undefined;
   mesh: THREE.Mesh;
@@ -175,30 +189,25 @@ interface ExtrudeDraft {
 let ext: ExtrudeDraft | null = null;
 const CUT_COLOR = new THREE.Color(0xef4444);
 
-function findCutTarget(d: ExtrudeDraft, h: number, ctx: ToolContext): string | null {
+function findCutTarget(d: ExtrudeDraft, h: number): string | null {
   // Auto-subtract when extruding inward (h < 0) or when Shift (forceCut) is held.
   if (h >= 0 && !d.forceCut) return null;
-  const scene = ctx.scene();
-  if (!scene) return null;
   const probe = d.centroid.clone().addScaledVector(d.normal, h * 0.5);
   const endPt = d.centroid.clone().addScaledVector(d.normal, h);
-  const box = new THREE.Box3();
   let bestId: string | null = null;
   let bestDist = Infinity;
 
-  for (const entity of scene.entities) {
-    if (!entity.visible || entity.locked || entity.category === "sketch") continue;
-    if (!entity.triPositions || entity.triPositions.length === 0) continue;
-    const obj = ctx.objectFor(entity.id);
-    if (!obj || !obj.visible) continue;
-    box.setFromObject(obj);
-    if (box.isEmpty()) continue;
-    box.expandByScalar(0.2);
-    if (box.containsPoint(probe) || box.containsPoint(endPt) || box.containsPoint(d.centroid)) {
-      const dist = box.getCenter(new THREE.Vector3()).distanceTo(probe);
+  for (const candidate of d.candidateTargets) {
+    if (
+      candidate.box.containsPoint(probe) ||
+      candidate.box.containsPoint(endPt) ||
+      candidate.box.containsPoint(d.centroid)
+    ) {
+      const center = candidate.box.getCenter(new THREE.Vector3());
+      const dist = center.distanceTo(probe);
       if (dist < bestDist) {
         bestDist = dist;
-        bestId = entity.id;
+        bestId = candidate.id;
       }
     }
   }
@@ -208,7 +217,7 @@ function findCutTarget(d: ExtrudeDraft, h: number, ctx: ToolContext): string | n
 function updateExtrudePreview(d: ExtrudeDraft, ctx: ToolContext): void {
   const rawH = Math.abs(d.height) < 0.05 ? (d.height < 0 ? -0.05 : 0.05) : d.height;
   const absH = Math.abs(rawH);
-  d.cutTargetId = findCutTarget(d, rawH, ctx);
+  d.cutTargetId = findCutTarget(d, rawH);
   const isCutting = d.cutTargetId !== null;
 
   if (rawH >= 0) {
@@ -257,6 +266,7 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
   // Orient normal outward from any adjacent solid face (or toward +Y / camera)
   const scene = ctx.scene();
   let alignedToHost = false;
+  const candidateTargets: { id: string; box: THREE.Box3 }[] = [];
   if (scene) {
     const box = new THREE.Box3();
     for (const entity of scene.entities) {
@@ -264,13 +274,15 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
       const obj = ctx.objectFor(entity.id);
       if (!obj) continue;
       box.setFromObject(obj);
-      if (!box.isEmpty() && box.distanceToPoint(centroid) <= 1.2) {
-        const hostCenter = box.getCenter(new THREE.Vector3());
-        if (centroid.clone().sub(hostCenter).dot(normal) < -0.05) {
-          normal.negate();
+      if (!box.isEmpty()) {
+        candidateTargets.push({ id: entity.id, box: box.clone().expandByScalar(0.2) });
+        if (!alignedToHost && box.distanceToPoint(centroid) <= 1.2) {
+          const hostCenter = box.getCenter(new THREE.Vector3());
+          if (centroid.clone().sub(hostCenter).dot(normal) < -0.05) {
+            normal.negate();
+          }
+          alignedToHost = true;
         }
-        alignedToHost = true;
-        break;
       }
     }
   }
@@ -282,12 +294,8 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
     }
   }
 
-  const isHorizontal = Math.abs(normal.x) < 1e-4 && Math.abs(normal.z) < 1e-4 && normal.y > 0;
-  const quat = isHorizontal
-    ? new THREE.Quaternion()
-    : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-  const u = new THREE.Vector3(1, 0, 0).applyQuaternion(quat).normalize();
-  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize();
+  const basis = computePlaneBasis(normal, centroid);
+  const { u, v, quat, isHorizontal } = basis;
 
   const shape = new THREE.Shape(
     points.map((p) => {
@@ -323,6 +331,7 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
     height: 20,
     forceCut: false,
     cutTargetId: null,
+    candidateTargets,
     typed: "",
     lastScreen: undefined,
     mesh,
@@ -337,12 +346,12 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
   if (!d) return;
   const rawH = Math.abs(signedH) < 0.05 ? 20 : signedH;
   const absH = Math.abs(rawH);
-  const targetId = findCutTarget(d, rawH, ctx);
+  const targetId = findCutTarget(d, rawH);
   const isCutting = targetId !== null;
 
   const polygon = d.points.map((p) => {
     const rel = p.clone().sub(d.centroid);
-    return [rel.dot(d.u), rel.dot(d.v)] as [number, number];
+    return [rel.dot(d.u), -rel.dot(d.v)] as [number, number];
   });
 
   // Add slight overshoot on entry face when boolean-cutting to prevent coplanar skin artifacts
@@ -359,11 +368,10 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
     const createdId = await ctx.createEntity(
       { type: "extrude", polygon, height: finalH },
       pos,
+      undefined,
+      d.isHorizontal ? undefined : rot,
     );
     if (!createdId) return;
-    if (!d.isHorizontal) {
-      await ctx.setTransform(createdId, { position: pos, rotation: rot, scale: [1, 1, 1] }, false);
-    }
     if (isCutting && targetId && docId) {
       try {
         const res = await ipc.csgApply(docId, "difference", targetId, createdId);

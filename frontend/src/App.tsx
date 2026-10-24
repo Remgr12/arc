@@ -24,6 +24,7 @@ import { SelectionHud } from "./components/SelectionHud";
 import { UtilityRail } from "./components/UtilityRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { Dashboard } from "./components/Dashboard";
+import { initAutoSave } from "./lib/autosave";
 
 export default function App() {
   const materialsMount = useMaterialsPanelMount();
@@ -53,9 +54,11 @@ export default function App() {
         useArcStore.getState().setStatusMessage(`Init failed: ${String(error)}`);
       });
     const unlistenKeys = installKeybinds();
+    const unlistenAutoSave = initAutoSave();
     return () => {
       cancelled = true;
       unlistenKeys();
+      unlistenAutoSave();
       unlistenEvents?.();
     };
   }, []);
@@ -132,17 +135,17 @@ export default function App() {
 
           {/* Shapr3D Right "History & Inspector" Sidebar (collapsible via History button) */}
           {rightSidebarOpen && (
-            <aside className=" flex w-[268px] shrink-0 flex-col border-l border-base-200 bg-base-50">
-              <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 px-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-base-600">
+            <aside className=" flex w-[272px] shrink-0 flex-col border-l border-base-200 bg-base-50">
+              <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 px-3.5">
+                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-base-600">
                   History & Inspector
                 </span>
                 <button
                   type="button"
                   onClick={() => setRightSidebarOpen(false)}
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
                 >
-                  <X size={13} strokeWidth={1.8} />
+                  <X size={14} strokeWidth={1.8} />
                 </button>
               </div>
               <div className="min-h-0 flex-1">

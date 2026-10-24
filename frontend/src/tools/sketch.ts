@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ToolContext, ToolHandler } from "./types";
-import { arcThrough3 } from "./geometry2d";
+import { arcThrough3, computePlaneBasis, type PlaneBasis } from "./geometry2d";
 import { useArcStore } from "../lib/store";
 
 // ---------------------------------------------------------------------------
@@ -30,30 +30,15 @@ function freshState(): ClickState {
   };
 }
 
-interface PlaneBasis {
-  origin: THREE.Vector3;
-  normal: THREE.Vector3;
-  u: THREE.Vector3;
-  v: THREE.Vector3;
-  quat: THREE.Quaternion;
-  isHorizontal: boolean;
-}
-
 function activePlaneBasis(overrideOrigin?: THREE.Vector3): PlaneBasis {
   const st = useArcStore.getState();
   const nArr = st.sketchMode ? st.sketchPlaneNormal : ([0, 1, 0] as [number, number, number]);
   const oArr = st.sketchMode
     ? st.sketchPlaneOrigin
     : ([0, st.sketchPlaneHeight ?? 0, 0] as [number, number, number]);
-  const normal = new THREE.Vector3(nArr[0], nArr[1], nArr[2]).normalize();
+  const normal = new THREE.Vector3(nArr[0], nArr[1], nArr[2]);
   const origin = overrideOrigin ? overrideOrigin.clone() : new THREE.Vector3(oArr[0], oArr[1], oArr[2]);
-  const isHorizontal = Math.abs(normal.x) < 1e-4 && Math.abs(normal.z) < 1e-4 && normal.y > 0;
-  const quat = isHorizontal
-    ? new THREE.Quaternion()
-    : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-  const u = new THREE.Vector3(1, 0, 0).applyQuaternion(quat).normalize();
-  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize();
-  return { origin, normal, u, v, quat, isHorizontal };
+  return computePlaneBasis(normal, origin);
 }
 
 function sketchPlanePoint(
@@ -62,9 +47,6 @@ function sketchPlanePoint(
   anchor?: THREE.Vector3 | null,
 ): THREE.Vector3 | null {
   const basis = activePlaneBasis(anchor ?? undefined);
-  if (basis.isHorizontal) {
-    return ctx.planePoint(event, basis.origin.y);
-  }
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(basis.normal, basis.origin);
   const out = new THREE.Vector3();
   return ctx.rayAt(event).intersectPlane(plane, out) ? out : null;
@@ -76,18 +58,10 @@ async function createSketchEntity(
   position: [number, number, number],
   basis: PlaneBasis,
 ): Promise<string | null> {
-  const id = await ctx.createEntity(geometry, position);
-  if (id && !basis.isHorizontal) {
-    await ctx.setTransform(
-      id,
-      {
-        position,
-        rotation: [basis.quat.x, basis.quat.y, basis.quat.z, basis.quat.w],
-        scale: [1, 1, 1],
-      },
-      false,
-    );
-  }
+  const rot: [number, number, number, number] = basis.isHorizontal
+    ? [0, 0, 0, 1]
+    : [basis.quat.x, basis.quat.y, basis.quat.z, basis.quat.w];
+  const id = await ctx.createEntity(geometry, position, undefined, rot);
   if (id) {
     await ctx.setSelection([id], id);
   }
@@ -538,10 +512,15 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       if (Number.isFinite(parsed) && parsed > 0) {
         target = pointAlongDirection(from, target, parsed);
       }
+      const isSingleLineDrag = id === "line" && points.length === 1;
       state.press = null;
       state.dragged = false;
       addSegmentTo(target, ctx);
       ctx.releasePointer(event);
+      if (isSingleLineDrag) {
+        reset(ctx);
+        ctx.setStatus("Line created · drag or click to draw next");
+      }
     },
     onKey(event, ctx) {
       if (points.length === 0) return false;

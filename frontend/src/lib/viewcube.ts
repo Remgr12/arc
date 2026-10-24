@@ -88,26 +88,26 @@ function sameZone(a: HoverZone, b: HoverZone): boolean {
 function cubeThemeFrom(palette: ViewportPalette): CubeTheme {
   return palette.lightViewport
     ? {
-        faceBgTop: "#eef2f7",
-        faceBgBottom: "#d9e1ec",
-        bevelBg: "#cdd6e4",
-        border: "#7a869a",
-        innerBorder: "#aeb9ca",
+        faceBgTop: "#f8fafc",
+        faceBgBottom: "#e2e8f0",
+        bevelBg: "#cbd5e1",
+        border: "#94a3b8",
+        innerBorder: "#cbd5e1",
         hoverFill: palette.accent600 || "#0096d6",
         hoverText: "#ffffff",
-        text: "#1e293b",
+        text: "#0f172a",
         ring: "#94a3b8",
       }
     : {
-        faceBgTop: "#2b303c",
-        faceBgBottom: "#1f232d",
-        bevelBg: "#181b24",
-        border: "#4b5568",
-        innerBorder: "#343b4a",
-        hoverFill: palette.accent500 || "#00b4d8",
-        hoverText: "#090d14",
-        text: "#e2e8f0",
-        ring: "#3b4254",
+        faceBgTop: "#475569",
+        faceBgBottom: "#334155",
+        bevelBg: "#1e293b",
+        border: "#64748b",
+        innerBorder: "#475569",
+        hoverFill: palette.accent500 || "#28b5f5",
+        hoverText: "#ffffff",
+        text: "#f8fafc",
+        ring: "#64748b",
       };
 }
 
@@ -120,7 +120,7 @@ export class ViewCube {
   private onFocusFace: (normal: THREE.Vector3) => void;
   private canvases: HTMLCanvasElement[] = [];
   private textures: THREE.CanvasTexture[] = [];
-  private materials: THREE.MeshLambertMaterial[] = [];
+  private materials: THREE.MeshBasicMaterial[] = [];
   private edges: THREE.LineSegments;
   private ringMesh: THREE.Mesh;
   private triadGroup: THREE.Group;
@@ -163,7 +163,7 @@ export class ViewCube {
       this.canvases.push(canvas);
       this.textures.push(tex);
       this.materials.push(
-        new THREE.MeshLambertMaterial({
+        new THREE.MeshBasicMaterial({
           map: tex,
         }),
       );

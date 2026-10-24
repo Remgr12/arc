@@ -90,8 +90,18 @@ function GeneralTab({
       <Row label="Performance">
         <Checkbox
           checked={lowSpecMode}
-          onChange={(checked) => setLowSpecMode(checked)}
+          onChange={(checked) => {
+            setLowSpecMode(checked);
+            patch({ fast_mode: checked });
+          }}
           label="Fast mode (laptop battery & low-spec GPU optimization)"
+        />
+      </Row>
+      <Row label="Auto-save">
+        <Checkbox
+          checked={settings.auto_save ?? true}
+          onChange={(auto_save) => patch({ auto_save })}
+          label="Auto-save changes automatically in the background"
         />
       </Row>
       <Row label="Units">

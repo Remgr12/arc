@@ -11,7 +11,7 @@ export interface ViewPalette {
   line: THREE.Color;
 }
 
-export type SnapKind = "grid" | "endpoint" | "midpoint" | "center" | "origin" | "axis";
+export type SnapKind = "grid" | "endpoint" | "midpoint" | "center" | "origin" | "axis" | "aligned";
 
 export interface SnapResult {
   point: THREE.Vector3;
@@ -66,6 +66,7 @@ export interface ToolContext {
     geometry: Geometry,
     position: [number, number, number],
     name?: string,
+    rotation?: [number, number, number, number],
   ): Promise<string | null>;
   updateGeometry(id: string, geometry: Geometry): Promise<void>;
   deleteEntities(ids: string[]): Promise<void>;

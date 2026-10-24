@@ -52,7 +52,7 @@ function Menu({
           onOpen(isOpen ? null : id);
         }}
         className={cn(
-          "flex h-6 items-center gap-0.5 rounded px-2 text-[12px] transition-colors",
+          "flex h-7 items-center gap-1 rounded-md px-2.5 text-[12px] transition-colors",
           isOpen ? "bg-base-200 text-base-800" : "text-base-600 hover:bg-base-200 hover:text-base-800",
         )}
       >
@@ -62,7 +62,7 @@ function Menu({
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="anim-pop absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg shadow-black/40"
+          className="anim-pop absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-lg border border-base-300 bg-base-100 p-1.5 shadow-lg shadow-black/40"
         >
           {entries.map((entry, index) =>
             entry === "-" ? (
@@ -77,7 +77,7 @@ function Menu({
                   entry.onSelect();
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between gap-6 rounded px-2 py-1 text-left text-[12px] transition-colors",
+                  "flex w-full items-center justify-between gap-6 rounded px-2.5 py-1.5 text-left text-[12px] transition-colors",
                   "disabled:pointer-events-none disabled:opacity-35",
                   "text-base-700 hover:bg-base-200 hover:text-base-900",
                 )}
@@ -253,8 +253,8 @@ export function TopBar({ children }: { children?: ReactNode }) {
   ];
 
   return (
-    <header className="relative flex h-9 shrink-0 items-center gap-1 border-b border-base-200 bg-base-50 px-2.5">
-      <div ref={menuBarRef} className="flex items-center gap-1">
+    <header className="relative flex h-10 shrink-0 items-center gap-1.5 border-b border-base-200 bg-base-50 px-3">
+      <div ref={menuBarRef} className="flex items-center gap-1.5">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
         <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
         <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
@@ -264,7 +264,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
         {docTitle}
       </div>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2">
         <IconButton
           icon={<ArrowLeft size={16} strokeWidth={1.75} />}
           onClick={() => useArcStore.getState().setView("dashboard")}

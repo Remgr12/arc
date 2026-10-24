@@ -105,6 +105,8 @@ export interface Settings {
   snap_enabled: boolean;
   show_grid: boolean;
   show_axes: boolean;
+  fast_mode?: boolean;
+  auto_save?: boolean;
   enabled_plugins: string[];
   recent_files: string[];
   reopen_last_session: boolean;

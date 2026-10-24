@@ -16,6 +16,10 @@ pub struct Settings {
     pub snap_enabled: bool,
     pub show_grid: bool,
     pub show_axes: bool,
+    #[serde(default)]
+    pub fast_mode: bool,
+    #[serde(default)]
+    pub auto_save: bool,
     pub enabled_plugins: Vec<String>,
     /// Recently opened/saved document paths, most recent first.
     #[serde(default)]
@@ -40,6 +44,8 @@ impl Default for Settings {
             snap_enabled: true,
             show_grid: true,
             show_axes: true,
+            fast_mode: false,
+            auto_save: true,
             enabled_plugins: vec![],
             recent_files: vec![],
             reopen_last_session: false,

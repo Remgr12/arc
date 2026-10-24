@@ -33,7 +33,7 @@ export function Button({
   type?: "button" | "submit";
 }) {
   const base =
-    "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-medium transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
+    "inline-flex h-8.5 items-center justify-center gap-2 rounded-lg px-3.5 text-[12px] font-medium transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
   const variants = {
     default:
       "bg-base-200 text-base-700 border border-base-300 hover:bg-base-300 hover:text-base-800 shadow-sm",
@@ -71,7 +71,7 @@ export function IconButton({
   className?: string;
   size?: "sm" | "md";
 }) {
-  const dim = size === "sm" ? "h-7 w-7" : "h-8 w-8";
+  const dim = size === "sm" ? "h-7.5 w-7.5" : "h-8.5 w-8.5";
   return (
     <button
       type="button"

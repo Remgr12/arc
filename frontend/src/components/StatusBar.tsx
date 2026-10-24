@@ -47,7 +47,7 @@ export function StatusBar() {
   const gridLabel = settings ? `${settings.grid_size} ${unit}` : null;
 
   return (
-    <footer className="no-scrollbar flex h-7 shrink-0 items-center gap-2.5 overflow-x-auto border-t border-base-200 bg-base-50 px-3 text-[11.5px]">
+    <footer className="no-scrollbar flex h-8 shrink-0 items-center gap-2.5 overflow-x-auto border-t border-base-200 bg-base-50 px-3.5 text-[11.5px]">
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"

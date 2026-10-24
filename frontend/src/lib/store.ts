@@ -117,6 +117,26 @@ const SKETCH_TOOL_SET = new Set<ToolId>([
   "mirror",
 ]);
 
+const FAST_MODE_STORAGE_KEY = "arc:fast_mode";
+
+function loadStoredFastMode(): boolean {
+  try {
+    const v = localStorage.getItem(FAST_MODE_STORAGE_KEY);
+    if (v !== null) return v === "true";
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+function saveStoredFastMode(enabled: boolean): void {
+  try {
+    localStorage.setItem(FAST_MODE_STORAGE_KEY, String(enabled));
+  } catch {
+    // ignore
+  }
+}
+
 export const useArcStore = create<ArcState>((set) => ({
   overview: null,
   scene: null,
@@ -153,7 +173,7 @@ export const useArcStore = create<ArcState>((set) => ({
   sketchPlaneLabel: "Ground (Y = 0)",
   polygonSides: 6,
   dimSnapStep: 1,
-  lowSpecMode: false,
+  lowSpecMode: loadStoredFastMode(),
   leftSidebarOpen: true,
   rightSidebarOpen: true,
   contextMenu: { open: false, x: 0, y: 0, items: [] },
@@ -182,7 +202,18 @@ export const useArcStore = create<ArcState>((set) => ({
       };
     }),
   setDrafting: (drafting: boolean) => set({ drafting }),
-  updateSettings: (settings: any) => set((_st) => ({ settings, overview: _st.overview ? { ..._st.overview, settings } : _st.overview })),
+  updateSettings: (settings: any) =>
+    set((_st) => {
+      if (settings?.fast_mode !== undefined) {
+        saveStoredFastMode(Boolean(settings.fast_mode));
+      }
+      return {
+        settings,
+        lowSpecMode:
+          settings?.fast_mode !== undefined ? Boolean(settings.fast_mode) : _st.lowSpecMode,
+        overview: _st.overview ? { ..._st.overview, settings } : _st.overview,
+      };
+    }),
   setPaletteOpen: (open: boolean) => set({ paletteOpen: open }),
   setCommandLineOpen: (open) => set({ commandLineOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
@@ -279,7 +310,10 @@ export const useArcStore = create<ArcState>((set) => ({
     })),
   setPolygonSides: (sides) => set({ polygonSides: Math.max(3, Math.min(32, Math.round(sides))) }),
   setDimSnapStep: (step) => set({ dimSnapStep: Math.max(0, step) }),
-  setLowSpecMode: (lowSpecMode) => set({ lowSpecMode }),
+  setLowSpecMode: (lowSpecMode) => {
+    saveStoredFastMode(lowSpecMode);
+    set({ lowSpecMode });
+  },
   setLeftSidebarOpen: (leftSidebarOpen) => set({ leftSidebarOpen }),
   setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
   setView: (view) => set({ view }),

@@ -20,6 +20,7 @@ import {
   facePlaneInfo,
   pickEdgeScreen,
 } from "../tools/topology";
+import { computePlaneBasis } from "../tools/geometry2d";
 import { uiCapture } from "../lib/uiCapture";
 
 interface ViewAnim {
@@ -154,21 +155,32 @@ function themeToPalette(p: ViewportPalette): ViewPalette {
 
 function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
   const step = Math.max(0.5, Math.min(100, gridSize || 2));
-  const divisions = 200;
-  const extent = step * divisions;
+  const majorCells = 40;
+  const majorStep = step * 5;
+  const extent = majorStep * majorCells;
+  const minorDivs = majorCells * 5;
+  const majorDivs = majorCells;
 
   const group = new THREE.Group();
-  const grid = new THREE.GridHelper(
-    extent,
-    divisions,
-    new THREE.Color(p.grid).getHex(),
-    new THREE.Color(p.gridLine).getHex(),
-  );
-  const mat = grid.material as THREE.LineBasicMaterial;
-  mat.transparent = true;
-  mat.opacity = 0.45;
-  mat.depthWrite = false;
-  group.add(grid);
+  const minorColor = new THREE.Color(p.gridLine);
+  const majorColor = new THREE.Color(p.grid).lerp(new THREE.Color(p.accent500), 0.2);
+  const centerColor = new THREE.Color(p.accent500);
+
+  const minor = new THREE.GridHelper(extent, minorDivs, minorColor.getHex(), minorColor.getHex());
+  const minorMat = minor.material as THREE.LineBasicMaterial;
+  minorMat.transparent = true;
+  minorMat.opacity = 0.32;
+  minorMat.depthWrite = false;
+
+  const major = new THREE.GridHelper(extent, majorDivs, centerColor.getHex(), majorColor.getHex());
+  const majorMat = major.material as THREE.LineBasicMaterial;
+  majorMat.transparent = true;
+  majorMat.opacity = 0.72;
+  majorMat.depthWrite = false;
+  major.position.y = 0.005;
+
+  group.add(minor);
+  group.add(major);
   return group;
 }
 
@@ -278,17 +290,35 @@ function makeInfiniteAxes(): THREE.Group {
 }
 
 function updateScaleBar(ref: ViewportRefs): void {
+  const h = Math.max(1, ref.host.clientHeight || 600);
+  const dist = Math.max(1, ref.camera.position.distanceTo(ref.controls.target));
+  const fovRad = (ref.camera.fov * Math.PI) / 180;
+  const worldHeight = 2 * dist * Math.tan(fovRad * 0.5);
+  const worldPerPx = worldHeight / h;
+
+  // Target bar width ~80px using clean 1-2-5 steps
+  const rawUnits = worldPerPx * 80;
+  const exp = Math.pow(10, Math.floor(Math.log10(Math.max(0.001, rawUnits))));
+  const norm = rawUnits / exp;
+  const niceMult = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+  const barUnits = niceMult * exp;
+  const barPx = Math.max(36, Math.min(150, Math.round(barUnits / worldPerPx)));
+
   const settings = useArcStore.getState().settings;
   const isImperial =
     settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
   const unit = isImperial ? "in" : "cm";
   const gridSize = settings?.grid_size ?? 2;
 
-  // Map gridSize (1, 2, 5, 10) to a tiny visual square box size (12px -> 22px)
-  const boxPx = gridSize <= 1 ? 12 : gridSize <= 2 ? 15 : gridSize <= 5 ? 18 : 22;
-  ref.scaleBarLineEl.style.width = `${boxPx}px`;
-  ref.scaleBarLineEl.style.height = `${boxPx}px`;
-  ref.scaleBarLabelEl.textContent = `${gridSize} ${unit}`;
+  let label = `${Math.round(barUnits * 100) / 100} ${unit}`;
+  if (!isImperial) {
+    if (barUnits >= 100) label = `${Math.round((barUnits / 100) * 100) / 100} m`;
+    else if (barUnits < 1) label = `${Math.round(barUnits * 10 * 10) / 10} mm`;
+  }
+
+  ref.scaleBarLineEl.style.width = `${barPx}px`;
+  ref.scaleBarLabelEl.textContent = label;
+  ref.scaleGridBtnEl.textContent = `1 sq = ${gridSize} ${unit}`;
 }
 
 function createViewport(host: HTMLDivElement): ViewportRefs {
@@ -377,10 +407,51 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   measureEl.style.display = "none";
   host.appendChild(measureEl);
 
-  // Scale indicator is rendered in the top-right Shapr3D pill (UtilityRail)
-  const scaleGridBtnEl = document.createElement("button");
-  const scaleBarLineEl = document.createElement("div");
+  // Live bottom-right CAD Scale Bar + Grid Legend
+  const scaleWrap = document.createElement("div");
+  scaleWrap.className =
+    "pointer-events-auto absolute bottom-3 right-3 z-20 flex items-center gap-2.5 rounded-xl border border-base-300/80 bg-base-100/95 px-3 py-1.5 font-mono text-[11px] text-base-700 shadow-md backdrop-blur-md transition-all";
+
+  const rulerWrap = document.createElement("div");
+  rulerWrap.className = "flex flex-col items-center gap-0.5";
+
   const scaleBarLabelEl = document.createElement("span");
+  scaleBarLabelEl.className = "text-[10.5px] font-semibold leading-none text-base-800 tabular-nums";
+  scaleBarLabelEl.textContent = "10 cm";
+
+  const scaleBarLineEl = document.createElement("div");
+  scaleBarLineEl.className =
+    "h-1.5 border-x-2 border-b-2 border-accent-500 transition-[width] duration-150";
+  scaleBarLineEl.style.width = "72px";
+
+  rulerWrap.appendChild(scaleBarLabelEl);
+  rulerWrap.appendChild(scaleBarLineEl);
+
+  const sep = document.createElement("span");
+  sep.className = "h-4 w-px bg-base-300";
+
+  const scaleGridBtnEl = document.createElement("button");
+  scaleGridBtnEl.type = "button";
+  scaleGridBtnEl.title = "Click to cycle 3D grid scale (1 / 2 / 5 / 10 per square)";
+  scaleGridBtnEl.className =
+    "rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900";
+  scaleGridBtnEl.textContent = "1 sq = 2 cm";
+  scaleGridBtnEl.addEventListener("click", () => {
+    const settings = useArcStore.getState().settings;
+    if (!settings) return;
+    const steps = [1, 2, 5, 10];
+    const idx = steps.indexOf(settings.grid_size);
+    const nextGrid = steps[(idx + 1) % steps.length];
+    void ipc
+      .setSettings({ ...settings, grid_size: nextGrid })
+      .then((next) => useArcStore.getState().updateSettings(next))
+      .catch(() => undefined);
+  });
+
+  scaleWrap.appendChild(rulerWrap);
+  scaleWrap.appendChild(sep);
+  scaleWrap.appendChild(scaleGridBtnEl);
+  host.appendChild(scaleWrap);
 
   const tc = new TransformControls(camera, renderer.domElement);
   tc.setMode("translate");
@@ -703,7 +774,7 @@ function syncSceneToThree(ref: ViewportRefs): void {
     ref.needsRender = true;
   }
 
-  if (sceneChanged || displayModeChanged) {
+  if (sceneChanged || displayModeChanged || sketchChanged) {
     ref.lastScene = scene;
     ref.lastDisplayMode = state.displayMode;
     if (scene) rebuildEntities(ref, scene);
@@ -779,13 +850,10 @@ function syncSceneToThree(ref: ViewportRefs): void {
     ref.gridNode.visible = gridVis;
     if (state.sketchMode) {
       const n = new THREE.Vector3(...state.sketchPlaneNormal).normalize();
-      const quat =
-        Math.abs(n.x) < 1e-4 && Math.abs(n.z) < 1e-4 && n.y > 0
-          ? new THREE.Quaternion()
-          : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
-      ref.gridNode.quaternion.copy(quat);
-      const dist = new THREE.Vector3(...state.sketchPlaneOrigin).dot(n);
-      ref.gridNode.position.copy(n.clone().multiplyScalar(dist));
+      const o = new THREE.Vector3(...state.sketchPlaneOrigin);
+      const basis = computePlaneBasis(n, o);
+      ref.gridNode.quaternion.copy(basis.quat);
+      ref.gridNode.position.copy(basis.origin);
     } else {
       ref.gridNode.quaternion.identity();
       ref.gridNode.position.set(0, 0, 0);
@@ -1117,36 +1185,6 @@ function buildClosedSketchFill(lineData: number[], entityId: string, color: THRE
   return fillMesh;
 }
 
-function buildSketchVertexDots(entity: EntityData): THREE.Points | null {
-  const g = entity.geometry;
-  const coords: number[] = [];
-  if (g.type === "line_curve" && Array.isArray(g.end)) {
-    const end = g.end as [number, number, number];
-    coords.push(0, 0, 0, end[0], end[1], end[2]);
-  } else if (g.type === "polyline_curve" && Array.isArray(g.points)) {
-    for (const p of g.points as [number, number, number][]) {
-      coords.push(p[0], p[1], p[2]);
-    }
-  } else if (g.type === "rectangle_curve" && typeof g.width === "number" && typeof g.depth === "number") {
-    const hw = g.width / 2;
-    const hd = g.depth / 2;
-    coords.push(-hw, 0, -hd, hw, 0, -hd, hw, 0, hd, -hw, 0, hd);
-  }
-  if (coords.length === 0) return null;
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
-  const mat = new THREE.PointsMaterial({
-    color: 0xa855f7,
-    size: 5,
-    sizeAttenuation: false,
-    depthTest: false,
-  });
-  const pts = new THREE.Points(geo, mat);
-  pts.renderOrder = 995;
-  pts.userData.isSolidOutline = true; // ignore in raycast
-  return pts;
-}
-
 function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D | null {
   const tris =
     entity.triPositions && entity.triPositions.length > 0 ? entity.triPositions : null;
@@ -1160,8 +1198,6 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     if (entity.category === "sketch") {
       const fill = buildClosedSketchFill(lineData, entity.id, new THREE.Color(0xc8ccd4));
       if (fill) obj.add(fill);
-      const dots = buildSketchVertexDots(entity);
-      if (dots) obj.add(dots);
     } else if (entity.kind === "dimension" && entity.geometry?.type === "dimension") {
       const s = entity.geometry.start as [number, number, number] | undefined;
       const e = entity.geometry.end as [number, number, number] | undefined;
@@ -1246,6 +1282,7 @@ function present(
         visible: boolean;
         material: string | null;
         displayMode: "shaded" | "wireframe";
+        sketchMode: boolean;
         pos: [number, number, number];
         rot: [number, number, number, number];
         scl: [number, number, number];
@@ -1260,6 +1297,7 @@ function present(
     cache.visible !== visible ||
     cache.material !== entity.material ||
     cache.displayMode !== displayMode ||
+    cache.sketchMode !== st.sketchMode ||
     cache.pos[0] !== pos[0] ||
     cache.pos[1] !== pos[1] ||
     cache.pos[2] !== pos[2] ||
@@ -1284,6 +1322,7 @@ function present(
     visible,
     material: entity.material ?? null,
     displayMode,
+    sketchMode: st.sketchMode,
     pos: [...pos] as [number, number, number],
     rot: [...rot] as [number, number, number, number],
     scl: [...scl] as [number, number, number],
@@ -1318,19 +1357,32 @@ function present(
       mat.roughness = 0.5;
       mat.metalness = 0.05;
     }
-    if (entity.locked) mat.opacity = 0.55;
-    else mat.opacity = material?.transparent ? 0.55 : 1.0;
-    mat.transparent = entity.locked || !!material?.transparent;
+    if (st.sketchMode && entity.category !== "sketch") {
+      mat.opacity = 0.35;
+      mat.transparent = true;
+      mat.depthWrite = true;
+    } else if (entity.locked) {
+      mat.opacity = 0.55;
+      mat.transparent = true;
+      mat.depthWrite = true;
+    } else {
+      mat.opacity = material?.transparent ? 0.55 : 1.0;
+      mat.transparent = entity.locked || !!material?.transparent;
+      mat.depthWrite = !material?.transparent;
+    }
     const wholeBodySelected = selected && st.selKind === "entity";
     mat.emissive.copy(
       wholeBodySelected ? SHAPR_CYAN : hovered ? SHAPR_CYAN : BLACK,
     );
     mat.emissiveIntensity = wholeBodySelected ? 0.12 : hovered ? 0.06 : 0;
   } else if ((obj as THREE.Line).isLine) {
-    const mat = (obj as THREE.Line).material as THREE.LineBasicMaterial;
+    const line = obj as THREE.Line;
+    const mat = line.material as THREE.LineBasicMaterial;
     mat.color.copy(selected ? SHAPR_CYAN : hovered ? SHAPR_CYAN : SKETCH_LINE_COLOR);
     mat.opacity = entity.locked ? 0.5 : 1;
     mat.transparent = entity.locked;
+    mat.depthTest = true;
+    line.renderOrder = st.sketchMode ? 10 : 0;
     for (const child of obj.children) {
       if (child.userData.isProfileFill) {
         const fillMat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -1486,6 +1538,29 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
       );
     } else if (entity?.category === "sketch") {
       topItems.push(
+        {
+          label: "Edit / Draw on this Sketch",
+          run: () => {
+            const rot = entity.transform.rotation;
+            const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
+            const normalVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+            const normal: [number, number, number] = [normalVec.x, normalVec.y, normalVec.z];
+            const origin: [number, number, number] = [
+              entity.transform.position[0],
+              entity.transform.position[1],
+              entity.transform.position[2],
+            ];
+            useArcStore.getState().enterSketchMode({
+              origin,
+              normal,
+              label: `Edit ${entity.name || "Sketch"}`,
+              tool: "line",
+            });
+            window.dispatchEvent(
+              new CustomEvent("arc-focus-plane", { detail: { normal } }),
+            );
+          },
+        },
         {
           label: "Extrude Profile (E)",
           run: () => useArcStore.getState().setTool("extrude"),
@@ -1864,7 +1939,33 @@ function attachHandlers(ref: ViewportRefs): () => void {
               normal: [0, 0, 0],
             });
           }
+          if (store.tool === "select") {
+            const entity = store.scene?.entities.find((e) => e.id === edge.entityId);
+            if (entity?.lines) {
+              const o = edge.segIndex * 6;
+              if (o + 5 < entity.lines.length) {
+                const obj = ref.objects.get(edge.entityId);
+                const mat = obj?.matrixWorld ?? new THREE.Matrix4();
+                const v0 = new THREE.Vector3(
+                  entity.lines[o],
+                  entity.lines[o + 1],
+                  entity.lines[o + 2],
+                ).applyMatrix4(mat);
+                const v1 = new THREE.Vector3(
+                  entity.lines[o + 3],
+                  entity.lines[o + 4],
+                  entity.lines[o + 5],
+                ).applyMatrix4(mat);
+                const len = v0.distanceTo(v1);
+                const mid = v0.clone().add(v1).multiplyScalar(0.5);
+                const screenPt = ref.ctx.worldToScreen(mid);
+                const u = ref.ctx.settings.unitLabel;
+                ref.ctx.showMeasure(`L ${Math.round(len * 10) / 10} ${u}`, screenPt ?? undefined);
+              }
+            }
+          }
         } else if (face) {
+          if (store.tool === "select") ref.ctx.showMeasure(null);
           if (
             prevHover?.kind !== "face" ||
             prevHover.entityId !== face.entityId ||
@@ -1880,6 +1981,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
             });
           }
         } else if (prevHover !== null) {
+          if (store.tool === "select") ref.ctx.showMeasure(null);
           store.setHoverObj(null);
         } else {
           const id = pickEntityAt(ref, point);
@@ -1942,8 +2044,104 @@ function attachHandlers(ref: ViewportRefs): () => void {
     else fitSelection(ref);
   };
   const ctx_ = (event: MouseEvent) => onContextMenu(ref, event);
-  const wheel = () => {
+
+  const zoomToCursor = (event: WheelEvent, zoomFactor: number) => {
+    const rect = ref.host.getBoundingClientRect();
+    const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const ray = new THREE.Ray();
+    ray.origin.copy(ref.camera.position);
+    ray.direction
+      .set(ndcX, ndcY, 0.5)
+      .unproject(ref.camera)
+      .sub(ref.camera.position)
+      .normalize();
+
+    const camDir = new THREE.Vector3();
+    ref.camera.getWorldDirection(camDir);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, ref.controls.target);
+    const hit = new THREE.Vector3();
+
+    if (ray.intersectPlane(plane, hit)) {
+      if (zoomFactor > 1) {
+        ref.controls.dollyIn(zoomFactor);
+      } else {
+        ref.controls.dollyOut(1 / zoomFactor);
+      }
+      const shiftScale = (1 - 1 / zoomFactor) * 0.7;
+      const shift = hit.sub(ref.controls.target).multiplyScalar(shiftScale);
+      ref.controls.target.add(shift);
+      ref.camera.position.add(shift);
+      ref.controls.update();
+      ref.needsRender = true;
+      updateScaleBar(ref);
+    }
+  };
+
+  const wheel = (event: WheelEvent) => {
     ref.viewAnim = null;
+    const store = useArcStore.getState();
+
+    // 1) Trackpad pinch-to-zoom (or Ctrl + Wheel): Smooth zoom to cursor!
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const zoomFactor = Math.exp(-event.deltaY * 0.006);
+      zoomToCursor(event, zoomFactor);
+      return;
+    }
+
+    // 2) Sketch mode: Two-finger swipe ALWAYS smoothly pans the sketch plane!
+    if (store.sketchMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      const panSpeed = 0.75;
+      ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
+      ref.controls.update();
+      ref.needsRender = true;
+      updateScaleBar(ref);
+      return;
+    }
+
+    // 3) Shift + Two-finger swipe in 3D: Smoothly orbit around target!
+    if (event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const rotSpeed = 0.004;
+      ref.controls.rotateLeft(-event.deltaX * rotSpeed);
+      ref.controls.rotateUp(-event.deltaY * rotSpeed);
+      ref.controls.update();
+      ref.needsRender = true;
+      updateScaleBar(ref);
+      return;
+    }
+
+    // 4) Two-finger swipe on trackpad in 3D:
+    // When using a trackpad, deltaMode is 0 and lateral deltaX is present or deltas are fractional.
+    const isTrackpad =
+      event.deltaMode === 0 &&
+      (Math.abs(event.deltaX) > 0.5 || !Number.isInteger(event.deltaY) || Math.abs(event.deltaY) < 50);
+
+    if (isTrackpad && (Math.abs(event.deltaX) > 0.5 || Math.abs(event.deltaY) < 50)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const panSpeed = 0.75;
+      ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
+      ref.controls.update();
+      ref.needsRender = true;
+      updateScaleBar(ref);
+      return;
+    }
+
+    // 5) Standard physical mouse wheel: Smooth zoom toward cursor (Figma/Shapr3D style)!
+    if (!isTrackpad && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const zoomFactor = event.deltaY < 0 ? 1.15 : 0.87;
+      zoomToCursor(event, zoomFactor);
+      return;
+    }
   };
 
   const draftCancel = () => {
@@ -1984,6 +2182,30 @@ function attachHandlers(ref: ViewportRefs): () => void {
     ) {
       return;
     }
+
+    // Standard CAD Viewport Numpad / Alt+Digit shortcuts
+    if (event.code === "Numpad1" || (event.altKey && event.code === "Digit1")) {
+      event.preventDefault();
+      focusPlane(ref, new THREE.Vector3(0, 0, 1));
+      return;
+    }
+    if (event.code === "Numpad3" || (event.altKey && event.code === "Digit3")) {
+      event.preventDefault();
+      focusPlane(ref, new THREE.Vector3(1, 0, 0));
+      return;
+    }
+    if (event.code === "Numpad7" || (event.altKey && event.code === "Digit7")) {
+      event.preventDefault();
+      focusPlane(ref, new THREE.Vector3(0, 1, 0));
+      return;
+    }
+    if (event.code === "Numpad9" || (event.altKey && event.code === "Digit9")) {
+      event.preventDefault();
+      const cur = ref.camera.position.clone().sub(ref.controls.target).normalize();
+      focusPlane(ref, cur.negate());
+      return;
+    }
+
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const store = useArcStore.getState();
     if (
@@ -2004,12 +2226,23 @@ function attachHandlers(ref: ViewportRefs): () => void {
     }
   };
 
+  const leave = () => {
+    ref.ctx.clearPreview("snap-marker");
+    ref.ctx.clearPreview("alignment-guide");
+    if (useArcStore.getState().tool === "select") {
+      ref.ctx.showMeasure(null);
+      useArcStore.getState().setHoverObj(null);
+      useArcStore.getState().setHoverEntity(null);
+    }
+  };
+
   el.addEventListener("pointerdown", down);
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
   el.addEventListener("pointercancel", cancel);
+  el.addEventListener("pointerleave", leave);
   el.addEventListener("dblclick", dbl);
-  el.addEventListener("wheel", wheel, { passive: true });
+  el.addEventListener("wheel", wheel, { passive: false, capture: true });
   el.addEventListener("contextmenu", ctx_);
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("arc-draft-cancel", draftCancel);
@@ -2034,8 +2267,9 @@ function attachHandlers(ref: ViewportRefs): () => void {
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", up);
     el.removeEventListener("pointercancel", cancel);
+    el.removeEventListener("pointerleave", leave);
     el.removeEventListener("dblclick", dbl);
-    el.removeEventListener("wheel", wheel);
+    el.removeEventListener("wheel", wheel, { capture: true } as EventListenerOptions);
     el.removeEventListener("contextmenu", ctx_);
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("arc-draft-cancel", draftCancel);
@@ -2139,6 +2373,15 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
 
     snap(world, opts) {
       const { gridSize, snapEnabled } = settingsInView();
+      const st = useArcStore.getState();
+      const isSketch = st.sketchMode;
+      const basis = isSketch
+        ? computePlaneBasis(
+            new THREE.Vector3(...st.sketchPlaneNormal),
+            new THREE.Vector3(...st.sketchPlaneOrigin),
+          )
+        : null;
+
       const showSnapMarker = (pt: THREE.Vector3 | null, kind?: string) => {
         if (!pt || !kind || kind === "grid") {
           ref.ctx.clearPreview("snap-marker");
@@ -2150,9 +2393,10 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
             ? 0x10b981
             : kind === "center" || kind === "origin"
               ? 0xf59e0b
-              : 0x22d3ee;
+              : kind === "aligned"
+                ? 0xa855f7
+                : 0x22d3ee;
         const ringGeo = new THREE.RingGeometry(radius * 0.55, radius, 20);
-        ringGeo.rotateX(-Math.PI / 2);
         const ringMat = new THREE.MeshBasicMaterial({
           color,
           side: THREE.DoubleSide,
@@ -2161,18 +2405,182 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           opacity: 0.95,
         });
         const marker = new THREE.Mesh(ringGeo, ringMat);
-        marker.position.set(pt.x, pt.y + 0.05, pt.z);
+        if (basis) {
+          marker.quaternion.copy(basis.quat);
+          marker.position.copy(pt).addScaledVector(basis.normal, 0.06);
+        } else {
+          ringGeo.rotateX(-Math.PI / 2);
+          marker.position.set(pt.x, pt.y + 0.05, pt.z);
+        }
         marker.renderOrder = 999;
         ref.ctx.setPreview(marker, "snap-marker");
       };
 
+      const setGuideLine = (p0: THREE.Vector3 | null, p1: THREE.Vector3 | null) => {
+        if (!p0 || !p1) {
+          ref.ctx.clearPreview("alignment-guide");
+          return;
+        }
+        const geom = new THREE.BufferGeometry().setFromPoints([p0, p1]);
+        const mat = new THREE.LineDashedMaterial({
+          color: 0xa855f7, // purple extension line like Shapr3D
+          dashSize: 2.5,
+          gapSize: 2,
+          transparent: true,
+          opacity: 0.85,
+          depthTest: false,
+        });
+        const line = new THREE.Line(geom, mat);
+        line.computeLineDistances();
+        line.renderOrder = 998;
+        ref.ctx.setPreview(line, "alignment-guide");
+      };
+
       if (opts?.grid === false) {
         showSnapMarker(null);
+        setGuideLine(null, null);
         return { point: world.clone(), kind: "grid" };
       }
+
       const camDistance = ref.camera.position.distanceTo(world);
       const tolerance = Math.max(gridSize * 0.3, camDistance * 0.004);
 
+      if (basis) {
+        // --- PLANE-AWARE SKETCH SNAPPING (Shapr3D inference engine) ---
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(basis.normal, basis.origin);
+        const ptOnPlane = plane.projectPoint(world, new THREE.Vector3());
+        const delta = ptOnPlane.clone().sub(basis.origin);
+        let uCoord = delta.dot(basis.u);
+        let vCoord = delta.dot(basis.v);
+
+        // 1. Check Sketch Plane Origin (0,0)
+        if (Math.hypot(uCoord, vCoord) <= tolerance) {
+          showSnapMarker(basis.origin, "origin");
+          setGuideLine(null, null);
+          return { point: basis.origin.clone(), kind: "origin" };
+        }
+
+        // 2. Check Guidepoints on this plane (vertices, midpoints, circle centers)
+        const endpointTolerance = tolerance * 2.2;
+        let bestPt: THREE.Vector3 | null = null;
+        let bestKind: "endpoint" | "midpoint" | "center" = "endpoint";
+        let bestDist = endpointTolerance;
+        const scene = useArcStore.getState().scene;
+        const guidePoints: { u: number; v: number; pt: THREE.Vector3 }[] = [];
+
+        if (scene && snapEnabled) {
+          const vA = new THREE.Vector3();
+          const vB = new THREE.Vector3();
+          const mid = new THREE.Vector3();
+          for (const entity of scene.entities) {
+            if (!entity.visible) continue;
+            const obj = ref.objects.get(entity.id);
+            if (!obj || !obj.visible) continue;
+            obj.updateMatrixWorld();
+
+            // Candidate entity center
+            const center3D = new THREE.Vector3(...entity.transform.position);
+            const centerDist = center3D.distanceTo(ptOnPlane);
+            if (centerDist <= bestDist * 0.85) {
+              bestDist = centerDist;
+              bestPt = center3D;
+              bestKind = "center";
+            }
+            const cRel = center3D.clone().sub(basis.origin);
+            guidePoints.push({ u: cRel.dot(basis.u), v: cRel.dot(basis.v), pt: center3D });
+
+            const pts = entity.lines;
+            if (!pts || pts.length < 3) continue;
+            for (let i = 0; i + 5 < pts.length; i += 6) {
+              vA.set(pts[i], pts[i + 1], pts[i + 2]).applyMatrix4(obj.matrixWorld);
+              vB.set(pts[i + 3], pts[i + 4], pts[i + 5]).applyMatrix4(obj.matrixWorld);
+
+              const dA = vA.distanceTo(ptOnPlane);
+              if (dA <= bestDist) {
+                bestDist = dA;
+                bestPt = vA.clone();
+                bestKind = "endpoint";
+              }
+              const dB = vB.distanceTo(ptOnPlane);
+              if (dB <= bestDist) {
+                bestDist = dB;
+                bestPt = vB.clone();
+                bestKind = "endpoint";
+              }
+              mid.copy(vA).add(vB).multiplyScalar(0.5);
+              const dMid = mid.distanceTo(ptOnPlane);
+              if (dMid <= bestDist * 0.9) {
+                bestDist = dMid;
+                bestPt = mid.clone();
+                bestKind = "midpoint";
+              }
+
+              const relA = vA.clone().sub(basis.origin);
+              guidePoints.push({ u: relA.dot(basis.u), v: relA.dot(basis.v), pt: vA.clone() });
+              const relMid = mid.clone().sub(basis.origin);
+              guidePoints.push({ u: relMid.dot(basis.u), v: relMid.dot(basis.v), pt: mid.clone() });
+            }
+          }
+        }
+
+        if (bestPt) {
+          showSnapMarker(bestPt, bestKind);
+          setGuideLine(null, null);
+          return { point: bestPt, kind: bestKind };
+        }
+
+        // 3. Shapr3D Inference Alignment Guidelines (horizontal & vertical extension lines)
+        let alignedRefPt: THREE.Vector3 | null = null;
+        let alignedTargetPt: THREE.Vector3 | null = null;
+        const alignTol = tolerance * 1.15;
+
+        // Check alignment with origin axes (U = 0 or V = 0)
+        if (Math.abs(uCoord) <= alignTol) {
+          uCoord = 0;
+          alignedRefPt = basis.origin.clone();
+          alignedTargetPt = basis.origin.clone().addScaledVector(basis.v, vCoord);
+        } else if (Math.abs(vCoord) <= alignTol) {
+          vCoord = 0;
+          alignedRefPt = basis.origin.clone();
+          alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord);
+        } else if (snapEnabled) {
+          // Check alignment with any existing guidepoint
+          for (const gp of guidePoints) {
+            if (Math.abs(uCoord - gp.u) <= alignTol) {
+              uCoord = gp.u;
+              alignedRefPt = gp.pt;
+              alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord).addScaledVector(basis.v, vCoord);
+              break;
+            } else if (Math.abs(vCoord - gp.v) <= alignTol) {
+              vCoord = gp.v;
+              alignedRefPt = gp.pt;
+              alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord).addScaledVector(basis.v, vCoord);
+              break;
+            }
+          }
+        }
+
+        if (alignedRefPt && alignedTargetPt) {
+          setGuideLine(alignedRefPt, alignedTargetPt);
+          showSnapMarker(alignedTargetPt, "aligned");
+          return { point: alignedTargetPt, kind: "aligned" };
+        }
+        setGuideLine(null, null);
+
+        // 4. Snap coordinates to plane grid
+        const snappedU = snapCoord(uCoord, gridSize, snapEnabled);
+        const snappedV = snapCoord(vCoord, gridSize, snapEnabled);
+        const snappedPt = basis.origin
+          .clone()
+          .addScaledVector(basis.u, snappedU)
+          .addScaledVector(basis.v, snappedV);
+
+        showSnapMarker(null);
+        return { point: snappedPt, kind: "grid" };
+      }
+
+      // --- 3D VIEWPORT SNAPPING (when not in 2D sketch mode) ---
+      setGuideLine(null, null);
       const origin = new THREE.Vector3(0, world.y, 0);
       if (world.distanceTo(origin) <= tolerance) {
         showSnapMarker(origin, "origin");
@@ -2281,18 +2689,38 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       return Math.round(snapped * 100) / 100;
     },
 
-    createEntity(geometry, position, name) {
+    createEntity(geometry, position, name, rotation) {
       const docId = activeDoc();
       if (!docId) return Promise.resolve(null);
       ref.lastCommitAt = performance.now();
       return ipc
         .createEntity(docId, geometry, name)
         .then(({ id }) => {
+          const rot = rotation ?? [0, 0, 0, 1];
           const needsPlace =
-            position[0] !== 0 || position[1] !== 0 || position[2] !== 0;
+            position[0] !== 0 ||
+            position[1] !== 0 ||
+            position[2] !== 0 ||
+            rot[0] !== 0 ||
+            rot[1] !== 0 ||
+            rot[2] !== 0 ||
+            rot[3] !== 1;
           const placed = needsPlace
             ? ipc
-                .setTransform(docId, [{ id, transform: makeTransformFromPosition(id, position) }], true)
+                .setTransform(
+                  docId,
+                  [
+                    {
+                      id,
+                      transform: {
+                        position,
+                        rotation: rot,
+                        scale: [1, 1, 1],
+                      },
+                    },
+                  ],
+                  true,
+                )
                 .catch(() => undefined)
             : Promise.resolve();
           return placed
@@ -2422,15 +2850,6 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
   };
 }
 
-function makeTransformFromPosition(
-  id: string,
-  position: [number, number, number],
-): Transform {
-  const current = useArcStore.getState().scene?.entities.find((e) => e.id === id);
-  return current
-    ? { ...current.transform, position }
-    : { position, rotation: [0, 0, 0, 1], scale: [1, 1, 1] };
-}
 
 // ------------------------------------------------------------------- camera
 

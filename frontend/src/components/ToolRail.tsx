@@ -66,12 +66,12 @@ function ShaprRow({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "group pointer-events-auto flex items-center gap-1.5 text-left transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-35",
+        "group pointer-events-auto flex items-center gap-2 text-left transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-35",
       )}
     >
       <span
         className={cn(
-          "flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border transition-colors shadow-sm",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors shadow-sm",
           active
             ? "border-accent-500 bg-accent-500 text-white"
             : danger
@@ -83,13 +83,13 @@ function ShaprRow({
       </span>
       <span
         className={cn(
-          "flex flex-col justify-center rounded-lg border px-2.5 py-1 shadow-sm transition-colors",
+          "flex flex-col justify-center rounded-lg border px-3 py-1.5 shadow-sm transition-colors",
           active
             ? "border-accent-500/60 bg-base-100 text-base-900"
             : "border-base-300/70 bg-base-100 text-base-800 group-hover:bg-base-200",
         )}
       >
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-semibold leading-tight">
+        <span className="flex items-center gap-1.5 whitespace-nowrap text-[12px] font-semibold leading-tight">
           <span>{label}</span>
           {shortcut && (
             <span className="rounded bg-base-200 px-1 py-0.2 font-mono text-[9.5px] font-medium text-base-500">
@@ -277,6 +277,7 @@ export function ToolRail() {
               icon={<X size={15} strokeWidth={2} />}
               label="Exit Sketching"
               sub="Sketch Plane"
+              shortcut="Esc"
               onClick={() => exitSketchMode()}
             />
             <div className="my-0.5 h-px w-8 bg-base-300/60" />

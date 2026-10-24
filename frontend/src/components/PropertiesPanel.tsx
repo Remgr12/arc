@@ -48,7 +48,7 @@ function AxisFields({
       {AXIS.map((axis, i) => (
         <div
           key={axis.label}
-          className="flex h-7 min-w-0 items-center overflow-hidden rounded-lg border border-base-300 bg-base-100 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20"
+          className="flex h-7.5 min-w-0 items-center overflow-hidden rounded-lg border border-base-300 bg-base-100 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20"
         >
           <span
             className={cn(
@@ -92,7 +92,7 @@ export function PropertiesPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-base-50">
       <PanelHeader title="Properties" hint={entity.kind} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-3.5">
         <EntityForm docId={docId} entity={entity} scene={scene} />
       </div>
     </div>
@@ -101,7 +101,7 @@ export function PropertiesPanel() {
 
 function PanelHeader({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-3">
+    <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-3.5">
       <span className="text-[12px] font-semibold text-base-800">{title}</span>
       {hint && (
         <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{hint}</span>

@@ -34,7 +34,7 @@ function DocumentRow({
   return (
     <div
       className={cn(
-        "group flex h-8 items-center gap-2 rounded-lg px-2.5 transition-colors",
+        "group flex h-8.5 items-center gap-2 rounded-lg px-3 transition-colors",
         active
           ? "bg-accent-500/15 text-base-900 border border-accent-500/30"
           : "text-base-700 hover:bg-base-200 hover:text-base-900",
@@ -318,8 +318,8 @@ export function ProjectPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-base-50">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-2">
-        <div className="flex items-center gap-0.5">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-2.5">
+        <div className="flex items-center gap-1">
           {(
             [
               { id: "items", label: "Items", count: itemCount, icon: Shapes },
@@ -335,7 +335,7 @@ export function ProjectPanel() {
                 type="button"
                 onClick={() => setMode(tab.id)}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors",
+                  "flex h-7.5 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] font-medium transition-colors",
                   active
                     ? "bg-base-200 text-base-800 shadow-xs"
                     : "text-base-600 hover:bg-base-200/50 hover:text-base-800",
@@ -350,7 +350,7 @@ export function ProjectPanel() {
             );
           })}
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <IconButton
             icon={<Plus size={14} strokeWidth={1.75} />}
             title={plusTitle}

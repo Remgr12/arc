@@ -40,11 +40,11 @@ function RightShaprRow({
     <button
       type="button"
       onClick={onClick}
-      className="group pointer-events-auto flex items-center justify-end gap-1.5 text-right outline-none"
+      className="group pointer-events-auto flex items-center justify-end gap-2 text-right outline-none"
     >
       <span
         className={cn(
-          "flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[12px] font-medium shadow-sm transition-colors",
+          "flex h-9.5 items-center gap-2 rounded-xl border px-3 py-1.5 text-[12px] font-medium shadow-sm transition-colors",
           active
             ? "border-[#28b5f5]/50 bg-base-100 text-[#28b5f5]"
             : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
@@ -61,7 +61,7 @@ function RightShaprRow({
       </span>
       <span
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors",
+          "flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors",
           active
             ? "border-[#28b5f5] bg-[#28b5f5] text-white shadow-[#28b5f5]/25"
             : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
@@ -84,7 +84,9 @@ export function UtilityRail() {
   const snapOn = settings?.snap_enabled ?? true;
   const gridOn = settings?.show_grid ?? true;
   const gridSize = settings?.grid_size ?? 1;
-  const unit = settings?.default_units ?? "cm";
+  const isImperial =
+    settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
+  const unit = isImperial ? "in" : "cm";
 
   const toggleSnap = () => {
     if (!settings) return;
@@ -120,13 +122,13 @@ export function UtilityRail() {
   return (
     <>
       {/* 1. Top-Right Vertical Shapr3D Pill (next to the 3D ViewCube) */}
-      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-2 rounded-2xl border border-base-300/80 bg-base-100 p-2 shadow-md">
+      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-2.5 rounded-2xl border border-base-300/80 bg-base-100 p-2.5 shadow-md">
         <button
           type="button"
           onClick={toggleSnap}
           title={snapOn ? "Snap ON (click to disable)" : "Snap OFF (click to enable)"}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
+            "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             snapOn
               ? "bg-[#28b5f5]/18 text-[#28b5f5]"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",
@@ -140,7 +142,7 @@ export function UtilityRail() {
           type="button"
           onClick={cycleGridSize}
           title="Grid scale (click to cycle 1 / 2 / 5 / 10)"
-          className="flex h-8.5 w-8 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-[#28b5f5]/60 hover:text-[#28b5f5]"
+          className="flex h-9 w-8.5 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-[#28b5f5]/60 hover:text-[#28b5f5]"
         >
           <span className="font-mono text-[11.5px] font-bold leading-none">
             {gridSize}
@@ -155,7 +157,7 @@ export function UtilityRail() {
           onClick={toggleGrid}
           title={gridOn ? "Grid & Axes visible" : "Grid & Axes hidden"}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
+            "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             gridOn
               ? "bg-[#28b5f5]/18 text-[#28b5f5]"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",

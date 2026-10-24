@@ -1,8 +1,9 @@
+import * as THREE from "three";
 import type { ToolContext, ToolHandler } from "./types";
 import { useArcStore } from "../lib/store";
 import type { RefObject } from "../lib/types";
 import { faceEditable } from "./faceTools";
-import { armExtrudeSelectedSketch } from "./solid";
+import { facePlaneInfo } from "./topology";
 
 // ---------------------------------------------------------------------------
 // Selection tool. Click picks (face/edge first, whole entity as fallback),
@@ -72,6 +73,10 @@ export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
       event,
       ctx,
     );
+    const entity = ctx.entityById(face.entityId);
+    if (!event.shiftKey && entity && faceEditable(entity.kind)) {
+      useArcStore.getState().setTool("extrude-face");
+    }
     return;
   }
   const id = ctx.pickEntity(event);
@@ -134,16 +139,17 @@ export const selectTool: ToolHandler = {
     if (face) {
       const entity = ctx.entityById(face.entityId);
       if (entity && faceEditable(entity.kind)) {
-        ctx.setSelectionRef({
-          entityId: face.entityId,
-          kind: "face",
-          face: face.faceIndex,
-          edge: null,
-          point: face.point,
-          normal: face.normal,
+        const info = facePlaneInfo(entity, face.faceIndex);
+        useArcStore.getState().enterSketchMode({
+          height: info.height,
+          origin: info.origin,
+          normal: info.normal,
+          label: info.label,
+          tool: "line",
         });
-        void ctx.setSelection([face.entityId], face.entityId);
-        useArcStore.getState().setTool("extrude-face");
+        window.dispatchEvent(
+          new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
+        );
         return true;
       }
     }
@@ -151,11 +157,27 @@ export const selectTool: ToolHandler = {
     const entity = id ? ctx.entityById(id) : null;
     if (id && entity && entity.category === "sketch") {
       void ctx.setSelection([id], id);
-      armExtrudeSelectedSketch();
-      useArcStore.getState().setTool("extrude");
+      const rot = entity.transform.rotation;
+      const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
+      const normalVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+      const normal: [number, number, number] = [normalVec.x, normalVec.y, normalVec.z];
+      const origin: [number, number, number] = [
+        entity.transform.position[0],
+        entity.transform.position[1],
+        entity.transform.position[2],
+      ];
+      useArcStore.getState().enterSketchMode({
+        origin,
+        normal,
+        label: `Edit ${entity.name || "Sketch"}`,
+        tool: "line",
+      });
+      window.dispatchEvent(
+        new CustomEvent("arc-focus-plane", { detail: { normal } }),
+      );
       return true;
     }
     return false;
   },
-  hint: () => "Select · click to pick (double-click face/sketch to extrude) · Shift toggles · drag rubber band",
+  hint: () => "Select · click face for push-pull · double-click face/sketch to sketch on plane · Shift toggles",
 };

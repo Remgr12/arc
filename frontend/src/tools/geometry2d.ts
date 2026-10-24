@@ -12,6 +12,58 @@ export interface Chain {
   entityId: string;
 }
 
+export interface PlaneBasis {
+  origin: THREE.Vector3;
+  normal: THREE.Vector3;
+  u: THREE.Vector3;
+  v: THREE.Vector3;
+  quat: THREE.Quaternion;
+  isHorizontal: boolean;
+}
+
+/**
+ * Standard CAD orthonormal plane basis (Shapr3D / Fusion 360 / SolidWorks style).
+ * - `u`: horizontal axis on screen (perpendicular to world UP (0,1,0) and outward normal N)
+ * - `v`: vertical axis on screen (pointing upwards in the plane, N cross u)
+ * - `normal`: outward plane normal N
+ * - `quat`: rotation matrix mapping local X -> u, local Y -> normal, local Z -> (u cross normal = -v).
+ */
+export function computePlaneBasis(normal: THREE.Vector3, origin: THREE.Vector3): PlaneBasis {
+  const n = normal.clone().normalize();
+  const isHorizontalTop = Math.abs(n.x) < 1e-4 && Math.abs(n.z) < 1e-4 && n.y > 0.99;
+  const isHorizontalBottom = Math.abs(n.x) < 1e-4 && Math.abs(n.z) < 1e-4 && n.y < -0.99;
+
+  let u: THREE.Vector3;
+  let v: THREE.Vector3;
+  let quat: THREE.Quaternion;
+
+  if (isHorizontalTop) {
+    u = new THREE.Vector3(1, 0, 0);
+    v = new THREE.Vector3(0, 0, 1);
+    quat = new THREE.Quaternion(); // Identity
+  } else if (isHorizontalBottom) {
+    u = new THREE.Vector3(1, 0, 0);
+    v = new THREE.Vector3(0, 0, -1);
+    quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+  } else {
+    // 1) Horizontal on screen: perpendicular to world UP (0,1,0) and plane normal N.
+    // (0,1,0) cross N points right when facing the plane!
+    u = new THREE.Vector3(0, 1, 0).cross(n).normalize();
+    // 2) Vertical on screen: points UPWARDS on the plane: N cross u
+    v = new THREE.Vector3().crossVectors(n, u).normalize();
+
+    // 3) In local entity space (meshgen.rs):
+    //    Local X is (1, 0, 0) -> u
+    //    Local Y is (0, 1, 0) -> n
+    //    Local Z is (0, 0, 1) -> u cross n (-v)
+    const colZ = new THREE.Vector3().crossVectors(u, n).normalize();
+    const mat = new THREE.Matrix4().makeBasis(u, n, colZ);
+    quat = new THREE.Quaternion().setFromRotationMatrix(mat);
+  }
+
+  return { origin: origin.clone(), normal: n, u, v, quat, isHorizontal: isHorizontalTop };
+}
+
 const EPS = 1e-6;
 
 /** Sample a circle ring into `segments` points (open list, implicit closure). */
@@ -67,11 +119,10 @@ export function chainFromEntity(entity: EntityData, object: THREE.Object3D | nul
       const r = Number(g.radius ?? 0);
       if (r <= 0) return null;
       const sides = type === "polygon_curve" ? Number(g.sides ?? 32) : 64;
-      const center = toWorld([0, 0, 0]);
       points = [];
       for (let i = 0; i < sides; i++) {
         const a = (Math.PI * 2 * i) / sides;
-        points.push(new THREE.Vector3(center.x + r * Math.cos(a), center.y, center.z + r * Math.sin(a)));
+        points.push(toWorld([r * Math.cos(a), 0, r * Math.sin(a)]));
       }
       closed = true;
       break;
@@ -82,11 +133,10 @@ export function chainFromEntity(entity: EntityData, object: THREE.Object3D | nul
       const a1 = (Number(g.end_angle_deg ?? 0) * Math.PI) / 180;
       const segs = Number(g.segments ?? 48);
       if (r <= 0 || segs < 1) return null;
-      const center = toWorld([0, 0, 0]);
       points = [];
       for (let i = 0; i <= segs; i++) {
         const a = a0 + ((a1 - a0) * i) / segs;
-        points.push(new THREE.Vector3(center.x + r * Math.cos(a), center.y, center.z + r * Math.sin(a)));
+        points.push(toWorld([r * Math.cos(a), 0, r * Math.sin(a)]));
       }
       break;
     }
