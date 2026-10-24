@@ -760,6 +760,10 @@ footer.site .legal a {
   pre.code code {
     font-size: 12px;
     padding: 12px 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .note {
     padding: 12px 14px;
