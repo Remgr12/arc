@@ -74,7 +74,7 @@ function Menu({
         <ChevronDown size={11} className="text-base-500" />
       </button>
       {isOpen && (
-        <div className="absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-md border border-base-300 bg-base-150 p-1 shadow-lg shadow-black/40">
+        <div className="anim-pop absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-lg border border-base-300 bg-base-150 p-1 shadow-lg shadow-black/40">
           {entries.map((entry, index) =>
             entry === "-" ? (
               <div key={`sep-${index}`} className="mx-2 my-1 border-t border-base-300" />
@@ -251,7 +251,10 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
       </div>
 
-      <div className="mx-auto hidden min-w-0 max-w-[300px] truncate text-[12px] font-medium text-base-600 sm:block">
+      <div
+        title={docTitle}
+        className="pointer-events-none absolute left-1/2 top-1/2 hidden max-w-[280px] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[12px] font-medium text-base-600 md:block"
+      >
         {docTitle}
       </div>
 

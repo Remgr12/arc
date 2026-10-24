@@ -251,7 +251,7 @@ function DimPill({
         type="button"
         tabIndex={-1}
         onClick={() => stepBy(-1)}
-        className="flex h-4.5 w-4.5 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
         title={`Decrease ${spec.fullLabel}`}
       >
         <Minus size={10} strokeWidth={2.2} />
@@ -285,7 +285,7 @@ function DimPill({
             stepBy(-1);
           }
         }}
-        className="h-5 w-13 rounded bg-base-50 px-1 text-center font-mono text-[11.5px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
+        className="h-5 w-16 rounded bg-base-50 px-1.5 text-center font-mono text-[11.5px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
       />
       {!spec.isInteger && (
         <span className="text-[10px] font-mono text-base-500">{unitLabel}</span>
@@ -294,7 +294,7 @@ function DimPill({
         type="button"
         tabIndex={-1}
         onClick={() => stepBy(1)}
-        className="flex h-4.5 w-4.5 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
         title={`Increase ${spec.fullLabel}`}
       >
         <Plus size={10} strokeWidth={2.2} />
@@ -356,10 +356,10 @@ export function SelectionHud() {
   const canEditFace = faceEditable(entity.kind);
 
   return (
-    <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1.5">
+    <div className="anim-slide-up pointer-events-none absolute bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-340px)] -translate-x-1/2 flex-col items-center gap-1.5">
       {/* Optional parameter sub-bar for Shell, Chamfer, or Pattern */}
       {subPanel === "shell" && (
-        <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
           <Box size={13} className="text-accent-500" />
           <span className="font-semibold text-base-800">Shell Wall Thickness:</span>
           <button
@@ -399,7 +399,7 @@ export function SelectionHud() {
       )}
 
       {subPanel === "chamfer" && (
-        <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
           <Slice size={13} className="text-accent-500" />
           <span className="font-semibold text-base-800">Chamfer Distance (45°):</span>
           <button
@@ -439,7 +439,7 @@ export function SelectionHud() {
       )}
 
       {subPanel === "pattern" && (
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
           <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
             <button
               type="button"
@@ -540,11 +540,11 @@ export function SelectionHud() {
         </div>
       )}
 
-      <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-2xl border border-base-200 bg-base-50/95 px-3 py-1.5 shadow-lg shadow-black/25 backdrop-blur-md">
+      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-base-200 bg-base-50/95 px-3 py-1.5 shadow-lg shadow-black/25 backdrop-blur-md">
         {/* Selection badge */}
-        <div className="flex items-center gap-1.5 pr-1">
-          <span className="h-2 w-2 rounded-full bg-accent-500" />
-          <span className="text-[11.5px] font-semibold text-base-800">
+        <div className="flex max-w-[180px] items-center gap-1.5 pr-1">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-accent-500" />
+          <span className="truncate text-[11.5px] font-semibold text-base-800">
             {isFace
               ? `${entity.name || entity.kind} · Face ${selFace.face}`
               : isEdge

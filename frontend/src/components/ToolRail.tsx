@@ -55,7 +55,7 @@ export function ToolRail() {
 
   return (
     <nav
-      className="flex w-13 shrink-0 flex-col items-center gap-0.5 border-r border-base-200 bg-base-50 py-2"
+      className="flex w-12 shrink-0 flex-col items-center justify-start gap-0.5 border-r border-base-200 bg-base-50 py-1.5"
       aria-label="Tools"
     >
       <Tip
@@ -67,20 +67,20 @@ export function ToolRail() {
           disabled={!enabled}
           onClick={toggleSketchMode}
           className={cn(
-            "mb-1 flex h-8 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+            "mb-0.5 flex h-7 w-8 shrink-0 items-center justify-center rounded-lg border transition-all duration-150 active:scale-95",
             "disabled:pointer-events-none disabled:opacity-35",
             sketchMode
               ? "border-accent-500 bg-accent-500/20 text-accent-500 shadow-xs"
               : "border-base-300 bg-base-100 text-base-600 hover:bg-base-200 hover:text-base-800",
           )}
         >
-          <PencilRuler size={16} strokeWidth={1.8} />
+          <PencilRuler size={15} strokeWidth={1.8} />
         </button>
       </Tip>
 
       {RAIL_GROUPS.map((group, gi) => (
-        <div key={group.title} className="flex w-full flex-col items-center">
-          {gi > 0 && <div className="my-1 h-px w-7 bg-base-200" />}
+        <div key={group.title} className="flex w-full flex-col items-center gap-0.5">
+          {gi > 0 && <div className="my-0.5 h-px w-6 bg-base-200" />}
           {group.tools.map((id) => {
             const def = TOOL_BY_ID.get(id);
             if (!def) return null;
@@ -94,14 +94,14 @@ export function ToolRail() {
                   disabled={!enabled}
                   onClick={() => setTool(id)}
                   className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+                    "flex h-7 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-150 active:scale-95",
                     "disabled:pointer-events-none disabled:opacity-35",
                     active
                       ? "bg-accent-500 text-white shadow-xs"
                       : "text-base-600 hover:bg-base-200 hover:text-base-800",
                   )}
                 >
-                  <Icon size={16} strokeWidth={1.75} />
+                  <Icon size={15} strokeWidth={1.75} />
                 </button>
               </Tip>
             );

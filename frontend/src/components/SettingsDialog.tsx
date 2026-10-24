@@ -95,14 +95,34 @@ function GeneralTab({
         />
       </Row>
       <Row label="Grid size">
-        <TextField
-          mono
-          value={String(settings.grid_size)}
-          onCommit={(text) => {
-            const value = parseFloat(text);
-            if (Number.isFinite(value) && value > 0) patch({ grid_size: value });
-          }}
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-base-300 bg-base-100 p-0.5">
+            {[1, 2, 5, 10].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => patch({ grid_size: preset })}
+                className={cn(
+                  "rounded-md px-2 py-1 font-mono text-[11px] font-medium transition-colors",
+                  settings.grid_size === preset
+                    ? "bg-accent-500 text-white"
+                    : "text-base-600 hover:bg-base-200 hover:text-base-800",
+                )}
+              >
+                {preset} {settings.units === "imperial" ? "in" : "cm"}
+              </button>
+            ))}
+          </div>
+          <TextField
+            mono
+            className="w-24"
+            value={String(settings.grid_size)}
+            onCommit={(text) => {
+              const value = parseFloat(text);
+              if (Number.isFinite(value) && value > 0) patch({ grid_size: value });
+            }}
+          />
+        </div>
       </Row>
       <Row label="Snapping">
         <Checkbox

@@ -44,11 +44,11 @@ export function ModeBanner() {
   };
 
   return (
-    <div className="pointer-events-none absolute left-1/2 top-3 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2">
+    <div className="pointer-events-none absolute left-1/2 top-3 z-30 flex max-w-[calc(100vw-340px)] -translate-x-1/2 flex-wrap items-center justify-center gap-2">
       {(tool !== "select" || drafting || sketchMode) && (
         <div
           className={cn(
-            "pointer-events-auto flex items-center gap-2 rounded-full border border-base-200",
+            "anim-slide-down pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full border border-base-200",
             "bg-base-50/95 px-3 py-1 shadow-lg shadow-black/20 backdrop-blur-md",
           )}
         >
@@ -179,7 +179,7 @@ export function ModeBanner() {
       {sectionView && (
         <div
           className={cn(
-            "pointer-events-auto flex items-center gap-2 rounded-full border border-base-200",
+            "anim-slide-down pointer-events-auto flex items-center gap-2 rounded-full border border-base-200",
             "bg-base-50/95 px-3 py-1 shadow-lg shadow-black/20 backdrop-blur-md",
           )}
         >

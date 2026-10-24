@@ -48,15 +48,15 @@ export function StatusBar() {
   const gridLabel = settings ? `${settings.grid_size} ${unit}` : null;
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-base-200 bg-base-50 px-3 text-[11.5px]">
-      <div className="flex items-center gap-1.5">
+    <footer className="no-scrollbar flex h-7 shrink-0 items-center gap-2.5 overflow-x-auto border-t border-base-200 bg-base-50 px-3 text-[11.5px]">
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           title="Toggle reference grid"
           disabled={!settings}
           onClick={() => toggleSetting("show_grid")}
           className={cn(
-            "flex h-5.5 shrink-0 items-center gap-1 rounded px-2 text-[11px] transition-colors disabled:pointer-events-none disabled:opacity-30",
+            "flex h-5 shrink-0 items-center gap-1 rounded px-2 text-[11px] transition-colors disabled:pointer-events-none disabled:opacity-30",
             settings?.show_grid
               ? "bg-accent-500/15 text-accent-500"
               : "text-base-600 hover:bg-base-200 hover:text-base-800",
@@ -71,7 +71,7 @@ export function StatusBar() {
             type="button"
             title="Click to cycle grid spacing (1 / 2 / 5 / 10 cm)"
             onClick={cycleGridSize}
-            className="flex h-5.5 shrink-0 items-center rounded border border-base-200 bg-base-100 px-1.5 font-mono text-[10.5px] text-base-700 transition-colors hover:bg-base-200"
+            className="flex h-5 shrink-0 items-center rounded border border-base-200 bg-base-100 px-1.5 font-mono text-[10.5px] text-base-700 transition-colors hover:bg-base-200"
           >
             {gridLabel}
           </button>
@@ -83,7 +83,7 @@ export function StatusBar() {
           disabled={!settings}
           onClick={() => toggleSetting("snap_enabled")}
           className={cn(
-            "flex h-5.5 shrink-0 items-center gap-1 rounded px-2 text-[11px] transition-colors disabled:pointer-events-none disabled:opacity-30",
+            "flex h-5 shrink-0 items-center gap-1 rounded px-2 text-[11px] transition-colors disabled:pointer-events-none disabled:opacity-30",
             settings?.snap_enabled
               ? "bg-accent-500/15 text-accent-500"
               : "text-base-600 hover:bg-base-200 hover:text-base-800",
@@ -94,7 +94,7 @@ export function StatusBar() {
         </button>
 
         <div
-          className="flex h-5.5 items-center gap-0.5 rounded border border-base-200 bg-base-100 px-1"
+          className="flex h-5 shrink-0 items-center gap-0.5 rounded border border-base-200 bg-base-100 px-1"
           title="Dimension snap increment (hold Alt while dragging for 0.1 cm fine step)"
         >
           <Ruler size={11} className="mr-0.5 text-base-500" />
@@ -104,7 +104,7 @@ export function StatusBar() {
               type="button"
               onClick={() => setDimSnapStep(step)}
               className={cn(
-                "h-4 rounded px-1 font-mono text-[10px] transition-colors",
+                "flex h-4 items-center rounded px-1 font-mono text-[10px] transition-colors",
                 dimSnapStep === step
                   ? "bg-accent-500 font-semibold text-white"
                   : "text-base-600 hover:bg-base-200 hover:text-base-800",
@@ -163,7 +163,7 @@ export function StatusBar() {
         onClick={() => setLowSpecMode(!lowSpecMode)}
         title="Toggle Laptop Performance Mode (1.0x pixel ratio, disables shadows & PBR IBL)"
         className={cn(
-          "flex h-5.5 shrink-0 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors",
+          "flex h-5 shrink-0 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors",
           lowSpecMode
             ? "bg-amber-500/20 text-amber-500"
             : "text-base-500 hover:bg-base-200 hover:text-base-800",

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   FolderOpen,
   HardDriveDownload,
   Plus,
   Search,
+  Settings,
   Upload,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
-import { Button, Modal, TextField, cn } from "./ui";
+import { Button, IconButton, Modal, TextField, cn } from "./ui";
 import { Logo } from "./Logo";
 import type { ProjectSummary } from "../lib/types";
 
@@ -157,7 +159,21 @@ export function Dashboard() {
             )}
           </section>
         </div>
-        <div className="border-t border-base-200 p-3">
+        <div className="flex flex-col gap-1 border-t border-base-200 p-3">
+          {overview?.active && (
+            <DashButton
+              icon={<ArrowRight size={14} className="text-accent-500" />}
+              onClick={() => useArcStore.getState().setView("editor")}
+            >
+              Return to editor
+            </DashButton>
+          )}
+          <DashButton
+            icon={<Settings size={14} />}
+            onClick={() => actions.openSettings()}
+          >
+            Settings…
+          </DashButton>
           <DashButton
             icon={<ArrowLeft size={14} />}
             onClick={() => useArcStore.getState().setOnboardingOpen(true)}
@@ -171,21 +187,21 @@ export function Dashboard() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-200 px-6 py-4">
           <div className="flex min-w-0 flex-col">
-            <h1 className="text-[16px] font-semibold text-base-900">Projects</h1>
-            <span className="text-[11.5px] text-base-600">
+            <h1 className="text-[16px] font-semibold leading-tight text-base-900">Projects</h1>
+            <span className="truncate text-[11.5px] text-base-600">
               {folder
                 ? `${projects.length} in ${folder}`
                 : "Choose a workspace folder to see your projects"}
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <label className="flex h-8 w-56 items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-2.5 focus-within:border-accent-600">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <label className="flex h-8 w-56 items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-2.5 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
               <Search size={14} className="shrink-0 text-base-500" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search projects"
-                className="w-full bg-transparent text-[12px] text-base-800 outline-none placeholder:text-base-500"
+                className="w-full min-w-0 bg-transparent text-[12px] text-base-800 outline-none placeholder:text-base-500"
               />
             </label>
             <Button
@@ -217,6 +233,13 @@ export function Dashboard() {
             <Button variant="primary" disabled={!folder} onClick={() => setNaming("")}>
               <Plus size={14} /> New project
             </Button>
+            <span className="mx-0.5 h-5 w-px bg-base-200" />
+            <IconButton
+              icon={<Settings size={16} strokeWidth={1.75} />}
+              title="Settings"
+              onClick={() => actions.openSettings()}
+              className="border border-base-300 bg-base-100 text-base-700 hover:bg-base-200"
+            />
           </div>
         </header>
 
@@ -243,7 +266,7 @@ export function Dashboard() {
                   type="button"
                   onClick={() => void openProject(project)}
                   className={cn(
-                    "group overflow-hidden rounded-xl border border-base-200 bg-base-100 text-left transition-colors hover:border-accent-600/60",
+                    "view-fade-in group flex flex-col overflow-hidden rounded-xl border border-base-200 bg-base-100 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-500/60 hover:shadow-lg active:scale-[0.99]",
                     opening === project.path && "opacity-60",
                   )}
                 >
@@ -253,13 +276,13 @@ export function Dashboard() {
                       src={thumbs[project.path] ?? null}
                     />
                   </div>
-                  <div className="border-t border-base-200 px-3 py-2">
-                    <div className="truncate text-[12.5px] font-medium text-base-900 group-hover:text-accent-600">
+                  <div className="w-full border-t border-base-200 px-3 py-2.5">
+                    <div className="truncate text-[12.5px] font-medium text-base-900 transition-colors group-hover:text-accent-500">
                       {project.name}
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2 font-mono text-[11px] text-base-600">
-                      <span>{formatDate(project.modified)}</span>
-                      <span>{formatSize(project.size)}</span>
+                    <div className="mt-0.5 flex items-center justify-between gap-2 font-mono text-[11px] text-base-500">
+                      <span className="truncate">{formatDate(project.modified)}</span>
+                      <span className="shrink-0">{formatSize(project.size)}</span>
                     </div>
                   </div>
                 </button>

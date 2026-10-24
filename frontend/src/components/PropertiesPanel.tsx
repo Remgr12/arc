@@ -35,7 +35,7 @@ const AXIS = [
   { label: "Z", color: "text-[#5a94e5]" },
 ];
 
-/** Three number fields with tiny axis letters, for position / rotation / scale. */
+/** Three number fields with dedicated axis badges so numbers never collide with X/Y/Z. */
 function AxisFields({
   values,
   onCommit,
@@ -44,22 +44,27 @@ function AxisFields({
   onCommit: (index: 0 | 1 | 2, value: number) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1">
+    <div className="grid grid-cols-3 gap-1.5">
       {AXIS.map((axis, i) => (
-        <div key={axis.label} className="relative">
+        <div
+          key={axis.label}
+          className="flex h-7 min-w-0 items-center overflow-hidden rounded-lg border border-base-300 bg-base-100 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20"
+        >
           <span
             className={cn(
-              "pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 font-mono text-[10px]",
+              "flex h-full w-4 shrink-0 select-none items-center justify-center border-r border-base-200/70 bg-base-200/40 font-mono text-[10px] font-bold",
               axis.color,
             )}
           >
             {axis.label}
           </span>
-          <NumField
-            value={values[i]}
-            className="pl-4"
-            onCommit={(value) => onCommit(i as 0 | 1 | 2, value)}
-          />
+          <div className="min-w-0 flex-1">
+            <NumField
+              value={values[i]}
+              className="h-7 rounded-none border-0 bg-transparent px-1.5 text-[11px] focus:ring-0"
+              onCommit={(value) => onCommit(i as 0 | 1 | 2, value)}
+            />
+          </div>
         </div>
       ))}
     </div>
@@ -252,7 +257,7 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
       {numericKeys.map((key) => (
         <Row key={key} label={humanize(key)}>
           <NumField
-            className="h-6"
+            className="h-7 px-2.5 text-[11.5px]"
             value={geometry[key] as number}
             onCommit={(value) => update({ [key]: value })}
           />
@@ -261,7 +266,7 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
       {pointKeys.map((key) => (
         <Row key={key} label={humanize(key)}>
           <TextField
-            className="h-6"
+            className="h-7 px-2.5 text-[11.5px]"
             mono
             value={JSON.stringify(geometry[key])}
             onCommit={(text) => {

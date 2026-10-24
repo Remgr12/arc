@@ -33,7 +33,7 @@ export function Button({
   type?: "button" | "submit";
 }) {
   const base =
-    "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-40";
+    "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-medium transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
   const variants = {
     default:
       "bg-base-200 text-base-700 border border-base-300 hover:bg-base-300 hover:text-base-800 shadow-sm",
@@ -79,9 +79,9 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg text-base-600 transition-all duration-200 hover:bg-base-200 hover:text-base-800 disabled:pointer-events-none disabled:opacity-30",
+        "inline-flex items-center justify-center rounded-lg text-base-600 transition-all duration-150 hover:bg-base-200 hover:text-base-800 active:scale-[0.95] disabled:pointer-events-none disabled:opacity-30",
         dim,
-        active && "bg-accent-500/10 text-accent-600",
+        active && "bg-accent-500/12 text-accent-600",
         className,
       )}
     >
@@ -509,14 +509,14 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="anim-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         className={cn(
-          "flex max-h-[80vh] flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl",
+          "anim-pop flex max-h-[82vh] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl",
           width,
         )}
       >
@@ -532,8 +532,10 @@ export function Modal({
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[80px_1fr] items-center gap-3 py-1.5">
-      <span className="truncate text-[11.5px] font-medium text-base-700">{label}</span>
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2.5 py-1.5">
+      <span title={label} className="truncate text-[11.5px] font-medium text-base-700">
+        {label}
+      </span>
       <div className="min-w-0">{children}</div>
     </div>
   );

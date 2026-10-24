@@ -52,7 +52,8 @@ export function MaterialsPanel() {
   return (
     <Panel
       title="Materials"
-      className="fixed right-[19rem] top-[52px] z-40 h-auto max-h-[min(70vh,560px)] w-60 rounded-md border border-base-300 shadow-xl"
+      className="anim-pop fixed right-[19rem] top-[52px] z-40 h-auto max-h-[min(70vh,560px)] w-64 rounded-xl border border-base-300 shadow-xl"
+      bodyClassName="p-2"
       actions={
         <IconButton icon={<X size={14} />} title="Close" onClick={() => setMaterialsOpen(false)} />
       }

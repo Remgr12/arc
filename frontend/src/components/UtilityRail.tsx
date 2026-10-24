@@ -44,7 +44,7 @@ export function UtilityRail() {
             />
             <div
               className={cn(
-                "absolute right-full top-0 z-40 mr-2 flex flex-col gap-0.5",
+                "anim-pop absolute right-full top-0 z-40 mr-2 flex flex-col gap-0.5",
                 "rounded-xl border border-base-200 bg-base-50/95 p-1 shadow-lg shadow-black/20 backdrop-blur-md",
               )}
             >
@@ -111,7 +111,7 @@ export function UtilityRail() {
             />
             <div
               className={cn(
-                "absolute right-full top-0 z-40 mr-2 flex w-44 flex-col gap-1",
+                "anim-pop absolute right-full top-0 z-40 mr-2 flex w-44 flex-col gap-1",
                 "rounded-xl border border-base-200 bg-base-50/95 p-2 shadow-lg shadow-black/20 backdrop-blur-md",
               )}
             >

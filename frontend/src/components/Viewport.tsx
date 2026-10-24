@@ -51,6 +51,9 @@ interface MenuItem {
 interface ViewportRefs {
   host: HTMLDivElement;
   measureEl: HTMLDivElement;
+  scaleBarLineEl: HTMLDivElement;
+  scaleBarLabelEl: HTMLSpanElement;
+  scaleGridBtnEl: HTMLButtonElement;
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
@@ -58,7 +61,7 @@ interface ViewportRefs {
   gizmoDragging: boolean;
   sceneRoot: THREE.Scene;
   entityRoot: THREE.Group;
-  gridNode: THREE.GridHelper;
+  gridNode: THREE.Group;
   groundNode: THREE.Mesh;
   axes: THREE.AxesHelper;
   raycaster: THREE.Raycaster;
@@ -79,6 +82,7 @@ interface ViewportRefs {
   lastSketchMode: boolean;
   lastSketchHeight: number;
   lastSketchPlaneKey: string;
+  lastGridSize: number;
   lastLowSpecMode: boolean;
   lastCursorAt: number;
   disposed: boolean;
@@ -148,15 +152,60 @@ function themeToPalette(p: ViewportPalette): ViewPalette {
   };
 }
 
-function makeGrid(p: ViewportPalette): THREE.GridHelper {
-  const grid = new THREE.GridHelper(
-    4000,
-    200,
-    new THREE.Color(p.grid).getHex(),
-    new THREE.Color(p.gridLine).getHex(),
-  );
-  (grid.material as THREE.Material).depthWrite = false;
-  return grid;
+function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
+  const step = Math.max(0.5, Math.min(100, gridSize || 2));
+  const majorCells = 40;
+  const extent = step * 10 * majorCells;
+  const minorDivs = majorCells * 10;
+  const majorDivs = majorCells;
+
+  const group = new THREE.Group();
+  const minorColor = new THREE.Color(p.gridLine);
+  const majorColor = new THREE.Color(p.grid).lerp(new THREE.Color(p.accent500), 0.22);
+  const centerColor = new THREE.Color(p.accent500);
+
+  const minor = new THREE.GridHelper(extent, minorDivs, minorColor.getHex(), minorColor.getHex());
+  const minorMat = minor.material as THREE.LineBasicMaterial;
+  minorMat.transparent = true;
+  minorMat.opacity = 0.34;
+  minorMat.depthWrite = false;
+
+  const major = new THREE.GridHelper(extent, majorDivs, centerColor.getHex(), majorColor.getHex());
+  const majorMat = major.material as THREE.LineBasicMaterial;
+  majorMat.transparent = true;
+  majorMat.opacity = 0.78;
+  majorMat.depthWrite = false;
+  major.position.y = 0.015;
+
+  group.add(minor);
+  group.add(major);
+  return group;
+}
+
+function updateScaleBar(ref: ViewportRefs): void {
+  const h = ref.host.clientHeight || 600;
+  const dist = Math.max(1, ref.camera.position.distanceTo(ref.controls.target));
+  const fovRad = (ref.camera.fov * Math.PI) / 180;
+  const worldHeight = 2 * dist * Math.tan(fovRad * 0.5);
+  const worldPerPx = worldHeight / h;
+
+  // Target bar width between 56px and 130px using clean 1-2-5 steps
+  const rawUnits = worldPerPx * 85;
+  const exp = Math.pow(10, Math.floor(Math.log10(Math.max(0.01, rawUnits))));
+  const norm = rawUnits / exp;
+  const niceMult = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+  const barUnits = Math.max(0.5, Math.round(niceMult * exp * 100) / 100);
+  const barPx = Math.max(36, Math.min(150, Math.round(barUnits / worldPerPx)));
+
+  const settings = useArcStore.getState().settings;
+  const isImperial =
+    settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
+  const unit = isImperial ? "in" : "cm";
+  const gridSize = settings?.grid_size ?? 2;
+
+  ref.scaleBarLineEl.style.width = `${barPx}px`;
+  ref.scaleBarLabelEl.textContent = `${barUnits} ${unit}`;
+  ref.scaleGridBtnEl.textContent = `1 sq = ${gridSize} ${unit}  ·  maj = ${Math.round(gridSize * 10 * 10) / 10} ${unit}`;
 }
 
 function createViewport(host: HTMLDivElement): ViewportRefs {
@@ -242,9 +291,51 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
 
   const measureEl = document.createElement("div");
   measureEl.className =
-    "pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)] border border-base-400 bg-base-50/95 px-1.5 py-0.5 font-mono text-[11px] leading-none text-accent-700 shadow-sm";
+    "pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-md border border-base-400 bg-base-50/95 px-2 py-1 font-mono text-[11px] leading-none text-accent-500 shadow-md";
   measureEl.style.display = "none";
   host.appendChild(measureEl);
+
+  // Live bottom-left CAD Scale Bar + Grid Legend
+  const scaleWrap = document.createElement("div");
+  scaleWrap.className =
+    "pointer-events-auto absolute bottom-3 left-3 z-20 flex items-center gap-2.5 rounded-xl border border-base-200 bg-base-50/90 px-2.5 py-1.5 font-mono text-[10.5px] text-base-600 shadow-md backdrop-blur-md transition-all";
+  const rulerWrap = document.createElement("div");
+  rulerWrap.className = "flex flex-col items-center gap-0.5";
+  const scaleBarLabelEl = document.createElement("span");
+  scaleBarLabelEl.className = "text-[10px] font-semibold leading-none text-base-800 tabular-nums";
+  scaleBarLabelEl.textContent = "10 cm";
+  const scaleBarLineEl = document.createElement("div");
+  scaleBarLineEl.className =
+    "h-1.5 border-x-2 border-b-2 border-accent-500 transition-[width] duration-150";
+  scaleBarLineEl.style.width = "72px";
+  rulerWrap.appendChild(scaleBarLabelEl);
+  rulerWrap.appendChild(scaleBarLineEl);
+
+  const sep = document.createElement("span");
+  sep.className = "h-4 w-px bg-base-200";
+
+  const scaleGridBtnEl = document.createElement("button");
+  scaleGridBtnEl.type = "button";
+  scaleGridBtnEl.title = "Click to cycle 3D grid scale (1 / 2 / 5 / 10 cm per square)";
+  scaleGridBtnEl.className =
+    "rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900";
+  scaleGridBtnEl.textContent = "1 sq = 2 cm";
+  scaleGridBtnEl.addEventListener("click", () => {
+    const settings = useArcStore.getState().settings;
+    if (!settings) return;
+    const steps = [1, 2, 5, 10];
+    const idx = steps.indexOf(settings.grid_size);
+    const nextGrid = steps[(idx + 1) % steps.length];
+    void ipc
+      .setSettings({ ...settings, grid_size: nextGrid })
+      .then((next) => useArcStore.getState().updateSettings(next))
+      .catch(() => undefined);
+  });
+
+  scaleWrap.appendChild(rulerWrap);
+  scaleWrap.appendChild(sep);
+  scaleWrap.appendChild(scaleGridBtnEl);
+  host.appendChild(scaleWrap);
 
   const tc = new TransformControls(camera, renderer.domElement);
   tc.setMode("translate");
@@ -257,9 +348,16 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   const raycaster = new THREE.Raycaster();
   if (raycaster.params.Line) (raycaster.params.Line as { threshold: number }).threshold = 10;
 
+  const initialGridSize = useArcStore.getState().settings?.grid_size ?? 2;
+  const gridNode = makeGrid(palette, initialGridSize);
+  sceneRoot.add(gridNode);
+
   const ref: ViewportRefs = {
     host,
     measureEl,
+    scaleBarLineEl,
+    scaleBarLabelEl,
+    scaleGridBtnEl,
     renderer,
     camera,
     controls,
@@ -267,7 +365,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     gizmoDragging: false,
     sceneRoot,
     entityRoot,
-    gridNode: makeGrid(palette),
+    gridNode,
     groundNode,
     axes,
     raycaster,
@@ -292,6 +390,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     lastSketchMode: false,
     lastSketchHeight: 0,
     lastSketchPlaneKey: "",
+    lastGridSize: initialGridSize,
     lastLowSpecMode: false,
     lastCursorAt: 0,
     disposed: false,
@@ -401,6 +500,7 @@ function startLoop(ref: ViewportRefs): () => void {
       const w = ref.host.clientWidth;
       const h = ref.host.clientHeight;
       if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
+      updateScaleBar(ref);
     }
 
     if (pendingCapture) {
@@ -489,14 +589,19 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   ref.sceneRoot.fog = new THREE.Fog(palette.bg, 5000, 16000);
   const index = ref.sceneRoot.children.indexOf(ref.gridNode);
   const wasVisible = ref.gridNode.visible;
+  const prevPos = ref.gridNode.position.clone();
+  const prevQuat = ref.gridNode.quaternion.clone();
   ref.sceneRoot.remove(ref.gridNode);
-  ref.gridNode.dispose();
-  const next = makeGrid(palette);
+  disposeObject(ref.gridNode);
+  const next = makeGrid(palette, ref.lastGridSize);
   next.visible = wasVisible;
+  next.position.copy(prevPos);
+  next.quaternion.copy(prevQuat);
   if (index >= 0) ref.sceneRoot.children.splice(index, 0, next);
   else ref.sceneRoot.add(next);
   ref.gridNode = next;
   ref.gizmo.applyTheme(palette);
+  updateScaleBar(ref);
   ref.needsRender = true;
 }
 
@@ -595,7 +700,26 @@ function syncSceneToThree(ref: ViewportRefs): void {
   const settings = state.settings;
   const gridVis = settings?.show_grid ?? true;
   const axesVis = settings?.show_axes ?? true;
-  if (ref.gridNode.visible !== gridVis || sketchChanged) {
+  const gridSize = settings?.grid_size ?? 2;
+  const gridSizeChanged = gridSize !== ref.lastGridSize;
+  if (gridSizeChanged) {
+    ref.lastGridSize = gridSize;
+    const index = ref.sceneRoot.children.indexOf(ref.gridNode);
+    const prevPos = ref.gridNode.position.clone();
+    const prevQuat = ref.gridNode.quaternion.clone();
+    ref.sceneRoot.remove(ref.gridNode);
+    disposeObject(ref.gridNode);
+    const next = makeGrid(viewportPalette(useThemeStore.getState().active()), gridSize);
+    next.visible = gridVis;
+    next.position.copy(prevPos);
+    next.quaternion.copy(prevQuat);
+    if (index >= 0) ref.sceneRoot.children.splice(index, 0, next);
+    else ref.sceneRoot.add(next);
+    ref.gridNode = next;
+    updateScaleBar(ref);
+    ref.needsRender = true;
+  }
+  if (ref.gridNode.visible !== gridVis || sketchChanged || gridSizeChanged) {
     ref.gridNode.visible = gridVis;
     if (state.sketchMode) {
       const n = new THREE.Vector3(...state.sketchPlaneNormal).normalize();

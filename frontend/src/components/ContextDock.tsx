@@ -295,7 +295,7 @@ export function ContextDock() {
       {groups.map((group) => (
         <div
           key={group.title}
-          className="pointer-events-auto w-fit rounded-xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md"
+          className="anim-slide-right pointer-events-auto w-fit rounded-xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md"
         >
           <div className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-base-500">
             {group.title}
@@ -318,7 +318,7 @@ export function ContextDock() {
                     disabled={disabled}
                     onClick={() => item.run()}
                     className={cn(
-                      "flex h-7.5 w-full min-w-[8.75rem] items-center gap-2 rounded-lg px-2.5 text-[12px] font-medium transition-colors",
+                      "flex h-7 w-full min-w-[8.75rem] items-center gap-2 rounded-lg px-2.5 text-[12px] font-medium transition-all duration-150 active:scale-[0.98]",
                       "disabled:pointer-events-none disabled:opacity-35",
                       active
                         ? "bg-accent-500 text-white shadow-xs"

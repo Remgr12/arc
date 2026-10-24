@@ -30,6 +30,11 @@
     <binary>arc</binary>
   </provides>
   <releases>
+    <release version="0.16.0" date="2026-10-24">
+      <description>
+        <p>Dashboard Settings access, dynamic dual-layer 3D grid scaling with live CAD scale bar, inspector/HUD alignment and text-overflow fixes, and fluid UI animations.</p>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-10-24">
       <description>
         <p>Performance and direct-modeling upgrade: on-demand viewport rendering, Fast laptop mode, face-first Selection &amp; Dimension HUD with 1 cm / 2 cm snapping, bidirectional Extrude-Cut, vertical/side face sketching (XZ/XY/YZ), Shell/Hollow, 45° Edge Chamfer, and Linear/Circular Patterns.</p>

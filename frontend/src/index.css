@@ -100,12 +100,95 @@ button {
 @keyframes view-fade-in {
   from {
     opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
   }
   to {
     opacity: 1;
   }
 }
 
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes float-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float-down-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float-right-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 .view-fade-in {
-  animation: view-fade-in 180ms ease;
+  animation: view-fade-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-backdrop {
+  animation: modal-backdrop-in 160ms ease-out both;
+}
+
+.anim-pop {
+  animation: modal-card-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-slide-up {
+  animation: float-up-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-slide-down {
+  animation: float-down-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-slide-right {
+  animation: float-right-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

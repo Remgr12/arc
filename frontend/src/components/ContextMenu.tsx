@@ -36,7 +36,7 @@ export function ContextMenu() {
     <div
       ref={ref}
       className={cn(
-        "absolute z-50 w-48 rounded-lg border border-base-300 bg-base-100 py-1 shadow-xl",
+        "anim-pop absolute z-50 w-48 rounded-lg border border-base-300 bg-base-100 py-1 shadow-xl",
       )}
       style={{ left: `${Math.max(4, menu.x)}px`, top: `${Math.max(4, menu.y)}px` }}
     >
