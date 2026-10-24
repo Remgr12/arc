@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>arc: 3D modeling for builders</title>
-  <meta name="description" content="arc is a 3D modeling application for design, architecture, and interiors. Rust geometry kernel, native on Windows, macOS, and Linux. Free and open-source under MIT or Apache-2.0." />
+  <title>arc: Precision 3D CAD Modeling</title>
+  <meta name="description" content="arc is an open-source 3D CAD modeling application powered by a Rust geometry kernel. Fast direct modeling, 2D sketching, face extrusion, and multi-format CAD interop. Native on Windows, macOS, and Linux." />
 
   <link rel="canonical" href="https://remgr12.github.io/arc/" />
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
@@ -13,14 +13,13 @@
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="arc" />
-  <meta property="og:title" content="arc: 3D modeling for builders" />
-  <meta property="og:description" content="A 3D modeling app with a Rust geometry kernel. Native on Windows, macOS, and Linux. Free and open-source." />
+  <meta property="og:title" content="arc: Precision 3D CAD Modeling" />
+  <meta property="og:description" content="Direct 3D CAD modeling with a native Rust geometry kernel. Free and open-source under MIT or Apache-2.0." />
   <meta property="og:url" content="https://remgr12.github.io/arc/" />
   <meta property="og:image" content="https://remgr12.github.io/arc/assets/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#12141a" />
 
   <link rel="preload" href="./assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="./assets/fonts/jetbrains-mono-var-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -29,173 +28,250 @@
 <body>
   <header class="site">
     <div class="wrap">
-      <a class="brand" href="index.html"><img src="./assets/icon.svg" alt="" width="22" height="22" />arc</a>
+      <a class="brand" href="index.html">
+        <img src="./assets/icon.svg" alt="arc logo" width="24" height="24" />
+        arc
+        <span class="ver-badge">v0.18.1</span>
+      </a>
       <nav class="top">
         <a href="docs/index.html">Docs</a>
-        <a href="docs/getting-started.html">Getting started</a>
+        <a href="docs/getting-started.html">Getting Started</a>
         <a href="docs/keybinds.html">Keybinds</a>
         <a href="docs/plugins.html">Plugins</a>
-        <a href="https://github.com/Remgr12/arc" class="gh">Source</a>
+        <a href="https://github.com/Remgr12/arc" class="gh">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
       </nav>
     </div>
   </header>
 
   <main>
 
-    <!-- ~~~~~~~~~~~~~~ sheet 1: title ~~~~~~~~~~~~~~ -->
-    <div class="sheet wrap" id="title">
-      <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+    <!-- ~~~~~~~~~~~~~~ Hero Section ~~~~~~~~~~~~~~ -->
+    <div class="wrap">
+      <div class="sheet" id="title">
+        <div class="hero">
+          <div class="hero-main">
+            <div class="pill-status">
+              <span class="pulse-dot"></span>
+              Native 3D CAD · Windows · macOS · Linux
+            </div>
+            <h1>Direct 3D modeling<br />with <span class="accent">precision</span>.</h1>
+            <p class="tag">
+              arc is an open-source solid CAD modeler engineered for designers, engineers, and makers.
+              Sketch 2D profiles, extrude planar faces, place parametric solids, and manipulate geometry
+              directly with an uncluttered, responsive workspace.
+            </p>
+            <div class="cta">
+              <a class="btn primary" href="https://github.com/Remgr12/arc/releases">Download v0.18.1</a>
+              <a class="btn ghost" href="docs/getting-started.html">Documentation</a>
+            </div>
+          </div>
 
-      <div class="hero">
-        <div class="hero-main">
-          <p class="sheet-no">SHEET 01 · ARC 3D MODELING · SCALE 1:1</p>
-          <h1>Model on a<br /><span class="accent">drawn</span> plan</h1>
-          <p class="tag">
-            arc is a solid modeling application for design, architecture, and interiors.
-            Sketch, extrude, place walls like building parts, and adjust everything
-            in place. Native on Windows, macOS, and Linux.
-          </p>
-          <div class="cta">
-            <a class="btn primary" href="https://github.com/Remgr12/arc/releases">Download</a>
-            <a class="btn ghost" href="docs/getting-started.html">Read the docs</a>
+          <div class="viewport-preview">
+            <div class="viewport-header">
+              <div class="viewport-modes">
+                <span class="active">Solid</span>
+                <span>Wireframe</span>
+                <span>X-Ray</span>
+              </div>
+              <div style="color: var(--accent); font-weight: 600;">Perspective · Top-Right</div>
+            </div>
+
+            <div class="viewport-canvas">
+              <div class="cad-axis-x"></div>
+              <div class="cad-axis-z"></div>
+
+              <div class="cad-dimension top">160.00 mm</div>
+              <div class="cad-dimension bottom">R 72.00 mm</div>
+
+              <div class="cad-model-showcase">
+                <img src="./assets/rings-night.svg" alt="arc CAD model rendering" width="210" height="210" />
+              </div>
+
+              <div class="viewport-hud">
+                <span>Extrude [<b>E</b>]</span>
+                <span>·</span>
+                <span>Fillet [<b>F</b>]</span>
+                <span>·</span>
+                <span>Move [<b>M</b>]</span>
+                <span>·</span>
+                <span>Deselect [<b>Esc</b>]</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <figure class="draftpad">
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="./assets/rings-night.svg" />
-            <img src="./assets/rings-ink.svg" alt="arc logo, two concentric broken rings, drafted with construction circles" width="220" height="220" />
-          </picture>
-          <span class="dim h" style="--d:100%; top:-10px;"><s>270°</s></span>
-          <span class="dim v" style="--d:100%; right:-12px;"><s>R160</s></span>
-          <span class="callout" style="--x:18%; --y:70%;">R160<br />NE gap</span>
-          <span class="callout" style="--x:64%; --y:12%;">R72<br />SW gap</span>
-        </figure>
-      </div>
-
-      <div class="titleblock">
-        <div><em>version</em><b>0.10.4</b></div>
-        <div><em>platforms</em><b>WIN · MAC · LINUX</b></div>
-        <div><em>kernel</em><b>RUST</b></div>
-        <div><em>license</em><b>MIT / APACHE-2.0</b></div>
-        <div><em>price</em><b>FREE</b></div>
+        <div class="titleblock">
+          <div><em>version</em><b>0.18.1</b></div>
+          <div><em>platforms</em><b>WIN · MAC · LINUX</b></div>
+          <div><em>kernel</em><b>RUST B-REP</b></div>
+          <div><em>license</em><b>MIT / APACHE-2.0</b></div>
+          <div><em>formats</em><b>STEP · OBJ · STL</b></div>
+        </div>
       </div>
     </div>
 
-    <!-- ~~~~~~~~~~~~~~ sheet 2: what you draw ~~~~~~~~~~~~~~ -->
-    <section id="modeling">
+    <!-- ~~~~~~~~~~~~~~ Features Section ~~~~~~~~~~~~~~ -->
+    <section id="features">
       <div class="wrap">
-        <p class="progress"><span>02</span><i></i><span>05</span></p>
-        <h2 class="section-title">What you draw</h2>
-        <ol class="ledger">
-          <li><span>primitives</span><p>Box, sphere, cylinder, cone, torus, plane, typed as numbers, edited in place, no dialog stack.</p></li>
-          <li><span>sketch</span><p>Circles, lines, polylines, rectangles, and walls on the ground plane, snapping to grid and geometry.</p></li>
-          <li><span>solids</span><p>Extrude, revolve, sweep, and loft a profile into a watertight solid.</p></li>
-          <li><span>architecture</span><p>Walls, stairs, slabs, roofs, columns, beams, doors, and windows that behave like building parts.</p></li>
-          <li><span>layers</span><p>Visibility, locking, and colors with per-entity overrides.</p></li>
-          <li><span>history</span><p>Every change is one reversible step on the undo stack; keep going, nothing is final.</p></li>
-          <li><span>documents</span><p>Several open at once. The native <span class="mono">.arc</span> document is plain JSON.</p></li>
-          <li><span>formats</span><p>STEP in and out (B-rep), OBJ and binary STL up and down.</p></li>
-        </ol>
+        <p class="progress"><span>01</span><i></i><span>04</span></p>
+        <h2 class="section-title">Built for fluid creation</h2>
+        <p class="sect">
+          Every tool is designed to feel natural and immediate. No modal roadblocks, no deep nested dialog trees.
+          Sketch on any plane, convert closed curves to extrudable faces, and sculpt solids directly in 3D.
+        </p>
+
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="card-head"><span class="num">01</span></div>
+            <h3>Parametric Primitives</h3>
+            <p>Box, sphere, cylinder, cone, torus, and ground plane. Placed with exact dimensions and fully adjustable in the properties dock.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="num">02</span></div>
+            <h3>Direct 2D Sketching</h3>
+            <p>Lines, polylines, circles, arcs, and rectangles. Connecting endpoints automatically creates planar faces ready for immediate extrusion.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="num">03</span></div>
+            <h3>Solid &amp; Face Operations</h3>
+            <p>Extrude, revolve, sweep, loft, fillet corners, offset profiles, and trim edges to build watertight solid bodies.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="num">04</span></div>
+            <h3>Infinite 3D Coordinate Canvas</h3>
+            <p>Uncluttered canvas with infinite X/Y/Z coordinate axes. The drafting grid activates automatically when sketching or placing shapes.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="num">05</span></div>
+            <h3>Modern Floating Docks</h3>
+            <p>Shapr3D-inspired left dock, top navigation bar, floating selection HUD, and an interactive 3D ViewCube for quick camera alignment.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="num">06</span></div>
+            <h3>Multi-Format CAD Interop</h3>
+            <p>Standard STEP (B-rep) export/import, binary STL for 3D printing, and text OBJ files. Documents save in transparent native JSON.</p>
+          </div>
+        </div>
 
         <div class="keysline">
-          <span><kbd>V</kbd> select</span>
-          <span><kbd>M</kbd> move</span>
-          <span><kbd>B</kbd> box</span>
-          <span><kbd>Y</kbd> sphere</span>
-          <span><kbd>C</kbd> cylinder</span>
-          <span><kbd>G</kbd> wall</span>
-          <span><kbd>Ctrl</kbd>+<kbd>K</kbd> palette</span>
+          <span><kbd>V</kbd> Select</span>
+          <span><kbd>M</kbd> Move</span>
+          <span><kbd>L</kbd> Line</span>
+          <span><kbd>R</kbd> Rectangle</span>
+          <span><kbd>C</kbd> Circle</span>
+          <span><kbd>B</kbd> Box</span>
+          <span><kbd>E</kbd> Extrude</span>
+          <span><kbd>F</kbd> Fillet</span>
+          <span><kbd>Esc</kbd> / <kbd>Enter</kbd> Commit</span>
+          <span><kbd>Ctrl</kbd>+<kbd>K</kbd> Command Palette</span>
         </div>
       </div>
     </section>
 
-    <!-- ~~~~~~~~~~~~~~ sheet 3: under the hood ~~~~~~~~~~~~~~ -->
-    <section id="built">
+    <!-- ~~~~~~~~~~~~~~ Architecture Section ~~~~~~~~~~~~~~ -->
+    <section id="architecture">
       <div class="wrap">
-        <p class="progress"><span>03</span><i></i><span>05</span></p>
-        <h2 class="section-title">Under the hood</h2>
+        <p class="progress"><span>02</span><i></i><span>04</span></p>
+        <h2 class="section-title">High-performance architecture</h2>
         <p class="sect">
-          Three layers, one chart. The UI is React, the document lives in a Rust kernel,
-          and between them run typed commands; nothing reads a screen copy of the model.
+          A clean separation between interface, communication, and geometry computation.
+          The WebGL frontend renders at high frame rates while the Rust kernel handles solid geometry and STEP serialization.
         </p>
+
         <div class="chart">
           <div class="box">
-            <em>UI</em>
-            <b>React · Zustand · three.js</b>
-            <p>WebGL viewport, picking, drafting tools, themes, property panels.</p>
+            <em>USER INTERFACE</em>
+            <b>React · Zustand · Three.js</b>
+            <p>WebGL viewport, transform gizmos, Shapr3D docks, customizable themes, and selection HUD.</p>
           </div>
-          <div class="link"><i></i><em>Tauri 2 · typed commands</em></div>
+          <div class="link"><i></i><em>Tauri 2 · Typed IPC</em></div>
           <div class="box wide">
-            <em>KERNEL</em>
-            <b>Rust (truck fork)</b>
-            <p>Document, entities, layers, history; B-rep solids and booleans; STEP; mesh generation.</p>
+            <em>GEOMETRY KERNEL</em>
+            <b>Rust Engine (truck B-rep)</b>
+            <p>Documents, layers, undo/redo history, B-rep solids, boolean operations, tessellation, and STEP parsing.</p>
           </div>
-          <div class="link"><i></i><em>Lua · sandboxed</em></div>
+          <div class="link"><i></i><em>Lua · Sandboxed</em></div>
           <div class="box ghosted">
-            <em>PLUGINS</em>
-            <b>Files you write</b>
-            <p>Run on new · open · save · start, reach the document through a small API.</p>
+            <em>EXTENSIONS</em>
+            <b>Lua Plugins &amp; Bridge</b>
+            <p>Automate workflows, generate parametric forms, or control arc externally via the local JSON bridge.</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ~~~~~~~~~~~~~~ sheet 4: plugins ~~~~~~~~~~~~~~ -->
+    <!-- ~~~~~~~~~~~~~~ Plugins Section ~~~~~~~~~~~~~~ -->
     <section id="plugins">
       <div class="wrap">
-        <p class="progress"><span>04</span><i></i><span>05</span></p>
-        <h2 class="section-title">Plugins, in three lines</h2>
+        <p class="progress"><span>03</span><i></i><span>04</span></p>
+        <h2 class="section-title">Scriptable with Lua</h2>
         <p class="sect">
-          Drop a Lua file next to your documents. It runs on document events and edits the
-          model directly, with the same objects, same commands the UI uses.
+          Drop a Lua script into your plugins directory. Hook into document events or run custom algorithms
+          to generate complex shapes, automate repetitive tasks, and inspect models.
         </p>
         <figure class="listing">
-          <figcaption>plugin.lua</figcaption>
-          <pre><code><span class="k">local function</span> <span class="fn">block</span>()
-  <span class="k">return</span> { type = <span class="str">"box"</span>, width = 600, depth = 400, height = 260 }
-<span class="k">end</span>
-
+          <figcaption>procedural_bracket.lua</figcaption>
+          <pre><code><span class="cmt">-- Generate a parametric mounting bracket on document creation</span>
 arc.<span class="fn">on</span>(<span class="str">"new"</span>, <span class="k">function</span>()
-  <span class="k">local</span> id = arc.<span class="fn">add_entity</span>(block(), <span class="str">"site volume"</span>)
-  arc.<span class="fn">log</span>(<span class="str">"new document → "</span> .. id)
+  <span class="k">local</span> base = arc.<span class="fn">add_entity</span>({
+    type = <span class="str">"box"</span>,
+    width = 120,
+    depth = 80,
+    height = 15,
+    corner_radius = 4
+  }, <span class="str">"Mounting Base"</span>)
+
+  arc.<span class="fn">log</span>(<span class="str">"Bracket generated: "</span> .. base)
 <span class="k">end</span>)</code></pre>
         </figure>
       </div>
     </section>
 
-    <!-- ~~~~~~~~~~~~~~ sheet 5: obtain ~~~~~~~~~~~~~~ -->
+    <!-- ~~~~~~~~~~~~~~ Quickstart Section ~~~~~~~~~~~~~~ -->
     <section id="quickstart">
       <div class="wrap">
-        <p class="progress"><span>05</span><i></i><span>05</span></p>
-        <h2 class="section-title">Ten minutes to first wall</h2>
+        <p class="progress"><span>04</span><i></i><span>04</span></p>
+        <h2 class="section-title">Quickstart &amp; Installation</h2>
+        <p class="sect">
+          Get started with arc in seconds. Install prebuilt binaries for your operating system or compile from source.
+        </p>
         <div class="obtain">
           <div class="way">
-            <em>A. Prebuilt</em>
-            <p>Installers on <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>: MSI and NSIS for Windows, DMG for macOS, AppImage, DEB, and RPM for Linux. A flatpak of the latest release lives in arc's own repository, published alongside every release:</p>
+            <em>Prebuilt Packages</em>
+            <p>
+              Download installers directly from <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>.
+              Includes MSI and NSIS for Windows, universal DMG for macOS, and AppImage, DEB, and RPM for Linux.
+            </p>
             <figure class="listing">
-              <figcaption>linux · flatpak</figcaption>
-              <pre><code><span class="cmt"># one-time: add the arc remote</span>
+              <figcaption>Linux · Flatpak</figcaption>
+              <pre><code><span class="cmt"># Add the official arc Flatpak repository</span>
 flatpak <span class="k">remote-add</span> arc https://remgr12.github.io/arc/flatpak-repo
-<span class="cmt"># install</span>
+
+<span class="cmt"># Install the latest release</span>
 flatpak <span class="k">install</span> arc com.arc.cad</code></pre>
             </figure>
-            <p class="hint">The app updates itself against the same channel; small green arrow in the title bar when a new build ships.</p>
+            <p class="hint">Built-in auto-updater notifies you when a new release is available.</p>
           </div>
-          <div class="way">
-            <em>B. From source</em>
-            <p>Repo is <a href="https://github.com/Remgr12/arc">github.com/Remgr12/arc</a>. A release build takes one command per side.</p>
-            <figure class="listing">
-              <figcaption>shell</figcaption>
-              <pre><code><span class="cmt"># frontend once</span>
-<span class="k">git clone</span> https://github.com/Remgr12/arc.git &amp;&amp; <span class="k">cd</span> arc
-npm --prefix frontend <span class="k">install</span> &amp;&amp; npm --prefix frontend run build
 
-<span class="cmt"># dev, or a release bundle</span>
-cargo tauri <span class="k">dev</span>
-cargo tauri <span class="k">build</span></code></pre>
+          <div class="way">
+            <em>Build from Source</em>
+            <p>
+              Requires Node.js 20+ and the Rust toolchain (<span class="mono">rustup</span>).
+              Clone the repository and build the frontend and backend with two simple commands:
+            </p>
+            <figure class="listing">
+              <figcaption>Terminal</figcaption>
+              <pre><code><span class="cmt"># Clone repository</span>
+<span class="k">git clone</span> https://github.com/Remgr12/arc.git &amp;&amp; <span class="k">cd</span> arc
+
+<span class="cmt"># Build and run locally</span>
+npm --prefix frontend <span class="k">install</span> &amp;&amp; npm --prefix frontend run build
+cargo tauri <span class="k">dev</span></code></pre>
             </figure>
-            <p class="hint">Windows needs WebView2; Linux targets the freedesktop 24.08 runtimes.</p>
+            <p class="hint">Use <code>cargo tauri build</code> to produce an optimized production release bundle.</p>
           </div>
         </div>
       </div>
@@ -205,10 +281,10 @@ cargo tauri <span class="k">build</span></code></pre>
 
   <footer class="site">
     <div class="wrap titleblock">
-      <div><em>drawn by</em><b>Zsombor Simon</b></div>
-      <div><em>repo</em><b><a href="https://github.com/Remgr12/arc">Remgr12/arc</a></b></div>
-      <div><em>issues</em><b><a href="https://github.com/Remgr12/arc/issues">tracker</a></b></div>
-      <div><em>docs</em><b><a href="docs/index.html">arc wiki</a></b></div>
+      <div><em>developed by</em><b>Zsombor Simon</b></div>
+      <div><em>source</em><b><a href="https://github.com/Remgr12/arc">GitHub Repository</a></b></div>
+      <div><em>support</em><b><a href="https://github.com/Remgr12/arc/issues">Issue Tracker</a></b></div>
+      <div><em>documentation</em><b><a href="docs/index.html">arc Wiki</a></b></div>
       <div><em>license</em><b>MIT / Apache-2.0</b></div>
       <div class="widecell"><em>note</em><b>Not affiliated with the Arc browser by The Browser Company.</b></div>
     </div>
