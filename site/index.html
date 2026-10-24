@@ -53,9 +53,6 @@
       <div class="sheet" id="title">
         <div class="hero">
           <div class="hero-main">
-            <div class="pill-status">
-              Native 3D CAD · Windows · macOS · Linux
-            </div>
             <h1>Direct 3D modeling<br />with <span class="accent">precision</span>.</h1>
             <p class="tag">
               arc is an open-source solid CAD modeler engineered for designers, engineers, and makers.
@@ -86,7 +83,7 @@
               <div class="cad-dimension bottom">R 72.00 mm</div>
 
               <div class="cad-model-showcase">
-                <img src="./assets/rings-night.svg" alt="arc CAD model rendering" width="210" height="210" />
+                <img src="./assets/cad-model.svg" alt="3D CAD solid model with extruded face" width="260" height="195" />
               </div>
 
               <div class="viewport-hud">
@@ -233,61 +230,32 @@ arc.<span class="fn">on</span>(<span class="str">"new"</span>, <span class="k">f
     <section id="quickstart">
       <div class="wrap">
         <p class="progress"><span>04</span><i></i><span>04</span></p>
-        <h2 class="section-title">Quickstart &amp; Installation</h2>
+        <h2 class="section-title">Install</h2>
         <p class="sect">
-          Get started with arc in seconds. Install prebuilt binaries for your operating system or compile from source.
+          Prebuilt installers are published on <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>:
+          MSI and NSIS installers for Windows, universal DMG for macOS, and AppImage, DEB, RPM, and Flatpak for Linux.
         </p>
-        <div class="obtain">
-          <div class="way">
-            <em>Prebuilt Packages</em>
-            <p>
-              Download official binaries for your platform:
-            </p>
-            <div class="install-targets">
-              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
-                <span class="os">Windows</span>
-                <span class="ext">MSI · NSIS</span>
-              </a>
-              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
-                <span class="os">macOS</span>
-                <span class="ext">Universal DMG</span>
-              </a>
-              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
-                <span class="os">Linux</span>
-                <span class="ext">AppImage · DEB · RPM</span>
-              </a>
-            </div>
-            <p class="install-subhead">Or install via Flatpak:</p>
-            <figure class="listing">
-              <figcaption>Terminal · Flatpak</figcaption>
-              <pre><code><span class="cmt"># Add repository remote</span>
+        <p class="sect">On Linux, you can also install via the official arc Flatpak repository:</p>
+        <pre class="code"><code><span class="cmt"># Add the arc Flatpak remote</span>
 flatpak remote-add arc https://remgr12.github.io/arc/flatpak-repo
 
-<span class="cmt"># Install arc</span>
+<span class="cmt"># Install the application</span>
 flatpak install arc com.arc.cad</code></pre>
-            </figure>
-            <p class="hint">Includes auto-updater that alerts you when a new release is available.</p>
-          </div>
 
-          <div class="way">
-            <em>Build from Source</em>
-            <p>
-              Requires Node.js 20+ and the Rust toolchain (<span class="mono">rustup</span>):
-            </p>
-            <figure class="listing">
-              <figcaption>Terminal · Shell</figcaption>
-              <pre><code><span class="cmt"># Clone repository</span>
+        <h3 class="section-subtitle">Build from Source</h3>
+        <p class="sect">Prerequisites: Node.js 20+ with npm, and the Rust toolchain via <span class="mono">rustup</span>.</p>
+        <pre class="code"><code><span class="cmt"># Clone repository</span>
 git clone https://github.com/Remgr12/arc.git
 cd arc
 
-<span class="cmt"># Install &amp; launch dev build</span>
+<span class="cmt"># Install frontend dependencies</span>
 npm --prefix frontend install
-npm --prefix frontend run build
+
+<span class="cmt"># Launch in development mode</span>
 cargo tauri dev</code></pre>
-            </figure>
-            <p class="hint">Use <code>cargo tauri build</code> to produce an optimized production release bundle.</p>
-          </div>
-        </div>
+        <p class="sect">To generate an optimized production bundle:</p>
+        <pre class="code"><code>npm --prefix frontend run build
+cargo tauri build</code></pre>
       </div>
     </section>
 
