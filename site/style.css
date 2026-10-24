@@ -208,7 +208,7 @@ main {
 .sheet {
   position: relative;
   margin-top: 36px;
-  padding: 44px 40px 0;
+  padding: 48px 44px;
   border: 1px solid var(--line);
   background: var(--bg-surface);
   border-radius: 16px;
@@ -218,7 +218,6 @@ main {
 
 .hero {
   max-width: 720px;
-  padding-bottom: 46px;
 }
 
 h1 {
@@ -752,7 +751,7 @@ footer.site .titleblock .widecell {
     padding: 6px 10px;
   }
   .sheet {
-    padding: 22px 14px 0;
+    padding: 26px 18px 28px;
     margin-top: 16px;
     border-radius: 12px;
   }
@@ -888,7 +887,7 @@ footer.site .titleblock .widecell {
     padding: 0 12px;
   }
   .sheet {
-    padding: 16px 10px 0;
+    padding: 20px 14px 22px;
   }
   .titleblock {
     grid-template-columns: 1fr;
