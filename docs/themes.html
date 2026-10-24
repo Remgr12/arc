@@ -4,22 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Themes: arc docs</title>
-  <meta name="description" content="Custom themes in arc: built-in themes, importing and exporting theme JSON files, and the sixteen color keys a theme defines." />
+  <meta name="description" content="Custom themes in arc: built-in themes (Deep Graphite and Glass), importing and exporting theme JSON files, and the sixteen color tokens." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/themes.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#12141a" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="site">
     <div class="wrap">
-      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" />arc<span class="docs-badge">docs</span></a>
+      <a class="brand" href="index.html">
+        <img src="assets/icon.svg" alt="arc icon" />
+        arc
+        <span class="docs-badge">docs</span>
+      </a>
       <nav class="top">
         <a class="keep" href="../index.html">Home</a>
         <a class="keep" href="index.html">Docs</a>
-        <a href="getting-started.html">Getting started</a>
+        <a href="getting-started.html">Getting Started</a>
         <a href="modeling.html">Modeling</a>
         <a href="navigation.html">Navigation</a>
         <a href="keybinds.html">Keybinds</a>
@@ -27,7 +30,7 @@
         <a href="themes.html" aria-current="page">Themes</a>
         <a href="automation.html">Automation</a>
         <a href="https://github.com/Remgr12/arc" class="gh">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           GitHub
         </a>
       </nav>
@@ -38,7 +41,7 @@
     <aside class="toc">
       <div class="label">Docs</div>
       <a href="index.html">Overview</a>
-      <a href="getting-started.html">Getting started</a>
+      <a href="getting-started.html">Getting Started</a>
       <a href="modeling.html">Modeling</a>
       <a href="navigation.html">Navigation</a>
       <a href="keybinds.html">Keybinds</a>
@@ -46,99 +49,86 @@
       <a class="on" href="themes.html">Themes</a>
       <a href="automation.html">Automation</a>
       <div class="label">On this page</div>
-      <a href="#builtin">Built-in themes</a>
-      <a href="#color-keys">Color keys</a>
-      <a href="#json">Theme JSON</a>
-      <a href="#import-export">Import and export</a>
+      <a href="#builtin">Built-in Themes</a>
+      <a href="#color-keys">Color Tokens</a>
+      <a href="#json">Theme JSON Format</a>
+      <a href="#import-export">Import &amp; Export</a>
     </aside>
 
     <main class="page">
       <h1>Themes</h1>
       <p class="subline">
-        A theme is a flat set of hex colors: a ten-step neutral scale, three accent steps, and three
-        viewport colors. Built-ins ship in code; your own themes are simple JSON files you can
-        import, export, and share.
+        Customize the entire appearance of the application and 3D viewport. Built-in presets ship
+        with the app; user themes are lightweight JSON files that can be imported, exported, and shared.
       </p>
 
       <section class="doc" id="builtin">
-        <h2>Built-in themes</h2>
-        <p>Built-ins are selected and switched in <strong>Settings → Appearance</strong>:</p>
+        <h2>Built-in Themes</h2>
+        <p>Built-in themes can be selected in <strong>Settings → Appearance</strong>:</p>
         <table class="tbl">
-          <caption>built-in themes</caption>
-          <thead><tr><th class="keys">Theme</th><th>Look</th></tr></thead>
+          <caption>Built-in Themes</caption>
+          <thead><tr><th class="keys">Theme</th><th>Appearance</th></tr></thead>
           <tbody>
-            <tr><td class="keys">Graphite</td><td>Neutral dark grays with a blue accent. The default theme.</td></tr>
-            <tr><td class="keys">Midnight</td><td>Deep blue-navy panels with a bright blue accent.</td></tr>
-            <tr><td class="keys">Forest</td><td>Dark green panels with a green accent.</td></tr>
-            <tr><td class="keys">Blueprint</td><td>Light blue-gray paper look, like drafting paper.</td></tr>
-            <tr><td class="keys">Paper</td><td>Warm light cream tones with a burnt-orange accent.</td></tr>
+            <tr><td class="keys">Deep Graphite</td><td>Neutral dark graphite panels (<span class="mono">#12141a</span>) with viewport (<span class="mono">#161922</span>) and electric cyan accent (<span class="mono">#00e8ff</span>). Default theme.</td></tr>
+            <tr><td class="keys">Glass</td><td>Deep dark obsidian panels (<span class="mono">#161619</span>) with viewport (<span class="mono">#1c1c22</span>) and vivid blue accent (<span class="mono">#0099ff</span>).</td></tr>
           </tbody>
         </table>
-        <p>
-          The viewport reacts to the theme too: background, grid, and the view cube adopt theme
-          colors, and viewports with a light background switch to a light-mode cube.
-        </p>
       </section>
 
       <section class="doc" id="color-keys">
-        <h2>Color keys</h2>
-        <p>A theme defines exactly these sixteen keys:</p>
+        <h2>Color Tokens</h2>
+        <p>A theme defines exactly sixteen color tokens:</p>
         <table class="tbl">
-          <caption>THEME_COLOR_KEYS</caption>
-          <thead><tr><th class="keys">Key</th><th>Used for</th></tr></thead>
+          <caption>Theme Color Tokens</caption>
+          <thead><tr><th class="keys">Token</th><th>Usage</th></tr></thead>
           <tbody>
-            <tr><td class="keys mono">base-50</td><td>Deepest background (window background in dark themes).</td></tr>
-            <tr><td class="keys mono">base-100</td><td>Base surfaces: panels and dialogs.</td></tr>
-            <tr><td class="keys mono">base-150</td><td>Slightly raised surfaces, control backgrounds.</td></tr>
-            <tr><td class="keys mono">base-200</td><td>Fills: hover and control states.</td></tr>
-            <tr><td class="keys mono">base-300</td><td>Deeper fills and pressed states.</td></tr>
-            <tr><td class="keys mono">base-400</td><td>Borders between regions and controls.</td></tr>
-            <tr><td class="keys mono">base-500</td><td>Faint text and placeholders.</td></tr>
-            <tr><td class="keys mono">base-600</td><td>Secondary text.</td></tr>
-            <tr><td class="keys mono">base-700</td><td>Primary text.</td></tr>
-            <tr><td class="keys mono">base-800</td><td>Brightest text and highlights.</td></tr>
-            <tr><td class="keys mono">accent-500</td><td>Accent highlights (selection, view cube hover on dark viewports).</td></tr>
-            <tr><td class="keys mono">accent-600</td><td>Main accent for buttons and active controls.</td></tr>
-            <tr><td class="keys mono">accent-700</td><td>Deeper accent for pressed and contrast states.</td></tr>
-            <tr><td class="keys mono">viewport-bg</td><td>3D viewport background.</td></tr>
-            <tr><td class="keys mono">viewport-grid</td><td>Primary viewport grid color.</td></tr>
-            <tr><td class="keys mono">viewport-grid-line</td><td>Secondary viewport grid line color.</td></tr>
+            <tr><td class="keys mono">base-50</td><td>Deepest window and background surface.</td></tr>
+            <tr><td class="keys mono">base-100</td><td>Base panels, tool docks, and dialogs.</td></tr>
+            <tr><td class="keys mono">base-150</td><td>Slightly raised surfaces and input backgrounds.</td></tr>
+            <tr><td class="keys mono">base-200</td><td>Hover fills and secondary controls.</td></tr>
+            <tr><td class="keys mono">base-300</td><td>Pressed states and deep active fills.</td></tr>
+            <tr><td class="keys mono">base-400</td><td>Subtle divider lines and borders.</td></tr>
+            <tr><td class="keys mono">base-500</td><td>Faint text and placeholder labels.</td></tr>
+            <tr><td class="keys mono">base-600</td><td>Secondary muted text.</td></tr>
+            <tr><td class="keys mono">base-700</td><td>Standard body text.</td></tr>
+            <tr><td class="keys mono">base-800</td><td>Primary bright text and headings.</td></tr>
+            <tr><td class="keys mono">accent-500</td><td>Bright accent highlights (active tool pill, view cube hover).</td></tr>
+            <tr><td class="keys mono">accent-600</td><td>Primary action buttons and selection outlines.</td></tr>
+            <tr><td class="keys mono">accent-700</td><td>Deeper accent states.</td></tr>
+            <tr><td class="keys mono">viewport-bg</td><td>3D WebGL viewport canvas background.</td></tr>
+            <tr><td class="keys mono">viewport-grid</td><td>Primary drafting grid lines.</td></tr>
+            <tr><td class="keys mono">viewport-grid-line</td><td>Secondary subdivision grid lines.</td></tr>
           </tbody>
         </table>
       </section>
 
       <section class="doc" id="json">
-        <h2>Theme JSON</h2>
+        <h2>Theme JSON Format</h2>
         <p>
-          A theme file is JSON with a name and a colors object, where every value is a CSS color:
+          Custom themes are structured JSON documents containing a theme name and a colors dictionary:
         </p>
         <pre class="code"><code>{
-  <span class="k">"name"</span>: <span class="k">"My theme"</span>,
+  <span class="k">"name"</span>: <span class="k">"Cyber Blue"</span>,
   <span class="k">"colors"</span>: {
-    <span class="k">"base-100"</span>: <span class="k">"#131313"</span>,
-    <span class="k">"base-800"</span>: <span class="k">"#e8e8e8"</span>,
-    <span class="k">"accent-600"</span>: <span class="k">"#00a0dd"</span>,
-    <span class="k">"viewport-bg"</span>: <span class="k">"#0c0c0e"</span>
+    <span class="k">"base-50"</span>: <span class="k">"#0b0d13"</span>,
+    <span class="k">"base-100"</span>: <span class="k">"#11151f"</span>,
+    <span class="k">"accent-500"</span>: <span class="k">"#38bdf8"</span>,
+    <span class="k">"viewport-bg"</span>: <span class="k">"#0d111a"</span>
   }
 }</code></pre>
-        <p>More rules make files forgiving to write:</p>
+        <p>Theme parsing rules:</p>
         <ul>
-          <li>A <strong>flat file without the wrapper works too</strong>: colors at the top level, with <span class="mono">name</span> alongside them.</li>
-          <li>A few <strong>shorthand aliases</strong> are accepted: <span class="mono">accent</span> → <span class="mono">accent-600</span>; <span class="mono">background</span>, <span class="mono">bg</span>, <span class="mono">viewport</span>, <span class="mono">canvas</span>, <span class="mono">theme</span> → <span class="mono">viewport-bg</span>; <span class="mono">grid</span> → <span class="mono">viewport-grid</span>; <span class="mono">grid-line</span>, <span class="mono">gridline</span> → <span class="mono">viewport-grid-line</span>.</li>
-          <li><strong>Missing keys fall back</strong> to the default theme (Graphite), so you can theme just one part.</li>
-          <li><strong>Unknown keys are ignored.</strong></li>
-          <li>Colors may be any CSS form, such as <span class="mono">#abc</span>, <span class="mono">#aabbccdd</span>, or <span class="mono">rgb(...)</span>, and are normalized; unrecognized colors make the import fail with the offending key named.</li>
+          <li><strong>Forgiving structure</strong>: You can provide colors directly at the top level alongside <span class="mono">name</span>.</li>
+          <li><strong>Shorthand aliases</strong>: <span class="mono">accent</span> maps to <span class="mono">accent-500</span>; <span class="mono">background</span>, <span class="mono">bg</span>, <span class="mono">viewport</span>, and <span class="mono">canvas</span> map to <span class="mono">viewport-bg</span>; <span class="mono">grid</span> maps to <span class="mono">viewport-grid</span>.</li>
+          <li><strong>Fallback defaults</strong>: Any unspecified color token falls back to the Deep Graphite default.</li>
         </ul>
       </section>
 
       <section class="doc" id="import-export">
-        <h2>Import and export</h2>
+        <h2>Import &amp; Export</h2>
         <p>
-          In <strong>Settings → Appearance</strong>, import a theme JSON file to add it to your
-          themes. Importing is instant and the theme applies immediately. Re-importing a file with
-          the same name creates a fresh entry. Exporting a theme writes the wrapped JSON format
-          above, pretty-printed, ready to share. Your custom themes and the active selection are
-          stored with your profile data (in the app's web storage) and survive restarts.
+          In <strong>Settings → Appearance</strong>, click <em>Import Theme</em> to load any JSON theme file.
+          The theme applies instantly. You can also export active themes to share them with other users.
         </p>
       </section>
     </main>
@@ -146,9 +136,8 @@
 
   <footer class="site">
     <div class="wrap">
-      <img src="assets/icon.svg" alt="" />
       <div class="who">
-        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon
+        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon.
       </div>
       <div class="right">
         <a href="../index.html">Website</a>
@@ -159,8 +148,8 @@
       <div class="legal">
         <small>
           Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or
-          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
-          Not affiliated with the Arc browser, a product of The Browser Company.
+          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>.
+          Not affiliated with the Arc browser by The Browser Company.
         </small>
       </div>
     </div>
