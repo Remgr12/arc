@@ -87,14 +87,14 @@
 <span class="k">cd</span> arc
 
 <span class="c"># Install frontend dependencies</span>
-<span class="k">cd</span> frontend &amp;&amp; npm install &amp;&amp; <span class="k">cd</span> ..
+npm --prefix frontend install
 
 <span class="c"># Launch in development mode</span>
 <span class="k">cargo tauri dev</span></code></pre>
         <p>
           To generate an optimized production bundle:
         </p>
-        <pre class="code"><code><span class="k">cd</span> frontend &amp;&amp; npm run build &amp;&amp; <span class="k">cd</span> ..
+        <pre class="code"><code>npm --prefix frontend run build
 <span class="k">cargo tauri build</span></code></pre>
       </section>
 
