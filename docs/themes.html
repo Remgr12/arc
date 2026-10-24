@@ -39,20 +39,25 @@
 
   <div class="wrap layout">
     <aside class="toc">
-      <div class="label">Docs</div>
-      <a href="index.html">Overview</a>
-      <a href="getting-started.html">Getting Started</a>
-      <a href="modeling.html">Modeling</a>
-      <a href="navigation.html">Navigation</a>
-      <a href="keybinds.html">Keybinds</a>
-      <a href="plugins.html">Plugins</a>
-      <a class="on" href="themes.html">Themes</a>
-      <a href="automation.html">Automation</a>
-      <div class="label">On this page</div>
-      <a href="#builtin">Built-in Themes</a>
-      <a href="#color-keys">Color Tokens</a>
-      <a href="#json">Theme JSON Format</a>
-      <a href="#import-export">Import &amp; Export</a>
+      <details class="toc-details" open>
+        <summary class="toc-summary">Navigation &amp; Topics</summary>
+        <div class="toc-content">
+          <div class="label">Docs</div>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Getting Started</a>
+          <a href="modeling.html">Modeling</a>
+          <a href="navigation.html">Navigation</a>
+          <a href="keybinds.html">Keybinds</a>
+          <a href="plugins.html">Plugins</a>
+          <a class="on" href="themes.html">Themes</a>
+          <a href="automation.html">Automation</a>
+          <div class="label">On this page</div>
+          <a href="#builtin">Built-in Themes</a>
+          <a href="#color-keys">Color Tokens</a>
+          <a href="#json">Theme JSON Format</a>
+          <a href="#import-export">Import &amp; Export</a>
+        </div>
+      </details>
     </aside>
 
     <main class="page">
@@ -154,5 +159,11 @@
       </div>
     </div>
   </footer>
+  <script>
+    if (window.innerWidth <= 900) {
+      var d = document.querySelector('.toc-details');
+      if (d) d.removeAttribute('open');
+    }
+  </script>
 </body>
 </html>

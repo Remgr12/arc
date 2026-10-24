@@ -39,22 +39,27 @@
 
   <div class="wrap layout">
     <aside class="toc">
-      <div class="label">Docs</div>
-      <a href="index.html">Overview</a>
-      <a href="getting-started.html">Getting Started</a>
-      <a href="modeling.html">Modeling</a>
-      <a href="navigation.html">Navigation</a>
-      <a href="keybinds.html">Keybinds</a>
-      <a href="plugins.html">Plugins</a>
-      <a href="themes.html">Themes</a>
-      <a class="on" href="automation.html">Automation</a>
-      <div class="label">On this page</div>
-      <a href="#overview">The Automation Bridge</a>
-      <a href="#handshake">bridge.json and Auth</a>
-      <a href="#protocol">Protocol</a>
-      <a href="#commands">Command Groups</a>
-      <a href="#mcp">MCP Stdio Client</a>
-      <a href="#raw">Raw Socket Example</a>
+      <details class="toc-details" open>
+        <summary class="toc-summary">Navigation &amp; Topics</summary>
+        <div class="toc-content">
+          <div class="label">Docs</div>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Getting Started</a>
+          <a href="modeling.html">Modeling</a>
+          <a href="navigation.html">Navigation</a>
+          <a href="keybinds.html">Keybinds</a>
+          <a href="plugins.html">Plugins</a>
+          <a href="themes.html">Themes</a>
+          <a class="on" href="automation.html">Automation</a>
+          <div class="label">On this page</div>
+          <a href="#overview">The Automation Bridge</a>
+          <a href="#handshake">bridge.json and Auth</a>
+          <a href="#protocol">Protocol</a>
+          <a href="#commands">Command Groups</a>
+          <a href="#mcp">MCP Stdio Client</a>
+          <a href="#raw">Raw Socket Example</a>
+        </div>
+      </details>
     </aside>
 
     <main class="page">
@@ -196,5 +201,11 @@ res = send_cmd(2, <span class="str">"create_entity"</span>, document_id=doc_id,
       </div>
     </div>
   </footer>
+  <script>
+    if (window.innerWidth <= 900) {
+      var d = document.querySelector('.toc-details');
+      if (d) d.removeAttribute('open');
+    }
+  </script>
 </body>
 </html>
