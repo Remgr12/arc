@@ -208,7 +208,7 @@ main {
 .sheet {
   position: relative;
   margin-top: 36px;
-  padding: 38px 36px 0;
+  padding: 44px 40px 0;
   border: 1px solid var(--line);
   background: var(--bg-surface);
   border-radius: 16px;
@@ -217,10 +217,7 @@ main {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.05fr);
-  align-items: center;
-  gap: 48px;
+  max-width: 720px;
   padding-bottom: 46px;
 }
 
@@ -238,7 +235,7 @@ h1 .accent {
 }
 
 .tag {
-  max-width: 48ch;
+  max-width: 62ch;
   margin: 22px 0 32px;
   font-size: 17px;
   line-height: 1.65;
@@ -301,148 +298,6 @@ h1 .accent {
 
 .btn:active {
   transform: translateY(1px);
-}
-
-/* CAD Viewport Showcase / Hero Preview */
-
-.viewport-preview {
-  position: relative;
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-}
-
-.viewport-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgba(18, 20, 26, 0.7);
-  border-bottom: 1px solid var(--line);
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.viewport-modes {
-  display: flex;
-  gap: 6px;
-}
-
-.viewport-modes span {
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.viewport-modes span.active {
-  color: var(--accent);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--line-strong);
-  font-weight: 700;
-}
-
-.viewport-label {
-  color: var(--ink-soft);
-  font-weight: 600;
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.viewport-canvas {
-  position: relative;
-  height: 290px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* Infinite axes representation in showcase */
-.cad-axis-x {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #ef4444 40%, #ef4444 60%, transparent);
-  opacity: 0.6;
-}
-
-.cad-axis-z {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, #3b82f6 40%, #3b82f6 60%, transparent);
-  opacity: 0.6;
-}
-
-.cad-model-showcase {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cad-model-showcase img {
-  transition: transform 200ms ease;
-  max-width: 100%;
-  height: auto;
-}
-
-.viewport-preview:hover .cad-model-showcase img {
-  transform: scale(1.02);
-}
-
-/* Floating CAD indicators */
-.cad-dimension {
-  position: absolute;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  background: rgba(18, 20, 26, 0.92);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  backdrop-filter: blur(4px);
-  z-index: 3;
-}
-
-.cad-dimension.top { top: 22px; right: 28px; }
-.cad-dimension.bottom { bottom: 22px; left: 24px; }
-
-/* Floating selection HUD */
-.viewport-hud {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(22, 26, 36, 0.95);
-  border: 1px solid var(--line-strong);
-  padding: 5px 14px;
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-soft);
-  z-index: 5;
-  white-space: nowrap;
-}
-
-.viewport-hud b {
-  color: var(--accent);
 }
 
 /* Title block (spec banner) */
@@ -831,15 +686,6 @@ footer.site .titleblock .widecell {
 /* ---------------- responsive optimization ---------------- */
 
 @media (max-width: 960px) {
-  .hero {
-    grid-template-columns: 1fr;
-    gap: 36px;
-  }
-  .viewport-preview {
-    max-width: 540px;
-    margin: 0 auto;
-    width: 100%;
-  }
   .titleblock, footer.site .titleblock {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -930,38 +776,6 @@ footer.site .titleblock .widecell {
     min-height: 44px;
     padding: 12px 18px;
     font-size: 13.5px;
-  }
-  .viewport-preview {
-    margin-top: 8px;
-    border-radius: 10px;
-  }
-  .viewport-header {
-    padding: 8px 12px;
-    font-size: 10px;
-  }
-  .viewport-canvas {
-    height: 220px;
-  }
-  .cad-model-showcase img {
-    width: 140px;
-    height: 140px;
-  }
-  .cad-dimension {
-    font-size: 9.5px;
-    padding: 2px 6px;
-  }
-  .cad-dimension.top { top: 12px; right: 12px; }
-  .cad-dimension.bottom { bottom: 12px; left: 12px; }
-  .viewport-hud {
-    font-size: 10.5px;
-    padding: 4px 12px;
-    gap: 6px;
-    max-width: 94%;
-    bottom: 8px;
-  }
-  .viewport-hud .kbd-hint,
-  .viewport-hud .hud-extra {
-    display: none;
   }
   .titleblock {
     grid-template-columns: repeat(2, minmax(0, 1fr));
