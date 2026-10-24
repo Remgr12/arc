@@ -20,8 +20,7 @@ function requireDoc(): string {
   return id;
 }
 
-export const actions = {
-  booleanApply: guard(async (operation: "union" | "difference" | "intersection") => {
+export const actions = {  booleanApply: guard(async (operation: "union" | "difference" | "intersection") => {
     const docId = requireDoc();
     const scene = useArcStore.getState().scene;
     if (!scene) return;
@@ -79,6 +78,47 @@ export const actions = {
     if (overview.active) {
       useArcStore.getState().setScene(await ipc.getScene(overview.active));
     }
+    useArcStore.getState().setView("editor");
+  }),
+
+  /** Open a workspace project by path, reusing an already-open document. */
+  openProjectPath: guard(async (path: string) => {
+    if (!path) return;
+    const overview = useArcStore.getState().overview;
+    const existing = overview?.documents.find((d) => d.path === path);
+    if (existing) {
+      await ipc.setActiveDocument(existing.id);
+      useArcStore.getState().setScene(await ipc.getScene(existing.id));
+    } else {
+      await ipc.openDocument(path);
+      const next = await ipc.getState();
+      useArcStore.getState().setOverview(next);
+      if (next.active) {
+        useArcStore.getState().setScene(await ipc.getScene(next.active));
+      }
+    }
+    useArcStore.getState().setView("editor");
+  }),
+
+  /** Create a named project inside the workspace folder and open it. */
+  createWorkspaceProject: guard(async (rawName: string) => {
+    const name = rawName.trim().replace(/[\\/:*?"<>|]/g, "-");
+    if (!name) return;
+    let folder = useArcStore.getState().workspaceFolder;
+    if (!folder) {
+      useArcStore.getState().setStatusMessage("Set a workspace folder first");
+      return;
+    }
+    folder = folder.replace(/[\\/]+$/, "");
+    const doc = await ipc.newDocument(name);
+    await ipc.saveDocument(doc.id, `${folder}/${name}.arc`);
+    const overview = await ipc.getState();
+    useArcStore.getState().setOverview(overview);
+    if (overview.active) {
+      useArcStore.getState().setScene(await ipc.getScene(overview.active));
+    }
+    useArcStore.getState().setStatusMessage(`Created ${name}`);
+    useArcStore.getState().setView("editor");
   }),
 
   importFile: guard(async () => {
@@ -98,6 +138,7 @@ export const actions = {
     useArcStore
       .getState()
       .setStatusMessage(`Imported ${result.entities_created.length} entities from ${result.format.toUpperCase()}`);
+    useArcStore.getState().setView("editor");
   }),
 
   saveActive: guard(async () => {
@@ -110,8 +151,8 @@ export const actions = {
       await saveDocumentAs();
     }
     useArcStore.getState().setStatusMessage("Saved");
+    await maybeCaptureThumbnail(id);
   }),
-
   saveDocumentAs: guard(async () => {
     await saveDocumentAs();
   }),
@@ -313,6 +354,40 @@ async function saveDocumentAs(): Promise<void> {
   });
   if (!path) return;
   await ipc.saveDocument(id, path as string);
+  await maybeCaptureThumbnail(id);
+}
+/** Ask the viewport renderer for the current frame (downscaled PNG data URL). */
+export function requestViewportThumbnail(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(null), 300);
+    window.dispatchEvent(
+      new CustomEvent("arc-capture-thumb", {
+        detail: (url: string | null) => {
+          window.clearTimeout(timer);
+          resolve(url);
+        },
+      }),
+    );
+  });
+}
+
+/** Best-effort: capture the viewport and store it next to the saved file. */
+async function maybeCaptureThumbnail(docId: string): Promise<void> {
+  try {
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.entities.length === 0) {
+      useArcStore.getState().setStatusMessage("Saved (thumbnail skipped: empty scene)");
+      return;
+    }
+    const url = await requestViewportThumbnail();
+    if (!url) {
+      useArcStore.getState().setStatusMessage("Saved (thumbnail: no frame)");
+      return;
+    }
+    await ipc.saveProjectThumbnail(docId, url);
+  } catch (e) {
+    useArcStore.getState().setStatusMessage(`Saved (thumbnail failed: ${String(e)})`);
+  }
 }
 
 /** Create geometry for the active tool at a world point (creation tools). */

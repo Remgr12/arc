@@ -35,27 +35,48 @@ impl MeshBuilder {
 
     /// Merge another buffer's contents into this builder.
     pub fn append_buffer(&mut self, buffer: &MeshBuffer) {
-        self.buffer
-            .positions
-            .extend_from_slice(&buffer.positions);
+        self.buffer.positions.extend_from_slice(&buffer.positions);
         self.buffer.normals.extend_from_slice(&buffer.normals);
-        self.buffer.tri_face_ids.extend_from_slice(&buffer.tri_face_ids);
+        self.buffer
+            .tri_face_ids
+            .extend_from_slice(&buffer.tri_face_ids);
         self.buffer.lines.extend_from_slice(&buffer.lines);
     }
 
     /// Push a triangle with a face identifier.
-    pub fn push_tri(&mut self, a: [f64; 3], b: [f64; 3], c: [f64; 3], normal: [f64; 3], face_id: u32) {
+    pub fn push_tri(
+        &mut self,
+        a: [f64; 3],
+        b: [f64; 3],
+        c: [f64; 3],
+        normal: [f64; 3],
+        face_id: u32,
+    ) {
         self.buffer.positions.extend_from_slice(&[
-            a[0] as f32, a[1] as f32, a[2] as f32,
-            b[0] as f32, b[1] as f32, b[2] as f32,
-            c[0] as f32, c[1] as f32, c[2] as f32,
+            a[0] as f32,
+            a[1] as f32,
+            a[2] as f32,
+            b[0] as f32,
+            b[1] as f32,
+            b[2] as f32,
+            c[0] as f32,
+            c[1] as f32,
+            c[2] as f32,
         ]);
         self.buffer.normals.extend_from_slice(&[
-            normal[0] as f32, normal[1] as f32, normal[2] as f32,
-            normal[0] as f32, normal[1] as f32, normal[2] as f32,
-            normal[0] as f32, normal[1] as f32, normal[2] as f32,
+            normal[0] as f32,
+            normal[1] as f32,
+            normal[2] as f32,
+            normal[0] as f32,
+            normal[1] as f32,
+            normal[2] as f32,
+            normal[0] as f32,
+            normal[1] as f32,
+            normal[2] as f32,
         ]);
-        self.buffer.tri_face_ids.extend_from_slice(&[face_id, face_id, face_id]);
+        self.buffer
+            .tri_face_ids
+            .extend_from_slice(&[face_id, face_id, face_id]);
     }
 
     /// Flat-shaded quad: two triangles with a shared normal.
@@ -74,7 +95,12 @@ impl MeshBuilder {
 
     pub fn push_line(&mut self, a: [f64; 3], b: [f64; 3]) {
         self.buffer.lines.extend_from_slice(&[
-            a[0] as f32, a[1] as f32, a[2] as f32, b[0] as f32, b[1] as f32, b[2] as f32,
+            a[0] as f32,
+            a[1] as f32,
+            a[2] as f32,
+            b[0] as f32,
+            b[1] as f32,
+            b[2] as f32,
         ]);
     }
 
@@ -140,11 +166,7 @@ pub fn earclip_xz(points: &[[f64; 2]]) -> Vec<[usize; 3]> {
         let b = points[verts[k % len]];
         let c = points[verts[(k + 1) % len]];
         let cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-        if flip {
-            cr < -1e-9
-        } else {
-            cr > 1e-9
-        }
+        if flip { cr < -1e-9 } else { cr > 1e-9 }
     };
     let point_in_tri = |p: [f64; 2], t: [usize; 3]| -> bool {
         let v = [points[t[0]], points[t[1]], points[t[2]]];
@@ -209,8 +231,8 @@ pub fn earclip_xz(points: &[[f64; 2]]) -> Vec<[usize; 3]> {
         if !clipped {
             // Degenerate polygon: clip the first convex corner regardless of
             // containment, else drop the first vertex to make progress.
-            if let Some(k) = (0..remaining.len())
-                .find(|&k| is_convex(&remaining, k, remaining.len()))
+            if let Some(k) =
+                (0..remaining.len()).find(|&k| is_convex(&remaining, k, remaining.len()))
             {
                 let len = remaining.len();
                 let cur = remaining[k];
@@ -253,11 +275,7 @@ pub fn ray_triangle(
         return None;
     }
     let inv_det = 1.0 / det;
-    let t = [
-        origin[0] - a[0],
-        origin[1] - a[1],
-        origin[2] - a[2],
-    ];
+    let t = [origin[0] - a[0], origin[1] - a[1], origin[2] - a[2]];
     let u = (t[0] * p[0] + t[1] * p[1] + t[2] * p[2]) * inv_det;
     if !(0.0..=1.0).contains(&u) {
         return None;
@@ -316,7 +334,11 @@ pub fn ray_point_segment_distance(
     let denom = a_ * c_ - b_ * b_;
 
     let dist_fn = |s: f64, t: f64| -> f64 {
-        let rp = [origin[0] + u[0] * s, origin[1] + u[1] * s, origin[2] + u[2] * s];
+        let rp = [
+            origin[0] + u[0] * s,
+            origin[1] + u[1] * s,
+            origin[2] + u[2] * s,
+        ];
         let sp = [a[0] + v[0] * t, a[1] + v[1] * t, a[2] + v[2] * t];
         let d = [rp[0] - sp[0], rp[1] - sp[1], rp[2] - sp[2]];
         (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
@@ -346,10 +368,21 @@ pub fn mesh_world(buffer: &MeshBuffer, t: &Transform) -> MeshBuffer {
         let a = t.transform_point([chunk[0] as f64, chunk[1] as f64, chunk[2] as f64]);
         let b = t.transform_point([chunk[3] as f64, chunk[4] as f64, chunk[5] as f64]);
         let c = t.transform_point([chunk[6] as f64, chunk[7] as f64, chunk[8] as f64]);
-        out.positions.extend_from_slice(&[a[0] as f32, a[1] as f32, a[2] as f32, b[0] as f32, b[1] as f32, b[2] as f32, c[0] as f32, c[1] as f32, c[2] as f32]);
+        out.positions.extend_from_slice(&[
+            a[0] as f32,
+            a[1] as f32,
+            a[2] as f32,
+            b[0] as f32,
+            b[1] as f32,
+            b[2] as f32,
+            c[0] as f32,
+            c[1] as f32,
+            c[2] as f32,
+        ]);
         let n = tri_normal(a, b, c);
         for _ in 0..3 {
-            out.normals.extend_from_slice(&[n[0] as f32, n[1] as f32, n[2] as f32]);
+            out.normals
+                .extend_from_slice(&[n[0] as f32, n[1] as f32, n[2] as f32]);
         }
     }
     out.lines = buffer.lines.clone();

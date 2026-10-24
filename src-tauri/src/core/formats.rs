@@ -142,7 +142,10 @@ pub fn parse_stl(bytes: &[u8]) -> Result<StlMesh, String> {
     } else if looks_ascii_stl(bytes) {
         parse_stl_ascii(&String::from_utf8_lossy(bytes))
     } else {
-        Err("not a recognizable STL: neither a valid binary layout nor an ASCII `solid` header".into())
+        Err(
+            "not a recognizable STL: neither a valid binary layout nor an ASCII `solid` header"
+                .into(),
+        )
     }
 }
 
@@ -244,7 +247,9 @@ fn parse_stl_ascii(text: &str) -> Result<StlMesh, String> {
                 flush_facet(&mut triangles, &mut verts, normal, false, line_no)?;
                 let has_normal_kw = tok.next().map(|k| k.eq_ignore_ascii_case("normal"));
                 if has_normal_kw != Some(true) {
-                    return Err(format!("line {line_no}: expected `facet normal <x> <y> <z>`"));
+                    return Err(format!(
+                        "line {line_no}: expected `facet normal <x> <y> <z>`"
+                    ));
                 }
                 let xs: Vec<&str> = tok.take(3).collect();
                 if xs.len() != 3 {
@@ -314,7 +319,12 @@ pub fn parse_obj(text: &str) -> Result<ObjMesh, String> {
             "f" => {
                 let mut corners: Vec<u32> = Vec::with_capacity(4);
                 for c in tok {
-                    corners.push(obj_corner(c, mesh.positions.len(), mesh.normals.len(), line_no)?);
+                    corners.push(obj_corner(
+                        c,
+                        mesh.positions.len(),
+                        mesh.normals.len(),
+                        line_no,
+                    )?);
                 }
                 if corners.len() < 3 {
                     return Err(format!(
@@ -323,7 +333,8 @@ pub fn parse_obj(text: &str) -> Result<ObjMesh, String> {
                     ));
                 }
                 for k in 1..corners.len() - 1 {
-                    mesh.faces.push(vec![corners[0], corners[k], corners[k + 1]]);
+                    mesh.faces
+                        .push(vec![corners[0], corners[k], corners[k + 1]]);
                 }
             }
             _ => {}
@@ -644,7 +655,13 @@ fn mesh_triangles(mesh: &MeshBuffer) -> impl Iterator<Item = ([[f32; 3]; 3], [f3
 /// NUL) with spaces and trim the result.
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .map(|c| if c == '\n' || c == '\r' || c == '\0' { ' ' } else { c })
+        .map(|c| {
+            if c == '\n' || c == '\r' || c == '\0' {
+                ' '
+            } else {
+                c
+            }
+        })
         .collect::<String>()
         .trim()
         .to_string()
@@ -759,7 +776,11 @@ pub fn export_gltf(mesh: &MeshBuffer, name: &str) -> Result<String, String> {
             blob.extend_from_slice(&n.to_le_bytes());
         }
     }
-    let norm_len = if has_normals { mesh.normals.len() * 4 } else { 0 };
+    let norm_len = if has_normals {
+        mesh.normals.len() * 4
+    } else {
+        0
+    };
 
     let mut min = [f64::INFINITY; 3];
     let mut max = [f64::NEG_INFINITY; 3];
@@ -789,9 +810,7 @@ pub fn export_gltf(mesh: &MeshBuffer, name: &str) -> Result<String, String> {
             vec![
                 json!({ "bufferView": 0, "componentType": 5126, "count": vert_count, "type": "VEC3", "min": min, "max": max }),
             ],
-            vec![
-                json!({ "buffer": 0, "byteOffset": 0, "byteLength": pos_len, "target": 34962 }),
-            ],
+            vec![json!({ "buffer": 0, "byteOffset": 0, "byteLength": pos_len, "target": 34962 })],
         )
     };
 

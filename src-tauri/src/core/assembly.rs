@@ -186,9 +186,21 @@ impl TransformOverrides {
     /// Returns `base_transform` with every enabled channel replaced.
     pub fn apply(&self, base_transform: &Transform) -> Transform {
         Transform {
-            position: if self.position_override { self.position } else { base_transform.position },
-            rotation: if self.rotation_override { self.rotation } else { base_transform.rotation },
-            scale: if self.scale_override { self.scale } else { base_transform.scale },
+            position: if self.position_override {
+                self.position
+            } else {
+                base_transform.position
+            },
+            rotation: if self.rotation_override {
+                self.rotation
+            } else {
+                base_transform.rotation
+            },
+            scale: if self.scale_override {
+                self.scale
+            } else {
+                base_transform.scale
+            },
         }
     }
 }
@@ -366,7 +378,11 @@ impl Assembly {
     }
 
     /// Wraps a document entity in a new component and returns its component id.
-    pub fn add_entity_component(&mut self, entity_id: EntityId, name: String) -> Result<EntityId, String> {
+    pub fn add_entity_component(
+        &mut self,
+        entity_id: EntityId,
+        name: String,
+    ) -> Result<EntityId, String> {
         let component_id = EntityId::new();
         let component = AssemblyComponent::new_entity_component(component_id, entity_id, name);
         self.add_component(component)?;
@@ -374,15 +390,24 @@ impl Assembly {
     }
 
     /// Adds a component referencing external content and returns its component id.
-    pub fn add_reference_component(&mut self, external_ref: String, name: String) -> Result<EntityId, String> {
+    pub fn add_reference_component(
+        &mut self,
+        external_ref: String,
+        name: String,
+    ) -> Result<EntityId, String> {
         let component_id = EntityId::new();
-        let component = AssemblyComponent::new_reference_component(component_id, external_ref, name);
+        let component =
+            AssemblyComponent::new_reference_component(component_id, external_ref, name);
         self.add_component(component)?;
         Ok(component_id)
     }
 
     /// Replaces a component's local placement transform.
-    pub fn set_component_transform(&mut self, component_id: EntityId, transform: Transform) -> Result<(), String> {
+    pub fn set_component_transform(
+        &mut self,
+        component_id: EntityId,
+        transform: Transform,
+    ) -> Result<(), String> {
         if let Some(component) = self.components.get_mut(&component_id) {
             component.transform = transform;
             self.metadata.modified_at = get_current_timestamp();
@@ -393,7 +418,11 @@ impl Assembly {
     }
 
     /// Replaces a component's transform override configuration.
-    pub fn set_component_overrides(&mut self, component_id: EntityId, overrides: TransformOverrides) -> Result<(), String> {
+    pub fn set_component_overrides(
+        &mut self,
+        component_id: EntityId,
+        overrides: TransformOverrides,
+    ) -> Result<(), String> {
         if let Some(component) = self.components.get_mut(&component_id) {
             component.transform_overrides = overrides;
             self.metadata.modified_at = get_current_timestamp();
@@ -421,11 +450,16 @@ impl Assembly {
     /// pairs in ascending component-id order.
     pub fn explode(&mut self, offset: [f64; 3]) -> Vec<(EntityId, Transform)> {
         let component_ids: Vec<EntityId> = self.components.keys().copied().collect();
-        let mut current_worlds: Vec<(EntityId, Transform)> = Vec::with_capacity(component_ids.len());
+        let mut current_worlds: Vec<(EntityId, Transform)> =
+            Vec::with_capacity(component_ids.len());
         for id in component_ids {
             let current = match self.world_transform(id) {
                 Ok(world) => world,
-                Err(_) => self.components.get(&id).map(|c| c.transform).unwrap_or_default(),
+                Err(_) => self
+                    .components
+                    .get(&id)
+                    .map(|c| c.transform)
+                    .unwrap_or_default(),
             };
             current_worlds.push((id, current));
         }
@@ -617,7 +651,11 @@ impl Assembly {
     }
 
     /// Shows or hides a component.
-    pub fn set_component_visibility(&mut self, component_id: EntityId, visible: bool) -> Result<(), String> {
+    pub fn set_component_visibility(
+        &mut self,
+        component_id: EntityId,
+        visible: bool,
+    ) -> Result<(), String> {
         if let Some(component) = self.components.get_mut(&component_id) {
             component.visible = visible;
             self.metadata.modified_at = get_current_timestamp();
@@ -628,7 +666,11 @@ impl Assembly {
     }
 
     /// Locks or unlocks a component.
-    pub fn set_component_lock(&mut self, component_id: EntityId, locked: bool) -> Result<(), String> {
+    pub fn set_component_lock(
+        &mut self,
+        component_id: EntityId,
+        locked: bool,
+    ) -> Result<(), String> {
         if let Some(component) = self.components.get_mut(&component_id) {
             component.locked = locked;
             self.metadata.modified_at = get_current_timestamp();
@@ -650,7 +692,9 @@ impl Assembly {
 
     /// Parent of `id` according to the transform hierarchy, if any.
     fn hierarchy_parent_of(&self, id: EntityId) -> Option<EntityId> {
-        self.component_transforms.get(&id).and_then(|node| node.parent_id)
+        self.component_transforms
+            .get(&id)
+            .and_then(|node| node.parent_id)
     }
 
     /// Local placement contribution of `id`: its hierarchy node's
@@ -799,7 +843,11 @@ mod tests {
         let mut local = Transform::default();
         local.position = [1.0, 0.0, 0.0];
         let world = compose_transform(&parent, &local);
-        assert_slice_close(&world.position, &[10.0, 2.0, 0.0], "scale then rotate then translate");
+        assert_slice_close(
+            &world.position,
+            &[10.0, 2.0, 0.0],
+            "scale then rotate then translate",
+        );
     }
 
     #[test]
@@ -809,9 +857,16 @@ mod tests {
         node.local_transform = Transform::at(1.0, 2.0, 3.0);
         let parent_global = Transform::at(10.0, 20.0, 30.0);
         node.update_global(Some(&parent_global));
-        assert_slice_close(&node.global_transform.position, &[11.0, 22.0, 33.0], "global position");
+        assert_slice_close(
+            &node.global_transform.position,
+            &[11.0, 22.0, 33.0],
+            "global position",
+        );
         node.update_global(None);
-        assert_eq!(node.global_transform, node.local_transform, "root copies local");
+        assert_eq!(
+            node.global_transform, node.local_transform,
+            "root copies local"
+        );
     }
 
     #[test]
@@ -821,7 +876,10 @@ mod tests {
         local.rotation = [0.0, 0.0, 0.0, 0.0];
         local.scale = [2.0, 2.0, 2.0];
         let world = compose_transform(&parent, &local);
-        assert!(world.rotation.iter().all(|v| v.is_finite()), "finite rotation");
+        assert!(
+            world.rotation.iter().all(|v| v.is_finite()),
+            "finite rotation"
+        );
         assert_quat_close(world.rotation, [0.0, 0.0, 0.0, 1.0], "identity fallback");
         assert_slice_close(&world.scale, &[2.0, 2.0, 2.0], "scale still composes");
     }
@@ -850,7 +908,11 @@ mod tests {
         let asm = hierarchy_fixture();
         let leaf_world = asm.world_transform(fid(12)).expect("leaf exists");
         assert_slice_close(&leaf_world.position, &[100.0, 2.0, 0.0], "chained position");
-        assert_quat_close(leaf_world.rotation, [0.0, 0.0, 1.0, 0.0], "chained rotation");
+        assert_quat_close(
+            leaf_world.rotation,
+            [0.0, 0.0, 1.0, 0.0],
+            "chained rotation",
+        );
         let root_world = asm.world_transform(fid(10)).expect("root exists");
         assert_slice_close(&root_world.position, &[100.0, 0.0, 0.0], "root position");
         assert!(asm.world_transform(fid(999)).is_err(), "unknown id errors");
@@ -861,10 +923,22 @@ mod tests {
         let mut asm = hierarchy_fixture();
         asm.update_transforms();
         let leaf = &asm.component_transforms[&fid(12)];
-        assert_slice_close(&leaf.global_transform.position, &[100.0, 2.0, 0.0], "leaf global");
-        assert_quat_close(leaf.global_transform.rotation, [0.0, 0.0, 1.0, 0.0], "leaf rotation");
+        assert_slice_close(
+            &leaf.global_transform.position,
+            &[100.0, 2.0, 0.0],
+            "leaf global",
+        );
+        assert_quat_close(
+            leaf.global_transform.rotation,
+            [0.0, 0.0, 1.0, 0.0],
+            "leaf rotation",
+        );
         let mid = &asm.component_transforms[&fid(11)];
-        assert_slice_close(&mid.global_transform.position, &[100.0, 1.0, 0.0], "mid global");
+        assert_slice_close(
+            &mid.global_transform.position,
+            &[100.0, 1.0, 0.0],
+            "mid global",
+        );
     }
 
     #[test]
@@ -873,8 +947,10 @@ mod tests {
         for id in [10u64, 11, 12] {
             asm.components.insert(fid(id), component(id, "c"));
         }
-        asm.set_parent(fid(11), fid(10)).expect("attach 11 under 10");
-        asm.set_parent(fid(12), fid(11)).expect("attach 12 under 11");
+        asm.set_parent(fid(11), fid(10))
+            .expect("attach 11 under 10");
+        asm.set_parent(fid(12), fid(11))
+            .expect("attach 12 under 11");
 
         let cycle = asm.set_parent(fid(10), fid(12));
         assert!(cycle.is_err(), "grandparent reparent must be rejected");
@@ -904,11 +980,21 @@ mod tests {
 
         assert_eq!(asm.children_of(fid(10)), vec![fid(11), fid(12)]);
         assert_eq!(asm.children_of(fid(12)), vec![fid(13)]);
-        assert!(asm.children_of(fid(13)).is_empty(), "leaves have no children");
-        assert!(asm.children_of(fid(77)).is_empty(), "unknown ids yield no children");
+        assert!(
+            asm.children_of(fid(13)).is_empty(),
+            "leaves have no children"
+        );
+        assert!(
+            asm.children_of(fid(77)).is_empty(),
+            "unknown ids yield no children"
+        );
 
         asm.set_parent(fid(12), None).expect("detach 12");
-        assert_eq!(asm.children_of(fid(10)), vec![fid(11)], "detached child is gone");
+        assert_eq!(
+            asm.children_of(fid(10)),
+            vec![fid(11)],
+            "detached child is gone"
+        );
         assert_eq!(
             asm.component_transforms.get(&fid(12)).map(|n| n.parent_id),
             Some(None),
@@ -919,7 +1005,13 @@ mod tests {
     #[test]
     fn walk_preorder_is_depth_first_roots_first() {
         let mut asm = Assembly::new(fid(1), "walk".to_string());
-        for (id, parent) in [(20u64, None), (21, Some(20u64)), (23, Some(20u64)), (22, Some(21u64)), (30, None)] {
+        for (id, parent) in [
+            (20u64, None),
+            (21, Some(20u64)),
+            (23, Some(20u64)),
+            (22, Some(21u64)),
+            (30, None),
+        ] {
             asm.components.insert(fid(id), component(id, "c"));
             asm.component_transforms.insert(fid(id), node(id, parent));
         }
@@ -948,22 +1040,34 @@ mod tests {
         }
         asm.set_parent(fid(11), fid(10)).expect("11 under 10");
 
-        let copy_id = asm.duplicate_component(fid(11)).expect("duplicate succeeds");
+        let copy_id = asm
+            .duplicate_component(fid(11))
+            .expect("duplicate succeeds");
         assert_ne!(copy_id, fid(11), "copy gets a fresh id");
         assert_eq!(asm.component_count(), 3);
         let copy = &asm.components[&copy_id];
-        assert_eq!(copy.name, "bracket (copy)", "copy name carries the (copy) suffix");
+        assert_eq!(
+            copy.name, "bracket (copy)",
+            "copy name carries the (copy) suffix"
+        );
         let copy_node = &asm.component_transforms[&copy_id];
         assert_eq!(copy_node.parent_id, Some(fid(10)), "copy shares the parent");
-        assert_eq!(copy_node.local_transform, asm.component_transforms[&fid(11)].local_transform);
-        assert!(asm.duplicate_component(fid(99)).is_err(), "unknown id errors");
+        assert_eq!(
+            copy_node.local_transform,
+            asm.component_transforms[&fid(11)].local_transform
+        );
+        assert!(
+            asm.duplicate_component(fid(99)).is_err(),
+            "unknown id errors"
+        );
     }
 
     #[test]
     fn rename_component_updates_display_name() {
         let mut asm = Assembly::new(fid(1), "rename".to_string());
         asm.components.insert(fid(10), component(10, "old"));
-        asm.rename_component(fid(10), "new".to_string()).expect("rename succeeds");
+        asm.rename_component(fid(10), "new".to_string())
+            .expect("rename succeeds");
         assert_eq!(asm.components[&fid(10)].name, "new");
         assert!(asm.rename_component(fid(77), "nope".to_string()).is_err());
     }
@@ -982,13 +1086,25 @@ mod tests {
         let moved = asm.explode([10.0, 20.0, 30.0]);
         assert_eq!(moved.len(), 2, "one pair per component");
         assert_eq!(moved[0].0, fid(10), "ascending component id order");
-        assert_slice_close(&moved[0].1.position, &[10.0, 20.0, 30.0], "parent moved from its global");
+        assert_slice_close(
+            &moved[0].1.position,
+            &[10.0, 20.0, 30.0],
+            "parent moved from its global",
+        );
         assert_eq!(moved[1].0, fid(11));
-        assert_slice_close(&moved[1].1.position, &[15.0, 20.0, 30.0], "child moved from its global");
+        assert_slice_close(
+            &moved[1].1.position,
+            &[15.0, 20.0, 30.0],
+            "child moved from its global",
+        );
 
         let child_node = &asm.component_transforms[&fid(11)];
         assert_eq!(child_node.parent_id, None, "explode flattens the hierarchy");
-        assert_slice_close(&child_node.local_transform.position, &[15.0, 20.0, 30.0], "local equals moved world");
+        assert_slice_close(
+            &child_node.local_transform.position,
+            &[15.0, 20.0, 30.0],
+            "local equals moved world",
+        );
         asm.update_transforms();
         assert_slice_close(
             &asm.component_transforms[&fid(11)].global_transform.position,

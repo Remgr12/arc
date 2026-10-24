@@ -43,9 +43,17 @@ pub enum Geometry {
     /// UV sphere centered at local origin.
     Sphere { radius: f64, segments: u32 },
     /// Cylinder along +Y.
-    Cylinder { radius: f64, height: f64, segments: u32 },
+    Cylinder {
+        radius: f64,
+        height: f64,
+        segments: u32,
+    },
     /// Cone along +Y (apex on top).
-    Cone { radius: f64, height: f64, segments: u32 },
+    Cone {
+        radius: f64,
+        height: f64,
+        segments: u32,
+    },
     /// Torus lying in the XZ plane.
     Torus {
         radius: f64,
@@ -324,7 +332,12 @@ impl Geometry {
             Ok(())
         };
         match self {
-            Geometry::Box { width, depth, height, .. } => {
+            Geometry::Box {
+                width,
+                depth,
+                height,
+                ..
+            } => {
                 if *width <= 0.0 || *depth <= 0.0 || *height <= 0.0 {
                     return Err("box dimensions must be positive".into());
                 }
@@ -354,7 +367,11 @@ impl Geometry {
                     return Err("revolve steps must be >= 3".into());
                 }
             }
-            Geometry::Wall { path, width, height } => {
+            Geometry::Wall {
+                path,
+                width,
+                height,
+            } => {
                 if path.len() < 2 {
                     return Err("wall path needs at least 2 points".into());
                 }
@@ -362,7 +379,9 @@ impl Geometry {
                     return Err("wall width/height must be positive".into());
                 }
             }
-            Geometry::Stair { rise, run, count, .. } => {
+            Geometry::Stair {
+                rise, run, count, ..
+            } => {
                 if *rise <= 0.0 || *run <= 0.0 || *count == 0 {
                     return Err("stair rise/run/count must be positive".into());
                 }

@@ -117,7 +117,12 @@ pub fn neutral_axis_radius(inner_radius_mm: f64, thickness_mm: f64, k_factor: f6
 /// Bend allowance: arc length of the neutral axis through a bend.
 ///
 /// `BA = radians(angle) * (inner_radius + k_factor * thickness)`.
-pub fn bend_allowance(angle_deg: f64, inner_radius_mm: f64, thickness_mm: f64, k_factor: f64) -> f64 {
+pub fn bend_allowance(
+    angle_deg: f64,
+    inner_radius_mm: f64,
+    thickness_mm: f64,
+    k_factor: f64,
+) -> f64 {
     let radians = angle_deg * PI / 180.0;
     radians * neutral_axis_radius(inner_radius_mm, thickness_mm, k_factor)
 }
@@ -144,7 +149,12 @@ pub fn inside_mold_line(angle_deg: f64, inner_radius_mm: f64) -> f64 {
 /// Bend deduction: amount to subtract from the sum of outside leg lengths.
 ///
 /// `BD = 2 * setback - BA`.
-pub fn bend_deduction(angle_deg: f64, inner_radius_mm: f64, thickness_mm: f64, k_factor: f64) -> f64 {
+pub fn bend_deduction(
+    angle_deg: f64,
+    inner_radius_mm: f64,
+    thickness_mm: f64,
+    k_factor: f64,
+) -> f64 {
     2.0 * setback(angle_deg, inner_radius_mm, thickness_mm)
         - bend_allowance(angle_deg, inner_radius_mm, thickness_mm, k_factor)
 }
@@ -266,7 +276,12 @@ pub fn flat_pattern(part: &SheetMetalPart) -> Result<FlatPattern, String> {
     }
 
     Ok(FlatPattern {
-        outline: vec![[0.0, 0.0], [total_length, 0.0], [total_length, width], [0.0, width]],
+        outline: vec![
+            [0.0, 0.0],
+            [total_length, 0.0],
+            [total_length, width],
+            [0.0, width],
+        ],
         bend_lines,
     })
 }
@@ -362,10 +377,8 @@ fn rectangle_extents(rect: [[f64; 2]; 4]) -> (f64, f64) {
     let xs = [rect[0][0], rect[1][0], rect[2][0], rect[3][0]];
     let ys = [rect[0][1], rect[1][1], rect[2][1], rect[3][1]];
     let (dx, dy) = (
-        xs.iter().cloned().fold(f64::MIN, f64::max)
-            - xs.iter().cloned().fold(f64::MAX, f64::min),
-        ys.iter().cloned().fold(f64::MIN, f64::max)
-            - ys.iter().cloned().fold(f64::MAX, f64::min),
+        xs.iter().cloned().fold(f64::MIN, f64::max) - xs.iter().cloned().fold(f64::MAX, f64::min),
+        ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min),
     );
     (dx, dy)
 }
@@ -455,7 +468,11 @@ mod tests {
     fn flat_length_l_bracket() {
         // legs 20 + 30 = 50, minus BD ≈ 2.198673
         let fl = flat_length(20.0, 30.0, 90.0, R, T, K).expect("valid angle");
-        assert_close(fl, 50.0 - (6.0 - std::f64::consts::FRAC_PI_2 * 2.42), "flat length");
+        assert_close(
+            fl,
+            50.0 - (6.0 - std::f64::consts::FRAC_PI_2 * 2.42),
+            "flat length",
+        );
     }
 
     #[test]
@@ -519,7 +536,11 @@ mod tests {
         assert_close(total, expected, "flat pattern length");
         assert_close(pattern.outline[2][1], 10.0, "flat pattern width");
         assert_eq!(pattern.bend_lines.len(), 1);
-        assert_close(pattern.bend_lines[0].position[0], 20.0 - (6.0 - std::f64::consts::FRAC_PI_2 * 2.42), "bend line x");
+        assert_close(
+            pattern.bend_lines[0].position[0],
+            20.0 - (6.0 - std::f64::consts::FRAC_PI_2 * 2.42),
+            "bend line x",
+        );
         assert_eq!(pattern.bend_lines[0].angle_deg, 90.0);
         assert_close(pattern.bend_lines[0].radius_mm, R, "bend line radius");
     }
@@ -641,11 +662,13 @@ mod tests {
         assert_eq!(back, pattern);
         let mats = default_materials();
         let json = serde_json::to_string(&mats).expect("serialize materials");
-        let back: Vec<SheetMetalMaterial> = serde_json::from_str(&json).expect("deserialize materials");
+        let back: Vec<SheetMetalMaterial> =
+            serde_json::from_str(&json).expect("deserialize materials");
         assert_eq!(back, mats);
         let seq = suggest_bend_sequence(&part);
         let json = serde_json::to_string(&seq).expect("serialize sequence");
-        let back: Vec<BendSequenceStep> = serde_json::from_str(&json).expect("deserialize sequence");
+        let back: Vec<BendSequenceStep> =
+            serde_json::from_str(&json).expect("deserialize sequence");
         assert_eq!(back, seq);
     }
 }

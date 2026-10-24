@@ -11,7 +11,7 @@ use truck_geometry::prelude::{BoundedCurve, BoundedSurface};
 use truck_modeling::Solid;
 
 use crate::core::entity::{CsgOperation, Geometry};
-use crate::core::mesh::{earclip_xz, polygon_signed_area_xz, tri_normal, MeshBuilder, MeshBuffer};
+use crate::core::mesh::{MeshBuffer, MeshBuilder, earclip_xz, polygon_signed_area_xz, tri_normal};
 
 use super::convert::solid_to_buffer;
 use super::nurbs::{payload_curve, payload_surface};
@@ -27,7 +27,12 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
     let mut mb = MeshBuilder::new();
     match kind {
         // ---- B-rep solids (truck shape -> polygon mesh)
-        Geometry::Box { width, depth, height, corner_radius } => {
+        Geometry::Box {
+            width,
+            depth,
+            height,
+            corner_radius,
+        } => {
             let solid = if *corner_radius <= 1e-6 {
                 shapes::box_solid(*width, *depth, *height)?
             } else {
@@ -55,15 +60,27 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             let solid = shapes::extrude_solid(polygon, *height)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
-        Geometry::Revolve { profile, steps, angle_deg } => {
+        Geometry::Revolve {
+            profile,
+            steps,
+            angle_deg,
+        } => {
             let solid = shapes::revolve_solid(profile, *steps, *angle_deg)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
-        Geometry::Column { radius, height, sides } => {
+        Geometry::Column {
+            radius,
+            height,
+            sides,
+        } => {
             let solid = shapes::column_solid(*radius, *height, *sides)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
-        Geometry::Beam { length, width, height } => {
+        Geometry::Beam {
+            length,
+            width,
+            height,
+        } => {
             let solid = shapes::beam_solid(*length, *width, *height)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
@@ -72,13 +89,21 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             let solid = shapes::slab_solid(polygon, *height)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
-        Geometry::Csg { operation, first, second } => {
+        Geometry::Csg {
+            operation,
+            first,
+            second,
+        } => {
             let a = payload_to_solid(first)?;
             let b = payload_to_solid(second)?;
             let solid = csg_boolean(*operation, a, b)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
         }
-        Geometry::SolidFillet { source, edge, radius } => {
+        Geometry::SolidFillet {
+            source,
+            edge,
+            radius,
+        } => {
             let source_solid = payload_to_solid(source)?;
             let solid = super::fillet::solid_fillet(&source_solid, *edge, *radius)?;
             mb.append_buffer(&solid_to_buffer(&solid, TESS_TOL));
@@ -86,40 +111,84 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
 
         // ---- mesh-level payloads (old generators)
         Geometry::Plane { width, depth } => gen_plane(&mut mb, *width, *depth),
-        Geometry::Sweep { path, radius, sides } => {
-            gen_sweep(&mut mb, path, *radius, (*sides).max(3))?
-        }
+        Geometry::Sweep {
+            path,
+            radius,
+            sides,
+        } => gen_sweep(&mut mb, path, *radius, (*sides).max(3))?,
         Geometry::Loft { sections } => gen_loft(&mut mb, sections)?,
-        Geometry::Wall { path, width, height } => gen_wall(&mut mb, path, *width, *height),
-        Geometry::Stair { width, rise, run, count } => {
-            gen_stair(&mut mb, *width, *rise, *run, *count)
-        }
-        Geometry::Roof { width, depth, pitch_deg, overhang } => {
-            gen_roof(&mut mb, *width, *depth, *pitch_deg, *overhang)
-        }
-        Geometry::Door { width, height, depth, swing_deg } => {
-            gen_door(&mut mb, *width, *height, *depth, *swing_deg)
-        }
-        Geometry::Window { width, height, depth, panes_x, panes_y } => {
-            gen_window(&mut mb, *width, *height, *depth, *panes_x, *panes_y)
-        }
+        Geometry::Wall {
+            path,
+            width,
+            height,
+        } => gen_wall(&mut mb, path, *width, *height),
+        Geometry::Stair {
+            width,
+            rise,
+            run,
+            count,
+        } => gen_stair(&mut mb, *width, *rise, *run, *count),
+        Geometry::Roof {
+            width,
+            depth,
+            pitch_deg,
+            overhang,
+        } => gen_roof(&mut mb, *width, *depth, *pitch_deg, *overhang),
+        Geometry::Door {
+            width,
+            height,
+            depth,
+            swing_deg,
+        } => gen_door(&mut mb, *width, *height, *depth, *swing_deg),
+        Geometry::Window {
+            width,
+            height,
+            depth,
+            panes_x,
+            panes_y,
+        } => gen_window(&mut mb, *width, *height, *depth, *panes_x, *panes_y),
         Geometry::Dimension { start, end } => gen_dimension(&mut mb, *start, *end),
         Geometry::ImportedMesh { positions, indices } => {
             gen_imported_mesh(&mut mb, positions, indices)?
         }
 
         // ---- NURBS (evaluated through truck)
-        Geometry::NurbsSurface { control_points, u_degree, v_degree, u_knots, v_knots } => {
-            gen_nurbs_surface(&mut mb,
-                control_points, *u_degree, *v_degree, u_knots, v_knots)?
-        }
-        Geometry::NurbsLoft { sections, degree, samples_v, .. } => {
-            gen_nurbs_loft(&mut mb, sections, *degree, *samples_v)?
-        }
-        Geometry::NurbsSweep { path, profile, path_degree, profile_degree, samples_u, samples_v } => {
-            gen_nurbs_sweep(&mut mb, path, profile, *path_degree, *profile_degree,
-                *samples_u, *samples_v)?
-        }
+        Geometry::NurbsSurface {
+            control_points,
+            u_degree,
+            v_degree,
+            u_knots,
+            v_knots,
+        } => gen_nurbs_surface(
+            &mut mb,
+            control_points,
+            *u_degree,
+            *v_degree,
+            u_knots,
+            v_knots,
+        )?,
+        Geometry::NurbsLoft {
+            sections,
+            degree,
+            samples_v,
+            ..
+        } => gen_nurbs_loft(&mut mb, sections, *degree, *samples_v)?,
+        Geometry::NurbsSweep {
+            path,
+            profile,
+            path_degree,
+            profile_degree,
+            samples_u,
+            samples_v,
+        } => gen_nurbs_sweep(
+            &mut mb,
+            path,
+            profile,
+            *path_degree,
+            *profile_degree,
+            *samples_u,
+            *samples_v,
+        )?,
 
         // ---- sketches / wireframe
         Geometry::LineCurve { end } => {
@@ -128,12 +197,19 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
         Geometry::PolylineCurve { points } => {
             mb.push_polyline(points);
         }
-        Geometry::CircleCurve { radius, segments } => {
-            gen_rim(&mut mb, *radius, (*segments).max(8))
-        }
-        Geometry::ArcCurve { radius, start_angle_deg, end_angle_deg, segments } => {
-            gen_arc(&mut mb, *radius, *start_angle_deg, *end_angle_deg, (*segments).max(3))
-        }
+        Geometry::CircleCurve { radius, segments } => gen_rim(&mut mb, *radius, (*segments).max(8)),
+        Geometry::ArcCurve {
+            radius,
+            start_angle_deg,
+            end_angle_deg,
+            segments,
+        } => gen_arc(
+            &mut mb,
+            *radius,
+            *start_angle_deg,
+            *end_angle_deg,
+            (*segments).max(3),
+        ),
         Geometry::RectangleCurve { width, depth } => {
             let (w, d) = (*width / 2.0, *depth / 2.0);
             mb.push_polyline(&[
@@ -144,9 +220,7 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
                 [-w, 0.0, -d],
             ]);
         }
-        Geometry::PolygonCurve { radius, sides } => {
-            gen_rim(&mut mb, *radius, (*sides).max(3))
-        }
+        Geometry::PolygonCurve { radius, sides } => gen_rim(&mut mb, *radius, (*sides).max(3)),
     }
     Ok(mb.into_buffer())
 }
@@ -154,7 +228,12 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
 /// Realize a payload sub-tree as a truck solid (B-rep payload set only).
 pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
     match kind {
-        Geometry::Box { width, depth, height, corner_radius } => {
+        Geometry::Box {
+            width,
+            depth,
+            height,
+            corner_radius,
+        } => {
             if *corner_radius <= 1e-6 {
                 shapes::box_solid(*width, *depth, *height)
             } else {
@@ -166,20 +245,36 @@ pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
         Geometry::Cone { radius, height, .. } => shapes::cone_solid(*radius, *height),
         Geometry::Torus { radius, tube, .. } => shapes::torus_solid(*radius, *tube),
         Geometry::Extrude { polygon, height } => shapes::extrude_solid(polygon, *height),
-        Geometry::Revolve { profile, steps, angle_deg } => {
-            shapes::revolve_solid(profile, *steps, *angle_deg)
-        }
-        Geometry::Column { radius, height, sides } => {
-            shapes::column_solid(*radius, *height, *sides)
-        }
-        Geometry::Beam { length, width, height } => shapes::beam_solid(*length, *width, *height),
+        Geometry::Revolve {
+            profile,
+            steps,
+            angle_deg,
+        } => shapes::revolve_solid(profile, *steps, *angle_deg),
+        Geometry::Column {
+            radius,
+            height,
+            sides,
+        } => shapes::column_solid(*radius, *height, *sides),
+        Geometry::Beam {
+            length,
+            width,
+            height,
+        } => shapes::beam_solid(*length, *width, *height),
         Geometry::Slab { polygon, height } => shapes::slab_solid(polygon, *height),
-        Geometry::Csg { operation, first, second } => {
+        Geometry::Csg {
+            operation,
+            first,
+            second,
+        } => {
             let a = payload_to_solid(first)?;
             let b = payload_to_solid(second)?;
             csg_boolean(*operation, a, b)
         }
-        Geometry::SolidFillet { source, edge, radius } => {
+        Geometry::SolidFillet {
+            source,
+            edge,
+            radius,
+        } => {
             let source_solid = payload_to_solid(source)?;
             let filleted = super::fillet::solid_fillet(&source_solid, *edge, *radius)?;
             Ok(filleted)
@@ -195,14 +290,10 @@ pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
 fn csg_boolean(op: CsgOperation, a: Solid, b: Solid) -> Result<Solid, String> {
     const TOL: f64 = 0.001;
     match op {
-        CsgOperation::Union => {
-            truck_shapeops::or(&a, &b, TOL)
-                .ok_or_else(|| "union failed: shapes may intersect tangentially".into())
-        }
-        CsgOperation::Intersection => {
-            truck_shapeops::and(&a, &b, TOL)
-                .ok_or_else(|| "intersection failed: shapes may intersect tangentially".into())
-        }
+        CsgOperation::Union => truck_shapeops::or(&a, &b, TOL)
+            .ok_or_else(|| "union failed: shapes may intersect tangentially".into()),
+        CsgOperation::Intersection => truck_shapeops::and(&a, &b, TOL)
+            .ok_or_else(|| "intersection failed: shapes may intersect tangentially".into()),
         CsgOperation::Difference => {
             let mut not = b.clone();
             not.not();
@@ -245,17 +336,59 @@ fn emit_cuboid(mb: &mut MeshBuilder, min: [f64; 3], max: [f64; 3], face_offset: 
     let (y0, y1) = (min[1], max[1]);
     let (z0, z1) = (min[2], max[2]);
     let mut face_id = face_offset;
-    mb.push_quad([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [0.0, 0.0, -1.0], face_id);
+    mb.push_quad(
+        [x0, y0, z0],
+        [x0, y1, z0],
+        [x1, y1, z0],
+        [x1, y0, z0],
+        [0.0, 0.0, -1.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], [0.0, 0.0, 1.0], face_id);
+    mb.push_quad(
+        [x1, y0, z1],
+        [x1, y1, z1],
+        [x0, y1, z1],
+        [x0, y0, z1],
+        [0.0, 0.0, 1.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1.0, 0.0, 0.0], face_id);
+    mb.push_quad(
+        [x1, y0, z0],
+        [x1, y1, z0],
+        [x1, y1, z1],
+        [x1, y0, z1],
+        [1.0, 0.0, 0.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1.0, 0.0, 0.0], face_id);
+    mb.push_quad(
+        [x0, y0, z1],
+        [x0, y1, z1],
+        [x0, y1, z0],
+        [x0, y0, z0],
+        [-1.0, 0.0, 0.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0.0, 1.0, 0.0], face_id);
+    mb.push_quad(
+        [x0, y1, z0],
+        [x0, y1, z1],
+        [x1, y1, z1],
+        [x1, y1, z0],
+        [0.0, 1.0, 0.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [0.0, -1.0, 0.0], face_id);
+    mb.push_quad(
+        [x0, y0, z1],
+        [x0, y0, z0],
+        [x1, y0, z0],
+        [x1, y0, z1],
+        [0.0, -1.0, 0.0],
+        face_id,
+    );
     face_id
 }
 
@@ -410,9 +543,23 @@ fn emit_wall_slab(
 ) -> u32 {
     let mut face_id = offset;
     let pts = [c0, c1, c2, c3];
-    mb.push_quad([c0[0], y1, c0[1]], [c1[0], y1, c1[1]], [c2[0], y1, c2[1]], [c3[0], y1, c3[1]], [0.0, 1.0, 0.0], face_id);
+    mb.push_quad(
+        [c0[0], y1, c0[1]],
+        [c1[0], y1, c1[1]],
+        [c2[0], y1, c2[1]],
+        [c3[0], y1, c3[1]],
+        [0.0, 1.0, 0.0],
+        face_id,
+    );
     face_id += 1;
-    mb.push_quad([c0[0], y0, c0[1]], [c3[0], y0, c3[1]], [c2[0], y0, c2[1]], [c1[0], y0, c1[1]], [0.0, -1.0, 0.0], face_id);
+    mb.push_quad(
+        [c0[0], y0, c0[1]],
+        [c3[0], y0, c3[1]],
+        [c2[0], y0, c2[1]],
+        [c1[0], y0, c1[1]],
+        [0.0, -1.0, 0.0],
+        face_id,
+    );
     face_id += 1;
     for i in 0..4 {
         let j = (i + 1) % 4;
@@ -422,8 +569,19 @@ fn emit_wall_slab(
 
         let ez = b[1] - a[1];
         let l = (ex * ex + ez * ez).sqrt();
-        let nrm = if l > 1e-9 { [ez / l, 0.0, -ex / l] } else { [0.0; 3] };
-        mb.push_quad([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], nrm, face_id);
+        let nrm = if l > 1e-9 {
+            [ez / l, 0.0, -ex / l]
+        } else {
+            [0.0; 3]
+        };
+        mb.push_quad(
+            [a[0], y0, a[1]],
+            [b[0], y0, b[1]],
+            [b[0], y1, b[1]],
+            [a[0], y1, a[1]],
+            nrm,
+            face_id,
+        );
         face_id += 1;
     }
     face_id
@@ -551,16 +709,25 @@ fn gen_door(mb: &mut MeshBuilder, width: f64, height: f64, depth: f64, swing_deg
     let mut next_face = 0u32;
 
     next_face = emit_cuboid(mb, [0.0, 0.0, -half_d], [frame, height, half_d], next_face);
-    next_face = emit_cuboid(mb, [width - frame, 0.0, -half_d], [width, height, half_d], next_face);
-    next_face = emit_cuboid(mb, [0.0, height, -half_d], [width, height + frame, half_d], next_face);
+    next_face = emit_cuboid(
+        mb,
+        [width - frame, 0.0, -half_d],
+        [width, height, half_d],
+        next_face,
+    );
+    next_face = emit_cuboid(
+        mb,
+        [0.0, height, -half_d],
+        [width, height + frame, half_d],
+        next_face,
+    );
     next_face = emit_cuboid(mb, [0.0, -0.02, -half_d], [width, 0.0, half_d], next_face);
 
     let hinge = [frame, 0.0, -half_d];
     let a = -swing_deg.to_radians();
     let (cs, sn) = (a.cos(), a.sin());
-    let rot = |x: f64, z: f64| -> (f64, f64) {
-        (hinge[0] + x * cs - z * sn, hinge[2] + x * sn + z * cs)
-    };
+    let rot =
+        |x: f64, z: f64| -> (f64, f64) { (hinge[0] + x * cs - z * sn, hinge[2] + x * sn + z * cs) };
     let corners = [
         rot(0.0, 0.0),
         rot(panel_w, 0.0),
@@ -581,11 +748,20 @@ fn gen_door(mb: &mut MeshBuilder, width: f64, height: f64, depth: f64, swing_deg
     face_id += 1;
     mb.push_quad(d0, d1, d2, d3, [0.0, 1.0, 0.0], face_id);
     face_id += 1;
-    for (aa, bb, cc, dd) in [(c0, c1, d1, d0), (c1, c2, d2, d1), (c2, c3, d3, d2), (c3, c0, d0, d3)] {
+    for (aa, bb, cc, dd) in [
+        (c0, c1, d1, d0),
+        (c1, c2, d2, d1),
+        (c2, c3, d3, d2),
+        (c3, c0, d0, d3),
+    ] {
         let ex = bb[0] - aa[0];
         let ez = bb[2] - aa[2];
         let l = (ex * ex + ez * ez).sqrt();
-        let n = if l > 1e-9 { [ez / l, 0.0, -ex / l] } else { [0.0; 3] };
+        let n = if l > 1e-9 {
+            [ez / l, 0.0, -ex / l]
+        } else {
+            [0.0; 3]
+        };
         mb.push_quad(aa, bb, cc, dd, n, face_id);
         face_id += 1;
     }
@@ -610,10 +786,30 @@ fn gen_window(
         }
         next_face = emit_cuboid(mb, [x0, y0, -half_d], [x1, y1, half_d], next_face);
     };
-    bar(-width / 2.0, -height / 2.0, width / 2.0, -height / 2.0 + frame);
-    bar(-width / 2.0, height / 2.0 - frame, width / 2.0, height / 2.0);
-    bar(-width / 2.0, -height / 2.0, -width / 2.0 + frame, height / 2.0);
-    bar(width / 2.0 - frame, -height / 2.0, width / 2.0, height / 2.0);
+    bar(
+        -width / 2.0,
+        -height / 2.0,
+        width / 2.0,
+        -height / 2.0 + frame,
+    );
+    bar(
+        -width / 2.0,
+        height / 2.0 - frame,
+        width / 2.0,
+        height / 2.0,
+    );
+    bar(
+        -width / 2.0,
+        -height / 2.0,
+        -width / 2.0 + frame,
+        height / 2.0,
+    );
+    bar(
+        width / 2.0 - frame,
+        -height / 2.0,
+        width / 2.0,
+        height / 2.0,
+    );
 
     let inner_w = width - 2.0 * frame;
     let inner_h = height - 2.0 * frame;
@@ -621,7 +817,12 @@ fn gen_window(
     let py = panes_y.max(1) as f64;
     for i in 1..panes_x.max(1) {
         let x = -width / 2.0 + frame + inner_w * (i as f64) / px;
-        bar(x - frame / 2.0, -height / 2.0, x + frame / 2.0, height / 2.0);
+        bar(
+            x - frame / 2.0,
+            -height / 2.0,
+            x + frame / 2.0,
+            height / 2.0,
+        );
     }
     for i in 1..panes_y.max(1) {
         let y = -height / 2.0 + frame + inner_h * (i as f64) / py;
@@ -646,7 +847,11 @@ fn gen_dimension(mb: &mut MeshBuilder, start: [f64; 3], end: [f64; 3]) {
         return;
     }
     let u = [dx / len, dy / len, dz / len];
-    let seed = if u[1].abs() < 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+    let seed = if u[1].abs() < 0.9 {
+        [0.0, 1.0, 0.0]
+    } else {
+        [1.0, 0.0, 0.0]
+    };
     let v = norm3(cross3(u, seed));
     let ah = (len * 0.08).clamp(0.05, 2.0);
     for (i, tip) in [start, end].into_iter().enumerate() {
@@ -664,8 +869,16 @@ fn gen_dimension(mb: &mut MeshBuilder, start: [f64; 3], end: [f64; 3]) {
         mb.push_line(tip, w1);
         mb.push_line(tip, w2);
         mb.push_line(
-            [tip[0] - v[0] * ah * 0.35, tip[1] - v[1] * ah * 0.35, tip[2] - v[2] * ah * 0.35],
-            [tip[0] + v[0] * ah * 0.35, tip[1] + v[1] * ah * 0.35, tip[2] + v[2] * ah * 0.35],
+            [
+                tip[0] - v[0] * ah * 0.35,
+                tip[1] - v[1] * ah * 0.35,
+                tip[2] - v[2] * ah * 0.35,
+            ],
+            [
+                tip[0] + v[0] * ah * 0.35,
+                tip[1] + v[1] * ah * 0.35,
+                tip[2] + v[2] * ah * 0.35,
+            ],
         );
     }
 }
@@ -680,9 +893,17 @@ fn path_frames(path: &[[f64; 3]]) -> Vec<([f64; 3], [f64; 3], [f64; 3])> {
     }
     let t0 = {
         let j = (path.len() - 1).min(1);
-        norm3([path[j][0] - path[0][0], path[j][1] - path[0][1], path[j][2] - path[0][2]])
+        norm3([
+            path[j][0] - path[0][0],
+            path[j][1] - path[0][1],
+            path[j][2] - path[0][2],
+        ])
     };
-    let seed = if t0[1].abs() < 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+    let seed = if t0[1].abs() < 0.9 {
+        [0.0, 1.0, 0.0]
+    } else {
+        [1.0, 0.0, 0.0]
+    };
     let r0 = norm3(cross3(t0, seed));
     let u0 = norm3(cross3(t0, r0));
     frames.push((path[0], r0, u0));
@@ -705,7 +926,12 @@ fn path_frames(path: &[[f64; 3]]) -> Vec<([f64; 3], [f64; 3], [f64; 3])> {
 }
 
 /// Tube swept along a polyline path with flat end caps.
-fn gen_sweep(mb: &mut MeshBuilder, path: &[[f64; 3]], radius: f64, sides: u32) -> Result<(), String> {
+fn gen_sweep(
+    mb: &mut MeshBuilder,
+    path: &[[f64; 3]],
+    radius: f64,
+    sides: u32,
+) -> Result<(), String> {
     if path.len() < 2 {
         return Err("sweep path needs at least 2 points".into());
     }
@@ -721,7 +947,11 @@ fn gen_sweep(mb: &mut MeshBuilder, path: &[[f64; 3]], radius: f64, sides: u32) -
             let dx = right[0] * a.cos() + up[0] * a.sin();
             let dy = right[1] * a.cos() + up[1] * a.sin();
             let dz = right[2] * a.cos() + up[2] * a.sin();
-            ring.push([origin[0] + radius * dx, origin[1] + radius * dy, origin[2] + radius * dz]);
+            ring.push([
+                origin[0] + radius * dx,
+                origin[1] + radius * dy,
+                origin[2] + radius * dz,
+            ]);
         }
         rings.push(ring);
     }
@@ -847,8 +1077,13 @@ fn gen_nurbs_surface(
     }
     let du = (u_degree as usize).min(cps.len() - 1).max(1);
     let dv = (v_degree as usize).min(cps[0].len() - 1).max(1);
-    let nus = payload_surface(cps, &clamped_uniform_knots(cps.len(), du),
-        &clamped_uniform_knots(cps[0].len(), dv), du as u32, dv as u32)?;
+    let nus = payload_surface(
+        cps,
+        &clamped_uniform_knots(cps.len(), du),
+        &clamped_uniform_knots(cps[0].len(), dv),
+        du as u32,
+        dv as u32,
+    )?;
     let _ = (u_knots, v_knots);
     let su = (cps.len() * 4).clamp(8, 96);
     let sv = (cps[0].len() * 4).clamp(8, 96);
@@ -925,7 +1160,11 @@ fn gen_nurbs_sweep(
                     n[2] - tangent[2] * dot3(n, tangent),
                 ];
                 let pl = (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt();
-                if pl < 1e-6 { None } else { Some([p[0] / pl, p[1] / pl, p[2] / pl]) }
+                if pl < 1e-6 {
+                    None
+                } else {
+                    Some([p[0] / pl, p[1] / pl, p[2] / pl])
+                }
             }
             None => None,
         };
@@ -937,7 +1176,11 @@ fn gen_nurbs_sweep(
             };
             let mut c = cross3(tangent, reference);
             let cl = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
-            if cl < 1e-9 { c = [0.0, 1.0, 0.0]; } else { c = [c[0] / cl, c[1] / cl, c[2] / cl]; }
+            if cl < 1e-9 {
+                c = [0.0, 1.0, 0.0];
+            } else {
+                c = [c[0] / cl, c[1] / cl, c[2] / cl];
+            }
             c
         });
         let binormal = cross3(tangent, normal);
@@ -1002,12 +1245,7 @@ mod tests {
     #[test]
     fn extrude_has_cap_and_side_tags() {
         let buffer = generate(&Geometry::Extrude {
-            polygon: vec![
-                [0.0, 0.0],
-                [40.0, 0.0],
-                [40.0, 30.0],
-                [0.0, 30.0],
-            ],
+            polygon: vec![[0.0, 0.0], [40.0, 0.0], [40.0, 30.0], [0.0, 30.0]],
             height: 20.0,
         })
         .expect("extrude mesh");

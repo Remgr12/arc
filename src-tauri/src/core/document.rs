@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::RayHit;
 use crate::core::entity::{Entity, EntityData, Geometry};
 use crate::core::history::{History, Snapshot};
-use crate::core::mesh::{ray_point_segment_distance, MeshBuffer};
-use crate::core::RayHit;
-use crate::kernel::meshgen;
+use crate::core::mesh::{MeshBuffer, ray_point_segment_distance};
 use crate::core::units::Units;
 use crate::core::{Color, EntityId, Layer, Transform};
+use crate::kernel::meshgen;
 
 /// Serializable document (without derived mesh buffers).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -483,7 +483,12 @@ impl Document {
                         let c = [tri[6] as f64, tri[7] as f64, tri[8] as f64];
                         let face_id = buffer.tri_face_ids.get(tri_index).copied().unwrap_or(0);
                         if let Some((dist, hit_face_id)) = crate::core::mesh::ray_triangle(
-                            local_origin, local_dir, a, b, c, face_id
+                            local_origin,
+                            local_dir,
+                            a,
+                            b,
+                            c,
+                            face_id,
                         ) && entity_hit.map(|(d, _, _, _)| dist < d).unwrap_or(true)
                         {
                             let normal = crate::core::mesh::tri_normal(a, b, c);
@@ -514,11 +519,8 @@ impl Document {
                             seg[4] as f64,
                             seg[5] as f64,
                         ]);
-                        let (dist, ray_t) =
-                            ray_point_segment_distance(origin, dir, a, b);
-                        if dist <= tolerance
-                            && best_line.map(|(d, _)| dist < d).unwrap_or(true)
-                        {
+                        let (dist, ray_t) = ray_point_segment_distance(origin, dir, a, b);
+                        if dist <= tolerance && best_line.map(|(d, _)| dist < d).unwrap_or(true) {
                             let point = [
                                 origin[0] + dir[0] * ray_t,
                                 origin[1] + dir[1] * ray_t,
@@ -607,9 +609,10 @@ impl Document {
                     any = true;
                 }
                 for l in buffer.lines.chunks(3) {
-                    let p = entity
-                        .transform
-                        .transform_point([l[0] as f64, l[1] as f64, l[2] as f64]);
+                    let p =
+                        entity
+                            .transform
+                            .transform_point([l[0] as f64, l[1] as f64, l[2] as f64]);
                     for k in 0..3 {
                         min[k] = min[k].min(p[k]);
                         max[k] = max[k].max(p[k]);
@@ -618,11 +621,7 @@ impl Document {
                 }
             }
         }
-        if any {
-            Some([min, max])
-        } else {
-            None
-        }
+        if any { Some([min, max]) } else { None }
     }
 }
 
@@ -686,7 +685,7 @@ pub struct SceneData {
 impl Document {
     /// Build a full snapshot for the frontend.
     pub fn scene_data(&self) -> SceneData {
-            let mut entities = Vec::with_capacity(self.entities.len());
+        let mut entities = Vec::with_capacity(self.entities.len());
         for entity in self.entities.values() {
             let buffer = self.mesh_cache.get(&entity.id);
             let (tri_positions, tri_normals, tri_face_ids, lines) = match buffer {

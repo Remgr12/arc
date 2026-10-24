@@ -20,6 +20,10 @@ export const ipc = {
   getPlugins: (): Promise<PluginInfo[]> => invoke("get_plugins"),
   getSettings: (): Promise<Settings> => invoke("get_settings"),
   listProjects: (dir: string): Promise<ProjectSummary[]> => invoke("list_projects", { dir }),
+  saveProjectThumbnail: (documentId: string, base64Png: string): Promise<void> =>
+    invoke("save_project_thumbnail", { documentId, base64Png }),
+  readProjectThumbnail: (projectPath: string): Promise<string | null> =>
+    invoke("read_project_thumbnail", { projectPath }),
   setSettings: (settings: Settings): Promise<Settings> => invoke("set_settings", { settings }),
 
   newDocument: (name?: string): Promise<DocumentInfo> =>

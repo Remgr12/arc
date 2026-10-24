@@ -90,7 +90,12 @@ impl Color {
     #[allow(dead_code)]
     pub fn to_css(&self) -> String {
         if self.a >= 1.0 {
-            format!("rgb({:.0} {:.0} {:.0})", self.r * 255.0, self.g * 255.0, self.b * 255.0)
+            format!(
+                "rgb({:.0} {:.0} {:.0})",
+                self.r * 255.0,
+                self.g * 255.0,
+                self.b * 255.0
+            )
         } else {
             format!(
                 "rgba({:.0} {:.0} {:.0} {:.2})",

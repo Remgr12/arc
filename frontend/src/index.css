@@ -130,6 +130,20 @@ button {
   box-shadow: var(--shadow-xl);
 }
 
+/* Dashboard ⇄ editor hand-off */
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.view-fade-in {
+  animation: view-fade-in 180ms ease;
+}
+
 /* Panel stack layout for right-side panels */
 .panel-stack {
   display: flex;
