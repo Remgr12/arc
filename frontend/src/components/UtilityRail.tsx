@@ -166,7 +166,7 @@ export function UtilityRail() {
       </div>
 
       {/* 2. Below ViewCube Shapr3D Rows (Display Modes, Screenshot, History) */}
-      <div className="pointer-events-none absolute right-3 top-[128px] z-30 flex flex-col items-end gap-1.5">
+      <div className="pointer-events-none absolute right-3 top-[164px] z-30 flex flex-col items-end gap-1.5">
         <div className="relative">
           {modesOpen && (
             <>

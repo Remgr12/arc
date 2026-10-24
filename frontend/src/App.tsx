@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { initEvents } from "./lib/events";
 import { installKeybinds } from "./lib/keybinds";
@@ -64,6 +64,30 @@ export default function App() {
   const leftSidebarOpen = useArcStore((s) => s.leftSidebarOpen);
   const rightSidebarOpen = useArcStore((s) => s.rightSidebarOpen);
   const setRightSidebarOpen = useArcStore((s) => s.setRightSidebarOpen);
+  const [leftWidth, setLeftWidth] = useState(280);
+  const isResizingRef = useRef(false);
+
+  const startResizing = (e: React.PointerEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startW = leftWidth;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!isResizingRef.current) return;
+      const nextW = Math.max(220, Math.min(650, startW + (ev.clientX - startX)));
+      setLeftWidth(nextW);
+    };
+
+    const onUp = () => {
+      isResizingRef.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   return (
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
@@ -76,11 +100,22 @@ export default function App() {
             (view === "dashboard" ? "invisible pointer-events-none" : "")
           }
         >
-          {/* Shapr3D Left "Items" Sidebar (collapsible via Items button in ToolRail) */}
+          {/* Shapr3D Left "Items" Sidebar (collapsible via Items button in ToolRail, View menu, or panel header) */}
           {leftSidebarOpen && (
-            <aside className="anim-slide-right flex w-[236px] shrink-0 flex-col border-r border-base-200 bg-base-50">
-              <div className="min-h-0 flex-1">
+            <aside
+              style={{ width: `${leftWidth}px` }}
+              className="relative anim-slide-right flex shrink-0 flex-col border-r border-base-200 bg-base-50"
+            >
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <ProjectPanel />
+              </div>
+              {/* Draggable right-edge resizer */}
+              <div
+                onPointerDown={startResizing}
+                title="Drag to resize sidebar"
+                className="group absolute -right-1.5 top-0 bottom-0 z-20 w-3 cursor-col-resize flex items-center justify-center hover:bg-accent-500/20 active:bg-accent-500/40"
+              >
+                <div className="h-8 w-0.5 rounded-full bg-base-300 transition-colors group-hover:bg-accent-500" />
               </div>
             </aside>
           )}

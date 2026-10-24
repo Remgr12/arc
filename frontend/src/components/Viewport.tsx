@@ -181,7 +181,7 @@ function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
 function makeInfiniteAxes(): THREE.Group {
   const group = new THREE.Group();
   group.name = "infinite-axes";
-  const extent = 100000;
+  const extent = 250000;
 
   // X axis (Red): +X vibrant, -X subtle
   const xPosGeo = new THREE.BufferGeometry().setAttribute(
@@ -197,12 +197,14 @@ function makeInfiniteAxes(): THREE.Group {
     transparent: true,
     opacity: 0.92,
     depthWrite: false,
+    fog: false,
   });
   const xNegMat = new THREE.LineBasicMaterial({
     color: 0xef4444,
     transparent: true,
     opacity: 0.32,
     depthWrite: false,
+    fog: false,
   });
   const xPosLine = new THREE.LineSegments(xPosGeo, xPosMat);
   const xNegLine = new THREE.LineSegments(xNegGeo, xNegMat);
@@ -225,12 +227,14 @@ function makeInfiniteAxes(): THREE.Group {
     transparent: true,
     opacity: 0.92,
     depthWrite: false,
+    fog: false,
   });
   const yNegMat = new THREE.LineBasicMaterial({
     color: 0x22c55e,
     transparent: true,
     opacity: 0.32,
     depthWrite: false,
+    fog: false,
   });
   const yPosLine = new THREE.LineSegments(yPosGeo, yPosMat);
   const yNegLine = new THREE.LineSegments(yNegGeo, yNegMat);
@@ -253,12 +257,14 @@ function makeInfiniteAxes(): THREE.Group {
     transparent: true,
     opacity: 0.92,
     depthWrite: false,
+    fog: false,
   });
   const zNegMat = new THREE.LineBasicMaterial({
     color: 0x3b82f6,
     transparent: true,
     opacity: 0.32,
     depthWrite: false,
+    fog: false,
   });
   const zPosLine = new THREE.LineSegments(zPosGeo, zPosMat);
   const zNegLine = new THREE.LineSegments(zNegGeo, zNegMat);
@@ -310,9 +316,9 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
 
   const sceneRoot = new THREE.Scene();
   sceneRoot.background = viewPalette.bg;
-  sceneRoot.fog = new THREE.Fog(palette.bg, 5000, 16000);
+  sceneRoot.fog = new THREE.Fog(palette.bg, 40000, 200000);
 
-  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 0.5, 60000);
+  const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 0.5, 250000);
   camera.position.set(340, 250, 380);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -625,7 +631,7 @@ function focusPlane(ref: ViewportRefs, normal: THREE.Vector3): void {
 function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   ref.palette = themeToPalette(palette);
   ref.sceneRoot.background = ref.palette.bg;
-  ref.sceneRoot.fog = new THREE.Fog(palette.bg, 5000, 16000);
+  ref.sceneRoot.fog = new THREE.Fog(palette.bg, 40000, 200000);
   const index = ref.sceneRoot.children.indexOf(ref.gridNode);
   const wasVisible = ref.gridNode.visible;
   const prevPos = ref.gridNode.position.clone();
@@ -1943,25 +1949,24 @@ function attachHandlers(ref: ViewportRefs): () => void {
   const draftCancel = () => {
     const handler = handlerFor(useArcStore.getState().tool);
     handler?.onCancel?.(ctx);
-    const still = handler?.hasActivity?.(ctx) ?? false;
-    if (still) {
-      useArcStore.getState().setDrafting(true);
-      return;
-    }
+    ref.ctx.clearPreview("draft");
     syncDrafting(ref);
     const stop = useArcStore.getState();
     if (stop.tool !== "select") {
       stop.setTool("select");
     }
+    stop.setDrafting(false);
   };
   const draftEnter = () => {
-    const consumed = handlerFor(useArcStore.getState().tool)?.onEnter?.(ctx) ?? false;
+    const handler = handlerFor(useArcStore.getState().tool);
+    handler?.onEnter?.(ctx);
+    ref.ctx.clearPreview("draft");
     syncDrafting(ref);
-    if (!consumed) {
-      useArcStore.getState().setStatusMessage(
-        "Nothing to finish · add more points or press Esc",
-      );
+    const stop = useArcStore.getState();
+    if (stop.tool !== "select") {
+      stop.setTool("select");
     }
+    stop.setDrafting(false);
   };
   const draftBackspace = () => {
     handlerFor(useArcStore.getState().tool)?.onBackspace?.(ctx);

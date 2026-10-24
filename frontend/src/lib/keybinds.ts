@@ -138,18 +138,42 @@ export function installKeybinds(): () => void {
     if (!binding) return;
 
     if (binding === "escape") {
-      if (st.paletteOpen) st.setPaletteOpen(false);
-      else if (st.commandLineOpen) st.setCommandLineOpen(false);
-      else if (st.drafting || st.tool !== "select") window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
-      else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
+      if (st.paletteOpen) {
+        st.setPaletteOpen(false);
+        return;
+      }
+      if (st.commandLineOpen) {
+        st.setCommandLineOpen(false);
+        return;
+      }
+      if (st.drafting || st.tool !== "select") {
+        window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
+        st.setTool("select");
+        st.setDrafting(false);
+        st.setSelectionRef(null);
+        return;
+      }
+      if (st.selFace || st.selEdge || (st.scene && st.scene.selection.length > 0)) {
+        st.setSelectionRef(null);
+        void actions.clearSelection();
+        return;
+      }
       return;
     }
 
-    if (st.tool !== "select" && (binding === "enter" || binding === "backspace")) {
+    if (binding === "enter") {
+      if (st.tool !== "select" || st.drafting) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("arc-draft-enter"));
+        st.setTool("select");
+        st.setDrafting(false);
+        return;
+      }
+    }
+
+    if (st.tool !== "select" && binding === "backspace") {
       e.preventDefault();
-      window.dispatchEvent(
-        new CustomEvent(binding === "enter" ? "arc-draft-enter" : "arc-draft-backspace"),
-      );
+      window.dispatchEvent(new CustomEvent("arc-draft-backspace"));
       return;
     }
 

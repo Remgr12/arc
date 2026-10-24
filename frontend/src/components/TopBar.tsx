@@ -23,7 +23,7 @@ type MenuEntry = MenuItem | "-";
 
 const recentLabel = (path: string) => {
   const name = path.split(/[\\/]/).pop() ?? path;
-  return `Open recent — ${name}`;
+  return `Open recent ${name}`;
 };
 
 function Menu({
@@ -106,6 +106,10 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const scene = useArcStore((s) => s.scene);
   const overview = useArcStore((s) => s.overview);
   const settings = useArcStore((s) => s.settings);
+  const leftSidebarOpen = useArcStore((s) => s.leftSidebarOpen);
+  const setLeftSidebarOpen = useArcStore((s) => s.setLeftSidebarOpen);
+  const rightSidebarOpen = useArcStore((s) => s.rightSidebarOpen);
+  const setRightSidebarOpen = useArcStore((s) => s.setRightSidebarOpen);
   const keybindActiveId = useKeybindStore((s) => s.activeId);
   const keybindProfiles = useKeybindStore((s) => s.profiles);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
@@ -140,11 +144,11 @@ export function TopBar({ children }: { children?: ReactNode }) {
 
   const fileMenu: MenuEntry[] = [
     { label: "New", keys: bindingHint("doc:new"), onSelect: () => void actions.newDocument() },
-    { label: "Open…", keys: bindingHint("doc:open"), onSelect: () => void actions.openDocument() },
-    { label: "Import…", disabled: !hasDoc, onSelect: () => void actions.importFile() },
+    { label: "Open", keys: bindingHint("doc:open"), onSelect: () => void actions.openDocument() },
+    { label: "Import", disabled: !hasDoc, onSelect: () => void actions.importFile() },
     "-",
     { label: "Save", keys: bindingHint("doc:save"), disabled: !hasDoc, onSelect: () => void actions.saveActive() },
-    { label: "Save as…", disabled: !hasDoc, onSelect: () => void actions.saveDocumentAs() },
+    { label: "Save as", disabled: !hasDoc, onSelect: () => void actions.saveDocumentAs() },
     ...(recents.length > 0
       ? (["-", ...recents.map((path) => ({
           label: recentLabel(path),
@@ -223,6 +227,17 @@ export function TopBar({ children }: { children?: ReactNode }) {
       label: "Snap to grid",
       checked: settings?.snap_enabled ?? false,
       onSelect: () => patchSettings({ snap_enabled: !settings?.snap_enabled }),
+    },
+    "-",
+    {
+      label: "Items sidebar",
+      checked: leftSidebarOpen,
+      onSelect: () => setLeftSidebarOpen(!leftSidebarOpen),
+    },
+    {
+      label: "History sidebar",
+      checked: rightSidebarOpen,
+      onSelect: () => setRightSidebarOpen(!rightSidebarOpen),
     },
     "-",
     {

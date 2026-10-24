@@ -237,22 +237,22 @@ function DimPill({
   return (
     <div
       className={cn(
-        "flex h-7 items-center gap-1 rounded-lg border px-1.5 transition-colors",
+        "flex h-6 items-center gap-0.5 rounded-md border px-1 transition-colors",
         spec.isActiveFaceParam
           ? "border-accent-500 bg-accent-500/12 text-accent-500"
-          : "border-base-300 bg-base-100/90 text-base-700",
+          : "border-base-300 bg-base-100 text-base-700",
       )}
     >
-      <span className="px-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-base-500">
+      <span className="px-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-base-500">
         {spec.shortLabel}
       </span>
       <button
         type="button"
         tabIndex={-1}
         onClick={() => stepBy(-1)}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
       >
-        <Minus size={10} strokeWidth={2.2} />
+        <Minus size={9} strokeWidth={2.2} />
       </button>
       <input
         type="text"
@@ -262,9 +262,9 @@ function DimPill({
           setFocused(true);
           e.currentTarget.select();
         }}
-        onBlur={() => {
+        onBlur={(e) => {
           setFocused(false);
-          commit(text);
+          commit(e.target.value);
         }}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -283,18 +283,18 @@ function DimPill({
             stepBy(-1);
           }
         }}
-        className="h-5 w-16 rounded bg-base-50 px-1.5 text-center font-mono text-[11.5px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
+        className="h-4 w-12 rounded bg-base-50 px-1 text-center font-mono text-[10.5px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
       />
       {!spec.isInteger && (
-        <span className="text-[10px] font-mono text-base-500">{unitLabel}</span>
+        <span className="text-[9px] font-mono text-base-500">{unitLabel}</span>
       )}
       <button
         type="button"
         tabIndex={-1}
         onClick={() => stepBy(1)}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
       >
-        <Plus size={10} strokeWidth={2.2} />
+        <Plus size={9} strokeWidth={2.2} />
       </button>
     </div>
   );
@@ -537,15 +537,15 @@ export function SelectionHud() {
         </div>
       )}
 
-      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-base-300 bg-base-100 px-3 py-1.5 shadow-lg shadow-black/25">
+      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-xl border border-base-300 bg-base-100 px-2.5 py-1 shadow-md">
         {/* Selection badge */}
-        <div className="flex max-w-[180px] items-center gap-1.5 pr-1">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-accent-500" />
-          <span className="truncate text-[11.5px] font-semibold text-base-800">
+        <div className="flex max-w-[130px] items-center gap-1.5 pr-0.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#28b5f5]" />
+          <span className="truncate text-[11px] font-semibold text-base-800">
             {isFace
-              ? `${entity.name || entity.kind} · Face ${selFace.face}`
+              ? `Face ${selFace.face}`
               : isEdge
-                ? `${entity.name || entity.kind} · Edge`
+                ? "Edge"
                 : entity.name || entity.kind}
           </span>
         </div>
@@ -553,21 +553,21 @@ export function SelectionHud() {
         {/* Face-first quick actions */}
         {isFace && (
           <>
-            <span className="h-4 w-px bg-base-200" />
+            <span className="h-3.5 w-px bg-base-200" />
             <div className="flex items-center gap-1">
               {canEditFace && (
                 <button
                   type="button"
                   onClick={() => useArcStore.getState().setTool("extrude-face")}
                   className={cn(
-                    "flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11.5px] font-medium transition-colors",
+                    "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                     tool === "extrude-face"
                       ? "bg-accent-500 text-white shadow-xs"
                       : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
                   )}
                 >
-                  <ArrowUpDown size={13} strokeWidth={2} />
-                  Extrude Face
+                  <ArrowUpDown size={12} strokeWidth={2} />
+                  Extrude
                 </button>
               )}
               {canEditFace && (
@@ -575,13 +575,13 @@ export function SelectionHud() {
                   type="button"
                   onClick={() => useArcStore.getState().setTool("offset-face")}
                   className={cn(
-                    "flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition-colors",
+                    "flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors",
                     tool === "offset-face"
                       ? "bg-accent-500 text-white shadow-xs"
                       : "text-base-700 hover:bg-base-200",
                   )}
                 >
-                  <Scaling size={13} strokeWidth={1.8} />
+                  <Scaling size={12} strokeWidth={1.8} />
                   Offset
                 </button>
               )}
@@ -589,13 +589,13 @@ export function SelectionHud() {
                 type="button"
                 onClick={() => setSubPanel((p) => (p === "shell" ? "none" : "shell"))}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors",
                   subPanel === "shell"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
               >
-                <Box size={13} strokeWidth={1.8} />
+                <Box size={12} strokeWidth={1.8} />
                 Shell
               </button>
               <button
@@ -613,10 +613,10 @@ export function SelectionHud() {
                     new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
                   );
                 }}
-                className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium text-base-700 transition-colors hover:bg-base-200"
+                className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-base-700 transition-colors hover:bg-base-200"
               >
-                <PencilRuler size={13} strokeWidth={1.8} />
-                Sketch on Face
+                <PencilRuler size={12} strokeWidth={1.8} />
+                Sketch
               </button>
             </div>
           </>
@@ -625,32 +625,32 @@ export function SelectionHud() {
         {/* Edge-first quick actions */}
         {isEdge && (
           <>
-            <span className="h-4 w-px bg-base-200" />
+            <span className="h-3.5 w-px bg-base-200" />
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => useArcStore.getState().setTool("fillet-edge")}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                   tool === "fillet-edge"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
-                )}
+                  )}
               >
-                <Sparkles size={13} strokeWidth={2} />
-                Fillet Edge
+                <Sparkles size={12} strokeWidth={2} />
+                Fillet
               </button>
               <button
                 type="button"
                 onClick={() => setSubPanel((p) => (p === "chamfer" ? "none" : "chamfer"))}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                   subPanel === "chamfer"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
               >
-                <Slice size={13} strokeWidth={1.8} />
+                <Slice size={12} strokeWidth={1.8} />
                 Chamfer
               </button>
             </div>
@@ -660,32 +660,32 @@ export function SelectionHud() {
         {/* Solid body quick actions (Shell + Pattern) when whole solid is selected */}
         {!isSketch && !isFace && !isEdge && (
           <>
-            <span className="h-4 w-px bg-base-200" />
+            <span className="h-3.5 w-px bg-base-200" />
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setSubPanel((p) => (p === "shell" ? "none" : "shell"))}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                   subPanel === "shell"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
               >
-                <Box size={13} strokeWidth={1.8} />
+                <Box size={12} strokeWidth={1.8} />
                 Shell
               </button>
               <button
                 type="button"
                 onClick={() => setSubPanel((p) => (p === "pattern" ? "none" : "pattern"))}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                   subPanel === "pattern"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
               >
-                <Grid3X3 size={13} strokeWidth={1.8} />
+                <Grid3X3 size={12} strokeWidth={1.8} />
                 Pattern
               </button>
             </div>
@@ -695,7 +695,7 @@ export function SelectionHud() {
         {/* Sketch-first quick action */}
         {isSketch && !isFace && !isEdge && (
           <>
-            <span className="h-4 w-px bg-base-200" />
+            <span className="h-3.5 w-px bg-base-200" />
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -704,27 +704,14 @@ export function SelectionHud() {
                   useArcStore.getState().setTool("extrude");
                 }}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[11.5px] font-medium transition-colors",
+                  "flex h-6 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors",
                   tool === "extrude"
                     ? "bg-accent-500 text-white shadow-xs"
                     : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
                 )}
               >
-                <ArrowUpDown size={13} strokeWidth={2} />
-                Extrude / Cut
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubPanel((p) => (p === "pattern" ? "none" : "pattern"))}
-                className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition-colors",
-                  subPanel === "pattern"
-                    ? "bg-accent-500 text-white shadow-xs"
-                    : "text-base-700 hover:bg-base-200",
-                )}
-              >
-                <Grid3X3 size={13} strokeWidth={1.8} />
-                Pattern
+                <ArrowUpDown size={12} strokeWidth={2} />
+                Extrude
               </button>
             </div>
           </>

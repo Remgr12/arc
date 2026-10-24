@@ -34,31 +34,43 @@ function DocumentRow({
   return (
     <div
       className={cn(
-        "group flex h-7 items-center gap-1.5 rounded-md px-2 transition-colors",
-        active ? "bg-accent-500/15 text-base-800" : "text-base-600 hover:bg-base-200 hover:text-base-800",
+        "group flex h-8 items-center gap-2 rounded-lg px-2.5 transition-colors",
+        active
+          ? "bg-accent-500/15 text-base-900 border border-accent-500/30"
+          : "text-base-700 hover:bg-base-200 hover:text-base-900",
       )}
     >
       <button
         type="button"
+        title={doc.path ?? doc.name}
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         onClick={() => actions.switchDocument(doc.id)}
       >
         <span
           className={cn(
-            "h-1.5 w-1.5 shrink-0 rounded-full",
-            active ? "bg-accent-500" : "bg-base-400",
+            "h-2 w-2 shrink-0 rounded-full",
+            active ? "bg-accent-500 shadow-xs shadow-accent-500" : "bg-base-400",
           )}
         />
-        <span className={cn("truncate text-[12px]", active ? "font-medium text-base-800" : "text-base-600")}>
+        <span
+          className={cn(
+            "truncate text-[12.5px]",
+            active ? "font-semibold text-base-900" : "text-base-700",
+          )}
+        >
           {doc.name}
         </span>
-        {doc.dirty && <span className="shrink-0 text-[10px] text-accent-500">•</span>}
+        {doc.dirty && (
+          <span className="shrink-0 rounded bg-accent-500/20 px-1 font-mono text-[9.5px] font-bold text-accent-500">
+            unsaved
+          </span>
+        )}
       </button>
       <IconButton
-        icon={<X size={11} strokeWidth={1.75} />}
+        icon={<X size={12} strokeWidth={2} />}
         title="Close document"
         size="sm"
-        className="h-5 w-5 opacity-0 group-hover:opacity-100"
+        className="h-6 w-6 opacity-0 group-hover:opacity-100"
         onClick={() => void ipc.closeDocument(doc.id).catch(() => undefined)}
       />
     </div>
@@ -338,14 +350,23 @@ export function ProjectPanel() {
             );
           })}
         </div>
-        <IconButton
-          icon={<Plus size={14} strokeWidth={1.75} />}
-          title={plusTitle}
-          disabled={mode === "layers" && docId === ""}
-          size="sm"
-          onClick={handlePlus}
-          className="hover:bg-base-200"
-        />
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            icon={<Plus size={14} strokeWidth={1.75} />}
+            title={plusTitle}
+            disabled={mode === "layers" && docId === ""}
+            size="sm"
+            onClick={handlePlus}
+            className="hover:bg-base-200"
+          />
+          <IconButton
+            icon={<X size={13} strokeWidth={2} />}
+            title="Hide sidebar"
+            size="sm"
+            onClick={() => useArcStore.getState().setLeftSidebarOpen(false)}
+            className="hover:bg-base-200"
+          />
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
