@@ -1,8 +1,9 @@
 /* =========================================================
    arc: Documentation ("arc wiki") Stylesheet
    Modern CAD design matching the arc application:
-   Deep graphite backgrounds, vibrant cyan accents,
-   sleek TOC navigation, dark code listings, and clean data tables.
+   Deep graphite surfaces, crisp hairlines, precision pill badges,
+   matte contrast, and clean engineering typography.
+   No pulsing lights, no glowing shadows, no neon halos.
    Deeply optimized for mobile and touch devices.
    ========================================================= */
 
@@ -26,8 +27,7 @@
   --accent: #00e8ff;
   --accent-hover: #53f0ff;
   --accent-ink: #00b8d8;
-  --accent-glow: rgba(0, 232, 255, 0.25);
-  --accent-soft: rgba(0, 232, 255, 0.1);
+  --accent-soft: rgba(0, 232, 255, 0.08);
 
   --shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.65);
   --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.45);
@@ -116,7 +116,7 @@ header.site {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(18, 20, 26, 0.88);
+  background: rgba(18, 20, 26, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
@@ -147,7 +147,6 @@ header.site .wrap {
   display: block;
   width: 24px;
   height: 24px;
-  filter: drop-shadow(0 0 8px rgba(0, 232, 255, 0.35));
 }
 
 .docs-badge {
@@ -157,8 +156,8 @@ header.site .wrap {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid rgba(0, 232, 255, 0.3);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--line);
   padding: 2px 7px 1px;
   border-radius: 999px;
   margin-left: 5px;
@@ -193,20 +192,20 @@ nav.top a:hover {
 
 nav.top a[aria-current="page"] {
   color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--bg-surface-elevated);
 }
 
 nav.top a.gh {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--accent);
-  border: 1px solid rgba(0, 232, 255, 0.3);
-  background: var(--accent-soft);
+  color: var(--ink-bright);
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
 }
 nav.top a.gh:hover {
-  background: rgba(0, 232, 255, 0.2);
-  border-color: var(--accent);
+  background: var(--bg-surface-elevated);
+  border-color: var(--line-strong);
   color: #ffffff;
 }
 
@@ -311,7 +310,7 @@ nav.top a.gh:hover {
 
 .toc a.on {
   color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--bg-surface-elevated);
   font-weight: 600;
 }
 
@@ -453,7 +452,7 @@ h3 {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--bg-surface-elevated);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -535,7 +534,7 @@ kbd {
   border: 1px solid var(--kbd-border);
   border-radius: 5px;
   background: var(--kbd-bg);
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   color: var(--kbd-text);
   display: inline-block;
 }
