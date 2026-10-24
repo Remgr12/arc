@@ -35,34 +35,24 @@ export async function commitWorkspaceFolder(folder: string): Promise<void> {
 export function decideStartupFlow(): void {
   const st = useArcStore.getState();
   const prefs = loadWorkspacePrefs();
-  const settings = st.settings as Settings;
+  const settings = st.settings as Settings | null;
   const folder = prefs?.folder ?? settings?.workspace_dir ?? null;
   st.setWorkspaceFolder(folder);
-  
-  // Prevent UI flash: ensure smooth transition when restoring session
-  st.setDashboardTransition(false);
-  
-  if (!folder) {
-    st.setStartupOpen(false);
-    st.setOnboardingOpen(true);
-    st.setDashboardTransition(true);
-    return;
-  }
+
+  // Session restore when enabled and a last active document is available.
   const overview = st.overview;
   const active = overview?.documents.find((d) => d.id === overview.active);
   const restored = Boolean(overview?.settings.reopen_last_session && active?.path);
-  
+
+  st.setStartupOpen(false);
+
   if (restored) {
-    // Smooth transition: hide startup immediately and show dashboard
-    st.setStartupOpen(false);
-    st.setDashboardTransition(true);
-    // Ensure viewport is ready before showing dashboard
-    requestAnimationFrame(() => {
-      st.setViewportReady(true);
-    });
-  } else {
-    st.setStartupOpen(false);
-    st.setOnboardingOpen(true);
-    st.setDashboardTransition(true);
+    st.setView("editor");
+    st.setOnboardingOpen(false);
+    return;
   }
+
+  st.setView("dashboard");
+  // The welcome screen only really belongs to first-time use (no workspace yet).
+  st.setOnboardingOpen(!folder);
 }

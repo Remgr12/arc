@@ -71,8 +71,11 @@ mod imp {
 
     impl PluginRuntime {
         #[allow(dead_code)]
-    pub fn new(dirs: Vec<PathBuf>) -> Self {
-            Self { dirs, ..Default::default() }
+        pub fn new(dirs: Vec<PathBuf>) -> Self {
+            Self {
+                dirs,
+                ..Default::default()
+            }
         }
 
         pub fn info(&self) -> Vec<PluginInfo> {
@@ -217,7 +220,10 @@ mod imp {
                         let doc_id = active_or_err(&context)?;
                         let list: Vec<Json> = {
                             let st = context.lock();
-                            let doc = st.documents.get(&doc_id).ok_or_else(|| api_err("no document"))?;
+                            let doc = st
+                                .documents
+                                .get(&doc_id)
+                                .ok_or_else(|| api_err("no document"))?;
                             doc.entities
                                 .values()
                                 .map(|e| {
@@ -244,15 +250,23 @@ mod imp {
                 let f = lua
                     .create_function(
                         move |lua, (geometry, name): (mlua::Value, Option<String>)| {
-                            let payload: Json = if let Ok(sql) = lua.from_value::<String>(geometry.clone()) {
+                            let payload: Json = if let Ok(sql) =
+                                lua.from_value::<String>(geometry.clone())
+                            {
                                 serde_json::from_str(&sql).map_err(|e| api_err(e.to_string()))?
                             } else {
-                                lua.from_value(geometry).map_err(|e| api_err(e.to_string()))?
+                                lua.from_value(geometry)
+                                    .map_err(|e| api_err(e.to_string()))?
                             };
                             let doc_id = active_or_err(&context)?;
-                            let id =
-                                crate::commands::helpers_add_entity(&context_app, &context, &doc_id, &payload, name.as_deref())
-                                    .map_err(api_err)?;
+                            let id = crate::commands::helpers_add_entity(
+                                &context_app,
+                                &context,
+                                &doc_id,
+                                &payload,
+                                name.as_deref(),
+                            )
+                            .map_err(api_err)?;
                             Ok(id)
                         },
                     )
@@ -264,23 +278,24 @@ mod imp {
             {
                 let context = ctx_state.clone();
                 let f = lua
-                    .create_function(
-                        move |lua, (o, d, tol): (Vec<f64>, Vec<f64>, Option<f64>)| {
-                            let doc_id = active_or_err(&context)?;
-                            let st = context.lock();
-                            let doc = st.documents.get(&doc_id).ok_or_else(|| api_err("no document"))?;
-                            let hit = doc.raycast(triple(&o), triple(&d), tol.unwrap_or(1.0));
-                            Ok(hit.map(|h| {
-                                lua.to_value(&serde_json::json!({
-                                    "entity_id": h.entity_id.as_string(),
-                                    "point": h.point,
-                                    "normal": h.normal,
-                                    "distance": h.distance,
-                                }))
-                                .unwrap_or(mlua::Value::Nil)
+                    .create_function(move |lua, (o, d, tol): (Vec<f64>, Vec<f64>, Option<f64>)| {
+                        let doc_id = active_or_err(&context)?;
+                        let st = context.lock();
+                        let doc = st
+                            .documents
+                            .get(&doc_id)
+                            .ok_or_else(|| api_err("no document"))?;
+                        let hit = doc.raycast(triple(&o), triple(&d), tol.unwrap_or(1.0));
+                        Ok(hit.map(|h| {
+                            lua.to_value(&serde_json::json!({
+                                "entity_id": h.entity_id.as_string(),
+                                "point": h.point,
+                                "normal": h.normal,
+                                "distance": h.distance,
                             }))
-                        },
-                    )
+                            .unwrap_or(mlua::Value::Nil)
+                        }))
+                    })
                     .unwrap();
                 table.set("raycast", f).unwrap();
             }
@@ -295,8 +310,15 @@ mod imp {
                             .from_value(transform)
                             .map_err(|e| api_err(e.to_string()))?;
                         let doc_id = active_or_err(&context)?;
-                        crate::commands::helpers_set_transform(&context_app, &context, &doc_id, &payload, &[&id], true)
-                            .map_err(api_err)?;
+                        crate::commands::helpers_set_transform(
+                            &context_app,
+                            &context,
+                            &doc_id,
+                            &payload,
+                            &[&id],
+                            true,
+                        )
+                        .map_err(api_err)?;
                         Ok(())
                     })
                     .unwrap();
@@ -312,12 +334,11 @@ mod imp {
                         let doc_id = active_or_err(&context)?;
                         let label = {
                             let mut st = context.lock();
-                            let doc = st.documents.get_mut(&doc_id).ok_or_else(|| api_err("no document"))?;
-                            if do_undo {
-                                doc.undo()
-                            } else {
-                                doc.redo()
-                            }
+                            let doc = st
+                                .documents
+                                .get_mut(&doc_id)
+                                .ok_or_else(|| api_err("no document"))?;
+                            if do_undo { doc.undo() } else { doc.redo() }
                         };
                         crate::commands::emit_scene(&context_app, &context, &doc_id);
                         Ok(label)
@@ -331,8 +352,13 @@ mod imp {
 
         /// Call every hook registered for `hook`. Only enabled plugins fire.
         pub fn fire(&self, state: &SharedState, hook: &str, arg: &Json) {
-            let enabled: std::collections::HashSet<String> =
-                state.lock().settings.enabled_plugins.iter().cloned().collect();
+            let enabled: std::collections::HashSet<String> = state
+                .lock()
+                .settings
+                .enabled_plugins
+                .iter()
+                .cloned()
+                .collect();
             let funcs: Vec<mlua::Function> = self
                 .hooks
                 .lock()

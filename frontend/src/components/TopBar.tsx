@@ -259,12 +259,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
         <IconButton
           icon={<ArrowLeft size={16} strokeWidth={1.75} />}
           title="Back to dashboard"
-          onClick={() => {
-            useArcStore.getState().setDashboardTransition(true);
-            setTimeout(() => {
-              useArcStore.getState().setView("dashboard");
-            }, 300);
-          }}
+          onClick={() => useArcStore.getState().setView("dashboard")}
           className="text-base-600 hover:bg-base-200"
         />
 

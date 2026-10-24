@@ -42,11 +42,7 @@ struct EdgeUse {
 /// Finds the face other than the two filleted faces that lies at one picked
 /// edge end (the end-cap face trimming its edge is the one stamped by
 /// `fillet_with_side`).
-fn side_face_at(
-    solid: &Solid,
-    skip: (&EdgeUse, &EdgeUse),
-    end: [f64; 3],
-) -> Option<EdgeUse> {
+fn side_face_at(solid: &Solid, skip: (&EdgeUse, &EdgeUse), end: [f64; 3]) -> Option<EdgeUse> {
     for (shell, shell_ref) in solid.boundaries().iter().enumerate() {
         for (face, face_ref) in shell_ref.iter().enumerate() {
             if (shell == skip.0.shell && face == skip.0.face)
@@ -55,9 +51,7 @@ fn side_face_at(
                 continue;
             }
             for cand in face_ref.edge_iter() {
-                if close(pt(cand.front().point()), end)
-                    || close(pt(cand.back().point()), end)
-                {
+                if close(pt(cand.front().point()), end) || close(pt(cand.back().point()), end) {
                     return Some(EdgeUse {
                         shell,
                         face,
@@ -173,7 +167,7 @@ pub fn solid_fillet(solid: &Solid, edge: [[f64; 3]; 2], radius: f64) -> Result<S
 mod tests {
     use super::*;
     use crate::kernel::shapes;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     fn box_solid() -> Solid {
         shapes::box_solid(60.0, 40.0, 20.0).expect("box")

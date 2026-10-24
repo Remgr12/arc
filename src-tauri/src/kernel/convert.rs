@@ -33,13 +33,28 @@ pub fn transform_to_cg_matrix(t: &crate::core::Transform) -> cgmath::Matrix4<f64
 /// Copy one polygon mesh into `mb`, tagging every triangle `face_id`.
 fn append_polygon(mb: &mut crate::core::mesh::MeshBuilder, mesh: &PolygonMesh, face_id: u32) {
     let positions = mesh.positions();
-    for pts in mesh.faces().tri_faces().iter().map(|f| vertex_points(positions, f)) {
+    for pts in mesh
+        .faces()
+        .tri_faces()
+        .iter()
+        .map(|f| vertex_points(positions, f))
+    {
         push_fan(mb, &pts, face_id);
     }
-    for pts in mesh.faces().quad_faces().iter().map(|f| vertex_points(positions, f)) {
+    for pts in mesh
+        .faces()
+        .quad_faces()
+        .iter()
+        .map(|f| vertex_points(positions, f))
+    {
         push_fan(mb, &pts, face_id);
     }
-    for pts in mesh.faces().other_faces().iter().map(|f| vertex_points(positions, f)) {
+    for pts in mesh
+        .faces()
+        .other_faces()
+        .iter()
+        .map(|f| vertex_points(positions, f))
+    {
         push_fan(mb, &pts, face_id);
     }
 }
@@ -108,15 +123,30 @@ pub fn solid_to_buffer(solid: &truck_modeling::Solid, tol: f64) -> crate::core::
 pub fn polygon_to_buffer(mesh: &PolygonMesh) -> crate::core::mesh::MeshBuffer {
     let mut mb = crate::core::mesh::MeshBuilder::new();
     let mut next_face_id = 0u32;
-    for pts in mesh.faces().tri_faces().iter().map(|f| vertex_points(mesh.positions(), f)) {
+    for pts in mesh
+        .faces()
+        .tri_faces()
+        .iter()
+        .map(|f| vertex_points(mesh.positions(), f))
+    {
         push_fan(&mut mb, &pts, next_face_id);
         next_face_id += 1;
     }
-    for pts in mesh.faces().quad_faces().iter().map(|f| vertex_points(mesh.positions(), f)) {
+    for pts in mesh
+        .faces()
+        .quad_faces()
+        .iter()
+        .map(|f| vertex_points(mesh.positions(), f))
+    {
         push_fan(&mut mb, &pts, next_face_id);
         next_face_id += 1;
     }
-    for pts in mesh.faces().other_faces().iter().map(|f| vertex_points(mesh.positions(), f)) {
+    for pts in mesh
+        .faces()
+        .other_faces()
+        .iter()
+        .map(|f| vertex_points(mesh.positions(), f))
+    {
         push_fan(&mut mb, &pts, next_face_id);
         next_face_id += 1;
     }

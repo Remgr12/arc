@@ -20,9 +20,7 @@ export function Onboarding() {
   if (!open) return null;
 
   const skip = () => {
-    const st = useArcStore.getState();
-    st.setOnboardingOpen(false);
-    st.setStartupOpen(false);
+    useArcStore.getState().setOnboardingOpen(false);
   };
 
   const browse = async () => {
@@ -59,9 +57,8 @@ export function Onboarding() {
       setStep(2);
       return;
     }
-    const st = useArcStore.getState();
-    st.setOnboardingOpen(false);
-    st.setStartupOpen(true);
+    // Workspace is committed; land on the dashboard behind the modal.
+    useArcStore.getState().setOnboardingOpen(false);
   };
 
   const back = () => {

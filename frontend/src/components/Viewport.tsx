@@ -309,10 +309,16 @@ function startLoop(ref: ViewportRefs): () => void {
 
   let raf = 0;
   let pendingCapture = false;
+  let pendingThumbResolve: ((url: string | null) => void) | null = null;
   const captureListener = () => {
     pendingCapture = true;
   };
   window.addEventListener("arc-capture", captureListener);
+  const thumbListener = (event: Event) => {
+    const resolve = (event as CustomEvent).detail;
+    if (typeof resolve === "function") pendingThumbResolve = resolve;
+  };
+  window.addEventListener("arc-capture-thumb", thumbListener);
   const tick = () => {
     if (ref.disposed) return;
 
@@ -349,6 +355,15 @@ function startLoop(ref: ViewportRefs): () => void {
         // capture unsupported on this renderer config
       }
     }
+    if (pendingThumbResolve) {
+      const resolve = pendingThumbResolve;
+      pendingThumbResolve = null;
+      try {
+        resolve(thumbnailDataUrl(ref.renderer));
+      } catch {
+        resolve(null);
+      }
+    }
     raf = requestAnimationFrame(tick);
   };
   tick();
@@ -356,7 +371,23 @@ function startLoop(ref: ViewportRefs): () => void {
     cancelAnimationFrame(raf);
     ro.disconnect();
     window.removeEventListener("arc-capture", captureListener);
+    window.removeEventListener("arc-capture-thumb", thumbListener);
   };
+}
+
+/** Downscaled PNG of the just-rendered frame, for project card thumbnails. */
+function thumbnailDataUrl(renderer: THREE.WebGLRenderer): string | null {
+  const src = renderer.domElement;
+  if (!src.width || !src.height) return null;
+  const width = 480;
+  const height = Math.max(1, Math.round((src.height / src.width) * width));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(src, 0, 0, width, height);
+  return canvas.toDataURL("image/png");
 }
 
 /** Shortest-arc rotation between two view directions. */

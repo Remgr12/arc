@@ -5,8 +5,8 @@
 //! so callers divide by `w` at the end (`sample_*` helpers do).
 
 use truck_geometry::prelude::{
-    BSplineCurve, BSplineSurface, KnotVec, NurbsCurve, NurbsSurface,
-    ParametricCurve, ParametricSurface,
+    BSplineCurve, BSplineSurface, KnotVec, NurbsCurve, NurbsSurface, ParametricCurve,
+    ParametricSurface,
 };
 
 /// Payload homogeneous point -> truck homogeneous vector.
@@ -24,7 +24,10 @@ pub fn payload_curve(
         return Err("nurbs curve needs control points".into());
     }
     let cps: Vec<cgmath::Vector4<f64>> = points.iter().map(|p| hom(*p)).collect();
-    Ok(NurbsCurve::new(BSplineCurve::new(KnotVec::from(knots.to_vec()), cps)))
+    Ok(NurbsCurve::new(BSplineCurve::new(
+        KnotVec::from(knots.to_vec()),
+        cps,
+    )))
 }
 
 /// Build a truck NURBS surface from the control grid + knot vectors

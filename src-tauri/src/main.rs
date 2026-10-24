@@ -15,7 +15,7 @@ mod state;
 mod updater;
 
 use crate::core::Document;
-use state::{load_settings, save_settings, SharedState, Settings};
+use state::{Settings, SharedState, load_settings, save_settings};
 
 fn main() {
     let app_state: SharedState = Arc::new(Mutex::new(state::AppState::new()));
@@ -53,9 +53,7 @@ fn main() {
                         if !std::path::Path::new(path).exists() {
                             continue;
                         }
-                        if commands::open_document_impl(app.handle(), &shared, None, path)
-                            .is_ok()
-                        {
+                        if commands::open_document_impl(app.handle(), &shared, None, path).is_ok() {
                             opened += 1;
                         }
                     }
@@ -171,8 +169,8 @@ fn main() {
             commands::get_material_library,
             commands::set_entity_material,
             commands::csg_apply,
-            // commands::save_project_thumbnail,
-            // commands::read_project_thumbnail,
+            commands::save_project_thumbnail,
+            commands::read_project_thumbnail,
             updater::check_for_updates,
             updater::install_update,
         ])

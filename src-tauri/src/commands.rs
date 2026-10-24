@@ -1,17 +1,19 @@
 //! Tauri command surface. All scene-mutating commands record undo history,
 //! and emit `arc://scene` so the webview stays in sync.
 
-use crate::plugins::PluginLock;
-use crate::state::{
-    doc_mut, doc_ref, parse_ids, AppOverview, DocumentInfo, SceneEnvelope, Settings,
-    SharedState, TransformUpdate,
-};
 use crate::core::annotation::{Annotation, AnnotationKind, DimensionGeometry};
+use crate::core::constraints::{
+    Constraint, ConstraintExpression, ConstraintType, GeometryParameter,
+};
 use crate::core::entity::CsgOperation;
-use crate::core::constraints::{Constraint, ConstraintExpression, ConstraintType, GeometryParameter};
 use crate::core::formats::{Format, TriangleSoup};
 use crate::core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
 use crate::core::{Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, Transform};
+use crate::plugins::PluginLock;
+use crate::state::{
+    AppOverview, DocumentInfo, SceneEnvelope, Settings, SharedState, TransformUpdate, doc_mut,
+    doc_ref, parse_ids,
+};
 use serde::Deserialize;
 use serde_json::Value as Json;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -19,10 +21,14 @@ use tauri::{AppHandle, Emitter, Manager, State};
 // ------------------------------------------------------------ event helpers
 
 pub fn emit_scene(app: &AppHandle, state: &SharedState, document_id: &str) {
-    let payload = state.lock().documents.get(document_id).map(|d| SceneEnvelope {
-        document_id: document_id.to_string(),
-        scene: d.scene_data(),
-    });
+    let payload = state
+        .lock()
+        .documents
+        .get(document_id)
+        .map(|d| SceneEnvelope {
+            document_id: document_id.to_string(),
+            scene: d.scene_data(),
+        });
     if let Some(payload) = payload {
         let _ = app.emit("arc://scene", payload);
     }
@@ -77,7 +83,12 @@ pub fn helpers_add_entity(
     let name = name.unwrap_or("").to_string();
     let mut out: Option<String> = None;
     doc_mut(state, document_id, "Add", |doc| {
-        let entity = Entity::new(EntityId::new(), name.clone(), doc.active_layer, kind.clone());
+        let entity = Entity::new(
+            EntityId::new(),
+            name.clone(),
+            doc.active_layer,
+            kind.clone(),
+        );
         let (id, res) = doc.add_entity(entity);
         if res.is_ok() {
             out = Some(id.as_string());
@@ -97,8 +108,8 @@ pub fn helpers_set_transform(
     ids: &[&str],
     record: bool,
 ) -> Result<(), String> {
-    let target: Transform = serde_json::from_value(transform.clone())
-        .map_err(|e| format!("bad transform: {e}"))?;
+    let target: Transform =
+        serde_json::from_value(transform.clone()).map_err(|e| format!("bad transform: {e}"))?;
     let ids = ids
         .iter()
         .map(|s| parse_one(s))
@@ -151,9 +162,7 @@ pub fn get_state(app: AppHandle, state: State<'_, SharedState>) -> AppOverview {
 }
 
 #[tauri::command]
-pub fn get_plugins(
-    plugins: State<'_, PluginLock>,
-) -> Vec<crate::state::PluginInfo> {
+pub fn get_plugins(plugins: State<'_, PluginLock>) -> Vec<crate::state::PluginInfo> {
     plugins.lock().info()
 }
 
@@ -253,7 +262,8 @@ pub fn open_document_impl(
         s.documents.insert(id.clone(), doc);
         s.order.push(id.clone());
         s.active = Some(id.clone());
-        s.doc_paths.insert(id.clone(), std::path::PathBuf::from(path));
+        s.doc_paths
+            .insert(id.clone(), std::path::PathBuf::from(path));
         crate::state::remember_recent(&mut s.settings, path);
         s.doc_info(&id).expect("just inserted")
     };
@@ -298,6 +308,10 @@ pub fn save_document_impl(
                 .ok_or("document has no path")?
         }
     };
+    if let Some(parent) = std::path::Path::new(&final_path).parent() {
+        // Typed workspace folders may not exist yet — make saving self-healing.
+        let _ = std::fs::create_dir_all(parent);
+    }
     std::fs::write(&final_path, json).map_err(|e| format!("write failed: {e}"))?;
     {
         let mut s = state.lock();
@@ -695,7 +709,9 @@ pub fn set_layer_locked(
     locked: bool,
 ) -> Result<(), String> {
     let id = parse_one(&layer_id)?;
-    doc_mut(&state, &document_id, "Layer", |d| d.set_layer_locked(&id, locked))?;
+    doc_mut(&state, &document_id, "Layer", |d| {
+        d.set_layer_locked(&id, locked)
+    })?;
     emit_scene(&app, &state, &document_id);
     Ok(())
 }
@@ -796,12 +812,55 @@ pub fn list_projects(dir: String) -> Vec<ProjectSummary> {
     out
 }
 
+// ------------------------------------------------------------ project thumbnails
+
+/// `<name>.thumbnail.png` sitting beside the .arc file.
+fn thumbnail_path(project_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let stem = project_path.file_stem()?.to_str()?;
+    if stem.is_empty() {
+        return None;
+    }
+    let parent = project_path.parent()?;
+    Some(parent.join(format!("{stem}.thumbnail.png")))
+}
+
+/// Store a base64 data-URL PNG captured from the viewport, beside the
+/// saved document. Best effort from the UI side — errors surface as strings.
 #[tauri::command]
-pub fn set_settings(
-    app: AppHandle,
+pub fn save_project_thumbnail(
     state: State<'_, SharedState>,
-    settings: Settings,
-) -> Settings {
+    document_id: String,
+    base64_png: String,
+) -> Result<(), String> {
+    let doc_path = {
+        let s = state.lock();
+        let path = s
+            .doc_paths
+            .get(&document_id)
+            .ok_or("document has no path")?;
+        path.display().to_string()
+    };
+    let target = thumbnail_path(std::path::Path::new(&doc_path)).ok_or("invalid project path")?;
+    let prefix = "data:image/png;base64,";
+    let raw = base64_png.strip_prefix(prefix).unwrap_or(&base64_png);
+    let bytes = base64::decode(raw).map_err(|e| format!("decode failed: {e}"))?;
+    if let Some(parent) = target.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&target, bytes).map_err(|e| format!("write failed: {e}"))?;
+    Ok(())
+}
+
+/// Base64 PNG for a project's stored thumbnail, if one exists.
+#[tauri::command]
+pub fn read_project_thumbnail(project_path: String) -> Option<String> {
+    let target = thumbnail_path(std::path::Path::new(&project_path))?;
+    let bytes = std::fs::read(target).ok()?;
+    Some(base64::encode(bytes))
+}
+
+#[tauri::command]
+pub fn set_settings(app: AppHandle, state: State<'_, SharedState>, settings: Settings) -> Settings {
     let saved = {
         let mut s = state.lock();
         s.settings = settings.clone();
@@ -1056,8 +1115,9 @@ pub fn import_file(
         Some("step") | Some("stp") => Format::Step,
         Some(other) => return Err(format!("unsupported import format: {other}")),
         None => {
-            let detected = Format::detect(&path)
-                .ok_or_else(|| format!("cannot detect format of {path}; pass an explicit format"))?;
+            let detected = Format::detect(&path).ok_or_else(|| {
+                format!("cannot detect format of {path}; pass an explicit format")
+            })?;
             if detected == Format::Gltf {
                 return Err("gltf import is not supported".into());
             }
@@ -1096,11 +1156,7 @@ pub fn import_file(
             for line in drawing.lines {
                 let start = dxf_point(line.start);
                 let end = dxf_point(line.end);
-                let delta = [
-                    end[0] - start[0],
-                    end[1] - start[1],
-                    end[2] - start[2],
-                ];
+                let delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
                 if delta.iter().all(|c| c.abs() < 1e-12) {
                     continue;
                 }
@@ -1135,11 +1191,7 @@ pub fn import_file(
                 ));
             }
             for polyline in drawing.polylines {
-                let first = dxf_point([
-                    polyline.vertices[0][0],
-                    polyline.vertices[0][1],
-                    0.0,
-                ]);
+                let first = dxf_point([polyline.vertices[0][0], polyline.vertices[0][1], 0.0]);
                 let points = polyline
                     .vertices
                     .iter()
@@ -1354,8 +1406,8 @@ pub fn solve_constraints(
         match probe.solve() {
             Ok(()) => break,
             Err(message) => {
-                let removed = violated_constraint_id(&message)
-                    .is_some_and(|id| probe.remove_constraint(id));
+                let removed =
+                    violated_constraint_id(&message).is_some_and(|id| probe.remove_constraint(id));
                 violations.push(message);
                 if !removed {
                     break;
@@ -1382,10 +1434,28 @@ pub fn get_material_library() -> Vec<MaterialLibraryEntry> {
     const ENTRIES: &[(&str, &str, [f64; 3], f64, f64)] = &[
         ("steel", "Steel", [0.659, 0.678, 0.710], 0.35, 0.9),
         ("aluminum", "Aluminum", [0.784, 0.800, 0.824], 0.4, 0.85),
-        ("brushed_metal", "Brushed metal", [0.690, 0.710, 0.737], 0.25, 0.85),
+        (
+            "brushed_metal",
+            "Brushed metal",
+            [0.690, 0.710, 0.737],
+            0.25,
+            0.85,
+        ),
         ("copper", "Copper", [0.722, 0.451, 0.200], 0.4, 0.9),
-        ("plastic_white", "Plastic white", [0.949, 0.949, 0.949], 0.7, 0.0),
-        ("plastic_black", "Plastic black", [0.165, 0.165, 0.180], 0.6, 0.05),
+        (
+            "plastic_white",
+            "Plastic white",
+            [0.949, 0.949, 0.949],
+            0.7,
+            0.0,
+        ),
+        (
+            "plastic_black",
+            "Plastic black",
+            [0.165, 0.165, 0.180],
+            0.6,
+            0.05,
+        ),
         ("glass", "Glass", [0.812, 0.910, 0.937], 0.1, 0.0),
         ("rubber", "Rubber", [0.227, 0.227, 0.227], 0.95, 0.0),
         ("wood_oak", "Wood oak", [0.690, 0.545, 0.341], 0.8, 0.0),
@@ -1395,13 +1465,15 @@ pub fn get_material_library() -> Vec<MaterialLibraryEntry> {
     ];
     ENTRIES
         .iter()
-        .map(|(id, label, color, roughness, metalness)| MaterialLibraryEntry {
-            id: id.to_string(),
-            label: label.to_string(),
-            color: *color,
-            roughness: *roughness,
-            metalness: *metalness,
-        })
+        .map(
+            |(id, label, color, roughness, metalness)| MaterialLibraryEntry {
+                id: id.to_string(),
+                label: label.to_string(),
+                color: *color,
+                roughness: *roughness,
+                metalness: *metalness,
+            },
+        )
         .collect()
 }
 
@@ -1430,8 +1502,10 @@ pub fn csg_apply(
     first_id: String,
     second_id: String,
 ) -> Result<CreateEntityOut, String> {
-    let op: CsgOperation = serde_json::from_value(Json::String(operation.clone()))
-        .map_err(|_| format!("unknown CSG operation: {operation} (use union, difference, intersection)"))?;
+    let op: CsgOperation =
+        serde_json::from_value(Json::String(operation.clone())).map_err(|_| {
+            format!("unknown CSG operation: {operation} (use union, difference, intersection)")
+        })?;
     let first = parse_one(&first_id)?;
     let second = parse_one(&second_id)?;
     let (first_kind, second_kind) = doc_ref(&state, &document_id, |d| {

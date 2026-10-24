@@ -136,7 +136,12 @@ impl GeometryParameter {
     /// applies to the given variant.
     pub fn value_of(geometry: &Geometry) -> impl Iterator<Item = (GeometryParameter, f64)> {
         let pairs: Vec<(GeometryParameter, f64)> = match geometry {
-            Geometry::Box { width, depth, height, corner_radius } => vec![
+            Geometry::Box {
+                width,
+                depth,
+                height,
+                corner_radius,
+            } => vec![
                 (GeometryParameter::BoxWidth, *width),
                 (GeometryParameter::BoxDepth, *depth),
                 (GeometryParameter::BoxHeight, *height),
@@ -159,14 +164,20 @@ impl GeometryParameter {
                 (GeometryParameter::PlaneWidth, *width),
                 (GeometryParameter::PlaneDepth, *depth),
             ],
-            Geometry::CircleCurve { radius, .. } => vec![(GeometryParameter::CircleRadius, *radius)],
+            Geometry::CircleCurve { radius, .. } => {
+                vec![(GeometryParameter::CircleRadius, *radius)]
+            }
             Geometry::RectangleCurve { width, depth } => vec![
                 (GeometryParameter::RectangleWidth, *width),
                 (GeometryParameter::RectangleDepth, *depth),
             ],
-            Geometry::PolygonCurve { radius, .. } => vec![(GeometryParameter::PolygonRadius, *radius)],
+            Geometry::PolygonCurve { radius, .. } => {
+                vec![(GeometryParameter::PolygonRadius, *radius)]
+            }
             Geometry::Extrude { height, .. } => vec![(GeometryParameter::ExtrudeHeight, *height)],
-            Geometry::Revolve { angle_deg, .. } => vec![(GeometryParameter::RevolveAngle, *angle_deg)],
+            Geometry::Revolve { angle_deg, .. } => {
+                vec![(GeometryParameter::RevolveAngle, *angle_deg)]
+            }
             Geometry::Sweep { radius, .. } => vec![(GeometryParameter::SweepRadius, *radius)],
             Geometry::Loft { sections } => {
                 vec![(GeometryParameter::LoftSectionCount, sections.len() as f64)]
@@ -175,7 +186,9 @@ impl GeometryParameter {
                 (GeometryParameter::WallWidth, *width),
                 (GeometryParameter::WallHeight, *height),
             ],
-            Geometry::Stair { rise, run, count, .. } => vec![
+            Geometry::Stair {
+                rise, run, count, ..
+            } => vec![
                 (GeometryParameter::StairRise, *rise),
                 (GeometryParameter::StairRun, *run),
                 (GeometryParameter::StairCount, *count as f64),
@@ -186,7 +199,11 @@ impl GeometryParameter {
                 (GeometryParameter::ColumnRadius, *radius),
                 (GeometryParameter::ColumnHeight, *height),
             ],
-            Geometry::Beam { length, width, height } => vec![
+            Geometry::Beam {
+                length,
+                width,
+                height,
+            } => vec![
                 (GeometryParameter::BeamLength, *length),
                 (GeometryParameter::BeamWidth, *width),
                 (GeometryParameter::BeamHeight, *height),
@@ -222,9 +239,10 @@ impl ConstraintExpression {
     fn evaluate(&self, values: &ValueCache) -> Option<f64> {
         match self {
             ConstraintExpression::Constant(v) => Some(*v),
-            ConstraintExpression::GeometryParameter { entity_id, parameter } => values
-                .get(&(*entity_id, *parameter))
-                .copied(),
+            ConstraintExpression::GeometryParameter {
+                entity_id,
+                parameter,
+            } => values.get(&(*entity_id, *parameter)).copied(),
         }
     }
 
@@ -279,7 +297,10 @@ impl ConstraintExpression {
     pub fn describe(&self) -> String {
         match self {
             ConstraintExpression::Constant(v) => format!("{v}"),
-            ConstraintExpression::GeometryParameter { entity_id, parameter } => {
+            ConstraintExpression::GeometryParameter {
+                entity_id,
+                parameter,
+            } => {
                 format!("e{entity_id}.{}", parameter.label())
             }
         }
@@ -336,12 +357,18 @@ impl ConstraintSystem {
             self.values.insert((entity_id, parameter), value);
         }
         let t = &entity.transform;
-        self.values.insert((entity_id, GeometryParameter::PositionX), t.position[0]);
-        self.values.insert((entity_id, GeometryParameter::PositionY), t.position[1]);
-        self.values.insert((entity_id, GeometryParameter::PositionZ), t.position[2]);
-        self.values.insert((entity_id, GeometryParameter::ScaleX), t.scale[0]);
-        self.values.insert((entity_id, GeometryParameter::ScaleY), t.scale[1]);
-        self.values.insert((entity_id, GeometryParameter::ScaleZ), t.scale[2]);
+        self.values
+            .insert((entity_id, GeometryParameter::PositionX), t.position[0]);
+        self.values
+            .insert((entity_id, GeometryParameter::PositionY), t.position[1]);
+        self.values
+            .insert((entity_id, GeometryParameter::PositionZ), t.position[2]);
+        self.values
+            .insert((entity_id, GeometryParameter::ScaleX), t.scale[0]);
+        self.values
+            .insert((entity_id, GeometryParameter::ScaleY), t.scale[1]);
+        self.values
+            .insert((entity_id, GeometryParameter::ScaleZ), t.scale[2]);
         self.dirty.insert(entity_id);
     }
 
@@ -395,8 +422,10 @@ impl ConstraintSystem {
             let Some(rhs) = constraint.rhs.as_ref() else {
                 continue;
             };
-            let (Some(l), Some(r)) = (constraint.lhs.evaluate(&self.values), rhs.evaluate(&self.values))
-            else {
+            let (Some(l), Some(r)) = (
+                constraint.lhs.evaluate(&self.values),
+                rhs.evaluate(&self.values),
+            ) else {
                 // Missing values are allowed (entities not yet registered).
                 continue;
             };

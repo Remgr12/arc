@@ -23,10 +23,8 @@ interface ArcState {
   hoverObj: any;
   selectionVersion: number;
   statusMessage: string;
-  cursorWorld: [number, number, number];
-  dashboardTransition: boolean;
-  viewportReady: boolean;
-  activeToolCategory: string;
+   cursorWorld: [number, number, number];
+   activeToolCategory: string;
   displayMode: "shaded" | "wireframe";
   isolated: boolean;
   contextMenu: {
@@ -62,11 +60,9 @@ interface ArcState {
   setHoverEntity: (id: string | null) => void;
   setHoverObj: (obj: any) => void;
   setSelectionRef: (obj: any) => void;
-  setStatusMessage: (msg: string) => void;
-  setCursorWorld: (c: [number, number, number]) => void;
-  setDashboardTransition: (transition: boolean) => void;
-  setViewportReady: (ready: boolean) => void;
-  setActiveToolCategory: (category: string) => void;
+   setStatusMessage: (msg: string) => void;
+   setCursorWorld: (c: [number, number, number]) => void;
+   setActiveToolCategory: (category: string) => void;
   setDisplayMode: (mode: "shaded" | "wireframe") => void;
   setIsolated: (isolated: boolean) => void;
   openContextMenu: (x: number, y: number, items: Array<{ label: string; run: () => void; disabled?: boolean }>) => void;
@@ -95,10 +91,8 @@ export const useArcStore = create<ArcState>((set) => ({
   hoverObj: null,
   selectionVersion: 0,
   statusMessage: "Ready",
-  cursorWorld: [0, 0, 0],
-  dashboardTransition: false,
-  viewportReady: false,
-  activeToolCategory: "all",
+   cursorWorld: [0, 0, 0],
+   activeToolCategory: "all",
   displayMode: "shaded",
   isolated: false,
   contextMenu: { open: false, x: 0, y: 0, items: [] },
@@ -134,10 +128,8 @@ export const useArcStore = create<ArcState>((set) => ({
     selectionVersion: st.selectionVersion + 1,
   })),
   setStatusMessage: (msg) => set({ statusMessage: msg }),
-  setCursorWorld: (c) => set({ cursorWorld: c }),
-  setDashboardTransition: (transition) => set({ dashboardTransition: transition }),
-  setViewportReady: (ready) => set({ viewportReady: ready }),
-  setActiveToolCategory: (category) => set({ activeToolCategory: category }),
+   setCursorWorld: (c) => set({ cursorWorld: c }),
+   setActiveToolCategory: (category) => set({ activeToolCategory: category }),
   setDisplayMode: (displayMode) => set({ displayMode }),
   setIsolated: (isolated) => set({ isolated }),
   setView: (view) => set({ view }),

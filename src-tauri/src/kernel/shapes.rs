@@ -8,10 +8,10 @@
 //! Construction recipes follow the upstream `truck-modeling` examples
 //! (`cube.rs`, `cylinder.rs`, `sphere.rs`, `cone.rs`, `torus.rs`).
 
-use std::f64::consts::{FRAC_PI_4, FRAC_PI_2, PI};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use cgmath::{Rad, Vector3};
-use truck_modeling::{builder, Edge, Solid, Vertex, Wire};
+use truck_modeling::{Edge, Solid, Vertex, Wire, builder};
 
 use super::convert::arr_to_pt;
 
@@ -37,7 +37,10 @@ fn unit_z() -> Vector3<f64> {
 
 /// Closed straight-line polygon wire through CCW `pts3`.
 fn closed_wire(pts3: &[[f64; 3]]) -> Wire {
-    let verts: Vec<Vertex> = pts3.iter().map(|p| builder::vertex(arr_to_pt(*p))).collect();
+    let verts: Vec<Vertex> = pts3
+        .iter()
+        .map(|p| builder::vertex(arr_to_pt(*p)))
+        .collect();
     let mut wire = Wire::new();
     for i in 0..verts.len() {
         wire.push_back(builder::line(&verts[i], &verts[(i + 1) % verts.len()]));
@@ -47,7 +50,10 @@ fn closed_wire(pts3: &[[f64; 3]]) -> Wire {
 
 /// Open straight-line polyline wire through `pts3` (>= 2 points).
 fn polyline_wire(pts3: &[[f64; 3]]) -> Wire {
-    let verts: Vec<Vertex> = pts3.iter().map(|p| builder::vertex(arr_to_pt(*p))).collect();
+    let verts: Vec<Vertex> = pts3
+        .iter()
+        .map(|p| builder::vertex(arr_to_pt(*p)))
+        .collect();
     let mut wire = Wire::new();
     for w in verts.windows(2) {
         wire.push_back(builder::line(&w[0], &w[1]));
@@ -90,8 +96,7 @@ pub fn rounded_box_solid(
     if width <= 0.0 || depth <= 0.0 || height <= 0.0 {
         return Err("box dimensions must be positive".into());
     }
-    let radius = corner_radius
-        .clamp(0.0, (width / 2.0 - 1e-6).min(depth / 2.0 - 1e-6).max(0.0));
+    let radius = corner_radius.clamp(0.0, (width / 2.0 - 1e-6).min(depth / 2.0 - 1e-6).max(0.0));
     if radius <= 1e-6 {
         return box_solid(width, depth, height);
     }
@@ -102,12 +107,7 @@ pub fn rounded_box_solid(
     // corners in order bottom-right, top-right, top-left, bottom-left;
     // each contributes a quarter arc plus a straight side
     let centers: [(f64, f64); 4] = [(hw, -hd), (hw, hd), (-hw, hd), (-hw, -hd)];
-    let starts: [Rad<f64>; 4] = [
-        Rad(-FRAC_PI_2),
-        Rad(0.0),
-        Rad(FRAC_PI_2),
-        Rad(PI),
-    ];
+    let starts: [Rad<f64>; 4] = [Rad(-FRAC_PI_2), Rad(0.0), Rad(FRAC_PI_2), Rad(PI)];
     let on = |c: (f64, f64), a: Rad<f64>| (c.0 + radius * a.0.cos(), c.1 + radius * a.0.sin());
     let y0 = -height / 2.0;
     let first_on = on(centers[0], starts[0]);
@@ -117,19 +117,21 @@ pub fn rounded_box_solid(
     for (ci, center) in centers.iter().enumerate() {
         let start = starts[ci];
         let end = Rad(start.0 + FRAC_PI_2);
-        let p_start = if ci == 0 { first_v.clone() } else { at(on(*center, start).0, y0, on(*center, start).1) };
+        let p_start = if ci == 0 {
+            first_v.clone()
+        } else {
+            at(on(*center, start).0, y0, on(*center, start).1)
+        };
         let p_end_v = at(on(*center, end).0, y0, on(*center, end).1);
         let mid = Rad(start.0 + FRAC_PI_4);
         let transit = on(*center, mid);
-        edges.push(
-            builder::circle_arc(
-                &p_start,
-                &p_end_v,
-                truck_modeling::builder::ArcConstraint::Transit(cgmath::Point3::new(
-                    transit.0, y0, transit.1,
-                )),
-            ),
-        );
+        edges.push(builder::circle_arc(
+            &p_start,
+            &p_end_v,
+            truck_modeling::builder::ArcConstraint::Transit(cgmath::Point3::new(
+                transit.0, y0, transit.1,
+            )),
+        ));
         prev = p_end_v;
         // straight side to the next corner's arc start
         let next = centers[(ci + 1) % 4];
@@ -141,8 +143,8 @@ pub fn rounded_box_solid(
     // close the ring
     edges.push(builder::line(&prev, &first_v));
     let wire = Wire::from_iter(edges);
-    let profile_face = builder::try_attach_plane(vec![wire])
-        .map_err(|e| format!("rounded box profile: {e}"))?;
+    let profile_face =
+        builder::try_attach_plane(vec![wire]).map_err(|e| format!("rounded box profile: {e}"))?;
     let solid: Solid = builder::tsweep(&profile_face, unit_y() * height);
     // profile was at y = -height/2; lift to center
     let solid = builder::translated(&solid, Vector3::new(0.0, height / 2.0, 0.0));
@@ -171,8 +173,8 @@ pub fn cylinder_solid(radius: f64, height: f64) -> Result<Solid, String> {
     // upstream cylinder recipe
     let vertex = at(0.0, 0.0, radius);
     let circle: Wire = builder::rsweep(&vertex, cgmath_zero_pt(), unit_y(), WHOLE, 2);
-    let disk = builder::try_attach_plane(vec![circle])
-        .map_err(|e| format!("cylinder base plane: {e}"))?;
+    let disk =
+        builder::try_attach_plane(vec![circle]).map_err(|e| format!("cylinder base plane: {e}"))?;
     let solid: Solid = builder::tsweep(&disk, unit_y() * height);
     Ok(solid)
 }

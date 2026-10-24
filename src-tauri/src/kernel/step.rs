@@ -7,16 +7,16 @@
 
 use std::result::Result;
 
-use crate::core::entity::Geometry;
 use crate::core::Transform;
+use crate::core::entity::Geometry;
 
-use truck_stepio::r#in::{convert::ProductShape, Table};
-use truck_stepio::r#out::{self as out, StepDesign};
 use truck_meshalgo::prelude::*;
+use truck_stepio::r#in::{Table, convert::ProductShape};
+use truck_stepio::r#out::{self as out, StepDesign};
 use truck_topology::compress::CompressedShell;
 
 use truck_base::cgmath64::Transform as _;
-use truck_modeling::{Solid};
+use truck_modeling::Solid;
 
 /// STEP-imported curve/surface geometry enums.
 pub type StepCurve = truck_stepio::r#in::step_geometry::Curve3D;
@@ -57,12 +57,12 @@ impl Geometry {
                     positions.extend(pos);
                 };
                 for shape in ent.shape.iter() {
-                    let shells: Vec<&CompressedShell<Point3, StepCurve, StepSurface>> =
-                        match shape {
-                            ProductShape::Solid(solid) => solid.boundaries.iter().collect(),
-                            ProductShape::Shells(shells) => shells.iter().collect(),
-                            ProductShape::Matrix(_) => continue,
-                        };
+                    let shells: Vec<&CompressedShell<Point3, StepCurve, StepSurface>> = match shape
+                    {
+                        ProductShape::Solid(solid) => solid.boundaries.iter().collect(),
+                        ProductShape::Shells(shells) => shells.iter().collect(),
+                        ProductShape::Matrix(_) => continue,
+                    };
                     for shell in shells {
                         let bdd = shell.triangulation(0.01).to_polygon().bounding_box();
                         let tol = if bdd.diameter() > 1e-6 {
@@ -79,7 +79,11 @@ impl Geometry {
                     continue;
                 }
                 entities.push((
-                    if name.is_empty() { "STEP".to_owned() } else { name },
+                    if name.is_empty() {
+                        "STEP".to_owned()
+                    } else {
+                        name
+                    },
                     Geometry::ImportedMesh { positions, indices },
                     Transform::default(),
                 ));
@@ -105,9 +109,7 @@ fn transform_polygon(
 }
 
 /// PolygonMesh -> indexed mesh data (fan-triangulated polygons).
-fn polygon_to_mesh_data(
-    polygon: &truck_polymesh::PolygonMesh,
-) -> (Vec<[f64; 3]>, Vec<u32>) {
+fn polygon_to_mesh_data(polygon: &truck_polymesh::PolygonMesh) -> (Vec<[f64; 3]>, Vec<u32>) {
     let positions: Vec<[f64; 3]> = polygon
         .positions()
         .iter()
@@ -175,9 +177,7 @@ pub fn export_document(doc: &crate::core::Document) -> Result<String, String> {
             const TOL: f64 = 0.001;
             for s in &solids[1..] {
                 fused = truck_shapeops::or(&fused, s, TOL).ok_or_else(|| {
-                    format!(
-                        "STEP export failed fusing {n} shapes (tangential intersection?)"
-                    )
+                    format!("STEP export failed fusing {n} shapes (tangential intersection?)")
                 })?;
             }
             export_solid(&fused, &doc.name)

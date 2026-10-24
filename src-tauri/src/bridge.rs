@@ -3,7 +3,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::{AppHandle, Manager};
 
 use crate::commands;
@@ -76,7 +76,9 @@ fn make_token() -> String {
 
 fn serve(app: AppHandle, token: String, stream: TcpStream) {
     let _ = stream.set_nodelay(true);
-    let Ok(writer_stream) = stream.try_clone() else { return };
+    let Ok(writer_stream) = stream.try_clone() else {
+        return;
+    };
     let mut writer = writer_stream;
     let mut reader = BufReader::new(stream);
     loop {
@@ -85,7 +87,9 @@ fn serve(app: AppHandle, token: String, stream: TcpStream) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
         }
-        let Ok(msg) = serde_json::from_str::<Value>(line.trim()) else { return };
+        let Ok(msg) = serde_json::from_str::<Value>(line.trim()) else {
+            return;
+        };
         if let Some(auth) = msg.get("auth").and_then(|a| a.as_str()) {
             let ok = auth == token;
             let text = format!("{{\"ok\":{}}}\n", ok);
@@ -97,7 +101,9 @@ fn serve(app: AppHandle, token: String, stream: TcpStream) {
             }
             continue;
         }
-        let Some(id) = msg.get("id").cloned() else { return };
+        let Some(id) = msg.get("id").cloned() else {
+            return;
+        };
         let cmd = msg
             .get("cmd")
             .and_then(|c| c.as_str())
@@ -134,7 +140,11 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
         params
             .get(k)
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .ok_or(format!("missing param {k}"))
     };
     let num = |k: &str| -> Result<f64, String> {
@@ -227,7 +237,10 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             d("document_id")?,
             serde_json::from_value::<Vec<TransformUpdate>>(val("updates")?)
                 .map_err(|e| format!("bad updates: {e}"))?,
-            params.get("record").and_then(|v| v.as_bool()).unwrap_or(true),
+            params
+                .get("record")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
         )),
         "set_entity_props" => to_json(commands::set_entity_props(
             app.clone(),
@@ -309,7 +322,11 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             st(app),
             d("document_id")?,
             d("path")?,
-            params.get("format").and_then(|v| v.as_str()).unwrap_or("obj").to_string(),
+            params
+                .get("format")
+                .and_then(|v| v.as_str())
+                .unwrap_or("obj")
+                .to_string(),
         )),
         other => Err(format!("unknown command {other}")),
     }

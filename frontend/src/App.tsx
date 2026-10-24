@@ -62,45 +62,45 @@ export default function App() {
   }, []);
 
   const view = useArcStore((s) => s.view);
-  const dashboardTransition = useArcStore((s) => s.dashboardTransition);
 
   return (
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
       <TopBar />
-      <div
-        className={
-          "flex min-h-0 flex-1 transition-transform duration-300 ease-in-out " +
-          (dashboardTransition ? "-translate-x-full" : "translate-x-0")
-        }
-      >
-        {view === "editor" ? (
-          // Editor view
-          <>
-            <ToolRail />
-            <div className="relative min-w-0 flex-1">
-              <Viewport />
-              <ContextDock />
-              <ModeBanner />
-              <StatusPill />
-              <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
-                <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 px-1.5 py-1.5 shadow-lg shadow-black/10 backdrop-blur-md">
-                  <UtilityRail />
-                </div>
+      <div className="relative flex min-h-0 flex-1">
+        {/* The editor stays mounted at all times — re-mounting the WebGL
+            viewport is expensive, so the dashboard simply covers it. */}
+        <div
+          className={
+            "flex min-h-0 min-w-0 flex-1 " +
+            (view === "dashboard" ? "invisible pointer-events-none" : "")
+          }
+        >
+          <ToolRail />
+          <div className="relative min-w-0 flex-1">
+            <Viewport />
+            <ContextDock />
+            <ModeBanner />
+            <StatusPill />
+            <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
+              <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 px-1.5 py-1.5 shadow-lg shadow-black/10 backdrop-blur-md">
+                <UtilityRail />
               </div>
-              <ContextMenu />
             </div>
-            <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-200 bg-base-100">
-              <div className="min-h-0 flex-1">
-                <ProjectPanel />
-              </div>
-              <div className="h-[300px] shrink-0 border-t border-base-200">
-                <PropertiesPanel />
-              </div>
-            </aside>
-          </>
-        ) : (
-          // Dashboard view - use Dashboard component
-          <Dashboard />
+            <ContextMenu />
+          </div>
+          <aside className="flex w-[260px] shrink-0 flex-col border-l border-base-200 bg-base-100">
+            <div className="min-h-0 flex-1">
+              <ProjectPanel />
+            </div>
+            <div className="h-[300px] shrink-0 border-t border-base-200">
+              <PropertiesPanel />
+            </div>
+          </aside>
+        </div>
+        {view === "dashboard" && (
+          <div className="view-fade-in absolute inset-0 z-10 overflow-hidden bg-base-50">
+            <Dashboard />
+          </div>
         )}
       </div>
       <StatusBar />

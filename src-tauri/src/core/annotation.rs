@@ -252,7 +252,11 @@ impl DimensionStyle {
         let mut body = format!("{:.*}", p, display);
         if self.show_units {
             body.push(' ');
-            body.push_str(self.units.as_deref().unwrap_or(length_unit_abbreviation(self.unit)));
+            body.push_str(
+                self.units
+                    .as_deref()
+                    .unwrap_or(length_unit_abbreviation(self.unit)),
+            );
         }
         format!("{}{}{}", self.prefix, body, self.suffix)
     }
@@ -502,7 +506,11 @@ pub fn circumradius(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> Result<f64, String
 /// the signed projection of `point - origin` onto the normalized direction.
 ///
 /// Errors when `direction` is degenerate.
-pub fn ordinate_value(point: [f64; 3], origin: [f64; 3], direction: [f64; 3]) -> Result<f64, String> {
+pub fn ordinate_value(
+    point: [f64; 3],
+    origin: [f64; 3],
+    direction: [f64; 3],
+) -> Result<f64, String> {
     let dir = normalize3(direction).ok_or_else(|| "degenerate ordinate direction".to_string())?;
     Ok(dot3(sub3(point, origin), dir))
 }
@@ -538,7 +546,13 @@ impl LinearDimension {
         offset: f64,
         style: &DimensionStyle,
     ) -> Result<DimensionGeometry, String> {
-        Self { start, end, offset_dir, offset }.to_geometry(style)
+        Self {
+            start,
+            end,
+            offset_dir,
+            offset,
+        }
+        .to_geometry(style)
     }
 
     /// Build the render geometry for this dimension with `style`.
@@ -557,8 +571,8 @@ impl LinearDimension {
             return Err("linear dimension points are coincident".to_string());
         }
         let dir = scale3(delta, 1.0 / dist);
-        let n = normalize3(self.offset_dir)
-            .ok_or_else(|| "degenerate offset direction".to_string())?;
+        let n =
+            normalize3(self.offset_dir).ok_or_else(|| "degenerate offset direction".to_string())?;
         if len3(cross3(n, dir)) < TOLERANCE {
             return Err("offset direction must not be parallel to the measured line".to_string());
         }
@@ -605,9 +619,10 @@ impl LinearDimension {
 
         let text_midpoint = match style.text_placement {
             TextPlacement::Inline => mid3(line_start, line_end),
-            TextPlacement::AboveLine => {
-                add3(mid3(line_start, line_end), scale3(n, style.text_size.max(0.0) * 0.75))
-            }
+            TextPlacement::AboveLine => add3(
+                mid3(line_start, line_end),
+                scale3(n, style.text_size.max(0.0) * 0.75),
+            ),
         };
 
         Ok(DimensionGeometry {
@@ -664,7 +679,13 @@ impl AngularDimension {
         radius: f64,
         style: &DimensionStyle,
     ) -> Result<DimensionGeometry, String> {
-        Self { vertex, a, b, radius }.to_geometry(style)
+        Self {
+            vertex,
+            a,
+            b,
+            radius,
+        }
+        .to_geometry(style)
     }
 
     /// Build the render geometry for this dimension with `style`.
@@ -684,8 +705,8 @@ impl AngularDimension {
             .ok_or_else(|| "degenerate angular ray a".to_string())?;
         let ub = normalize3(sub3(self.b, self.vertex))
             .ok_or_else(|| "degenerate angular ray b".to_string())?;
-        let normal = normalize3(cross3(ua, ub))
-            .ok_or_else(|| "angular rays are collinear".to_string())?;
+        let normal =
+            normalize3(cross3(ua, ub)).ok_or_else(|| "angular rays are collinear".to_string())?;
         let sweep = dot3(ua, ub).clamp(-1.0, 1.0).acos();
         let sweep_deg = sweep.to_degrees();
 
@@ -699,7 +720,8 @@ impl AngularDimension {
         let mut dimension_line = Vec::with_capacity(segments + 1);
         for i in 0..=segments {
             let angle = sweep * i as f64 / segments as f64;
-            let point = Transform::from_axis_angle(normal, angle).transform_point(scale3(ua, radius));
+            let point =
+                Transform::from_axis_angle(normal, angle).transform_point(scale3(ua, radius));
             dimension_line.push(add3(self.vertex, point));
         }
 
@@ -1075,7 +1097,10 @@ impl Annotation {
 
     /// Build the render geometry, resolving `style` against `styles` and
     /// falling back to the default style when the name is unknown.
-    pub fn to_geometry(&self, styles: &DimensionStyleRegistry) -> Result<DimensionGeometry, String> {
+    pub fn to_geometry(
+        &self,
+        styles: &DimensionStyleRegistry,
+    ) -> Result<DimensionGeometry, String> {
         let style = styles.get_or_default(&self.style);
         self.kind.to_geometry(&style)
     }
@@ -1282,7 +1307,10 @@ mod tests {
         let b = [1.0, 1.0, 0.0];
         assert_close(rotated_distance(a, b, [0.0, 0.0, 1.0], 0.0).unwrap(), 1.0);
         assert_close(rotated_distance(a, b, [0.0, 0.0, 1.0], 90.0).unwrap(), 1.0);
-        assert_close(rotated_distance(a, b, [0.0, 0.0, 1.0], 45.0).unwrap(), 2.0f64.sqrt());
+        assert_close(
+            rotated_distance(a, b, [0.0, 0.0, 1.0], 45.0).unwrap(),
+            2.0f64.sqrt(),
+        );
         // coincident points measure zero even with a degenerate-ish normal
         assert_close(rotated_distance(a, a, [0.0, 0.0, 1.0], 30.0).unwrap(), 0.0);
         assert!(rotated_distance(a, b, [0.0, 0.0, 0.0], 45.0).is_err());
@@ -1291,15 +1319,24 @@ mod tests {
     #[test]
     fn angle_between_directions_unsigned_and_oriented() {
         // right angle, unsigned and oriented
-        assert_close(angle_between_directions([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], None).unwrap(), 90.0);
+        assert_close(
+            angle_between_directions([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], None).unwrap(),
+            90.0,
+        );
         assert_close(
             angle_between_directions([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], Some([0.0, 0.0, 1.0]))
                 .unwrap(),
             90.0,
         );
         // parallel and antiparallel snap exactly
-        assert_close(angle_between_directions([1.0, 0.0, 0.0], [2.0, 0.0, 0.0], None).unwrap(), 0.0);
-        assert_close(angle_between_directions([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], None).unwrap(), 180.0);
+        assert_close(
+            angle_between_directions([1.0, 0.0, 0.0], [2.0, 0.0, 0.0], None).unwrap(),
+            0.0,
+        );
+        assert_close(
+            angle_between_directions([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], None).unwrap(),
+            180.0,
+        );
         // oriented sweep: clockwise about +Z from +X to -Y is 270 degrees
         assert_close(
             angle_between_directions([1.0, 0.0, 0.0], [0.0, -1.0, 0.0], Some([0.0, 0.0, 1.0]))
@@ -1315,10 +1352,18 @@ mod tests {
     #[test]
     fn circumradius_of_right_triangle_is_half_hypotenuse() {
         // 3-4-5 right triangle: R = hypotenuse / 2 = 2.5
-        assert_close(circumradius([0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 4.0, 0.0]).unwrap(), 2.5);
+        assert_close(
+            circumradius([0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 4.0, 0.0]).unwrap(),
+            2.5,
+        );
         // equilateral triangle of side 1: R = 1 / sqrt(3)
         assert_close(
-            circumradius([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 3.0f64.sqrt() / 2.0, 0.0]).unwrap(),
+            circumradius(
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.5, 3.0f64.sqrt() / 2.0, 0.0],
+            )
+            .unwrap(),
             1.0 / 3.0f64.sqrt(),
         );
         // collinear points have no circumcircle
@@ -1331,7 +1376,10 @@ mod tests {
         let origin = [1.0, 2.0, 3.0];
         let point = [4.0, 2.0, 3.0];
         assert_close(ordinate_value(point, origin, [1.0, 0.0, 0.0]).unwrap(), 3.0);
-        assert_close(ordinate_value(point, origin, [-1.0, 0.0, 0.0]).unwrap(), -3.0);
+        assert_close(
+            ordinate_value(point, origin, [-1.0, 0.0, 0.0]).unwrap(),
+            -3.0,
+        );
         // unnormalized direction is normalized first
         assert_close(ordinate_value(point, origin, [5.0, 0.0, 0.0]).unwrap(), 3.0);
         assert!(ordinate_value(point, origin, [0.0, 0.0, 0.0]).is_err());
@@ -1367,9 +1415,14 @@ mod tests {
     #[test]
     fn linear_dimension_build_places_geometry_correctly() {
         let style = DimensionStyle::default();
-        let geom =
-            LinearDimension::build([0.0, 0.0, 0.0], [20.0, 0.0, 0.0], [0.0, 1.0, 0.0], 10.0, &style)
-                .unwrap();
+        let geom = LinearDimension::build(
+            [0.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            10.0,
+            &style,
+        )
+        .unwrap();
 
         assert_eq!(geom.dimension_type, DimensionType::Linear);
         assert_close(geom.value, 20.0);
@@ -1414,23 +1467,60 @@ mod tests {
     fn linear_dimension_build_rejects_degenerate_inputs() {
         let style = DimensionStyle::default();
         // coincident points
-        assert!(LinearDimension::build([1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [0.0, 1.0, 0.0], 1.0, &style).is_err());
+        assert!(
+            LinearDimension::build(
+                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+                [0.0, 1.0, 0.0],
+                1.0,
+                &style
+            )
+            .is_err()
+        );
         // degenerate offset direction
-        assert!(LinearDimension::build([0.0, 0.0, 0.0], [20.0, 0.0, 0.0], [0.0, 0.0, 0.0], 1.0, &style).is_err());
+        assert!(
+            LinearDimension::build(
+                [0.0, 0.0, 0.0],
+                [20.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                1.0,
+                &style
+            )
+            .is_err()
+        );
         // offset direction parallel to the measured line
-        assert!(LinearDimension::build([0.0, 0.0, 0.0], [20.0, 0.0, 0.0], [1.0, 0.0, 0.0], 1.0, &style).is_err());
+        assert!(
+            LinearDimension::build(
+                [0.0, 0.0, 0.0],
+                [20.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                1.0,
+                &style
+            )
+            .is_err()
+        );
         // short lines flip the arrows outward instead of erroring
-        let cramped =
-            LinearDimension::build([0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 1.0, 0.0], 10.0, &style)
-                .unwrap();
+        let cramped = LinearDimension::build(
+            [0.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            10.0,
+            &style,
+        )
+        .unwrap();
         assert_v3(cramped.arrow_bases[0], [-3.0, 10.0, 0.0]);
         assert_v3(cramped.arrow_bases[1], [7.0, 10.0, 0.0]);
         // arrow_size <= 0 emits no arrowheads
         let mut bare = style.clone();
         bare.arrow_size = 0.0;
-        let bare_geom =
-            LinearDimension::build([0.0, 0.0, 0.0], [20.0, 0.0, 0.0], [0.0, 1.0, 0.0], 10.0, &bare)
-                .unwrap();
+        let bare_geom = LinearDimension::build(
+            [0.0, 0.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            10.0,
+            &bare,
+        )
+        .unwrap();
         assert!(bare_geom.arrow_tips.is_empty() && bare_geom.arrow_bases.is_empty());
     }
 
@@ -1469,7 +1559,10 @@ mod tests {
         // cramped arc: base angle clamped to 0.49 * sweep from each end
         let delta = 0.49 * std::f64::consts::FRAC_PI_2;
         let chord = 2.0 * (delta / 2.0).sin();
-        assert_close(linear_distance(geom.arrow_tips[0], geom.arrow_bases[0]), chord);
+        assert_close(
+            linear_distance(geom.arrow_tips[0], geom.arrow_bases[0]),
+            chord,
+        );
     }
 
     #[test]
@@ -1485,19 +1578,52 @@ mod tests {
         .unwrap();
         // radius 10 >> arrow size 3: base sits one arrow length along the arc
         let chord = 2.0 * 10.0 * (3.0f64 / 10.0 / 2.0).sin();
-        assert_close(linear_distance(geom.arrow_tips[0], geom.arrow_bases[0]), chord);
-        assert_close(linear_distance(geom.arrow_tips[1], geom.arrow_bases[1]), chord);
+        assert_close(
+            linear_distance(geom.arrow_tips[0], geom.arrow_bases[0]),
+            chord,
+        );
+        assert_close(
+            linear_distance(geom.arrow_tips[1], geom.arrow_bases[1]),
+            chord,
+        );
     }
 
     #[test]
     fn angular_dimension_build_rejects_collinear_rays() {
         let style = DimensionStyle::default();
         // degenerate ray
-        assert!(AngularDimension::build([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], 1.0, &style).is_err());
+        assert!(
+            AngularDimension::build(
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                1.0,
+                &style
+            )
+            .is_err()
+        );
         // collinear rays
-        assert!(AngularDimension::build([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], 1.0, &style).is_err());
+        assert!(
+            AngularDimension::build(
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                1.0,
+                &style
+            )
+            .is_err()
+        );
         // non-positive radius
-        assert!(AngularDimension::build([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], 0.0, &style).is_err());
+        assert!(
+            AngularDimension::build(
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                0.0,
+                &style
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1544,7 +1670,10 @@ mod tests {
 
         // unknown styles fall back to the default style
         assert!(registry.get("missing").is_none());
-        assert_eq!(registry.get_or_default("missing"), DimensionStyle::default());
+        assert_eq!(
+            registry.get_or_default("missing"),
+            DimensionStyle::default()
+        );
 
         let removed = registry.remove("Structural");
         assert_eq!(removed, Some(structural.clone()));
@@ -1591,7 +1720,13 @@ mod tests {
         registry.set_locked(&id, true);
         assert!(registry.annotation(&id).unwrap().locked);
         assert!(registry.set_layer_visible(AnnotationLayer::DEFAULT_ID, false));
-        assert!(!registry.layers.get(AnnotationLayer::DEFAULT_ID).unwrap().visible);
+        assert!(
+            !registry
+                .layers
+                .get(AnnotationLayer::DEFAULT_ID)
+                .unwrap()
+                .visible
+        );
         assert!(!registry.set_layer_visible("layer-missing", true));
 
         // removal
