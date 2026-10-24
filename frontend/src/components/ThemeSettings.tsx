@@ -11,7 +11,8 @@ import {
   useThemeStore,
 } from "../lib/themes";
 import { useArcStore } from "../lib/store";
-import { Button } from "./ui";
+import { Button, SelectField } from "./ui";
+import { useWindowControlsStyle, detectPlatform, type WindowControlsStyle } from "../lib/platform";
 
 /** Appearance section of the settings dialog: pick, import, export themes. */
 export function ThemeSettings() {
@@ -21,6 +22,8 @@ export function ThemeSettings() {
   const addCustom = useThemeStore((s) => s.addCustom);
   const removeCustom = useThemeStore((s) => s.removeCustom);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const { preference, setPreference } = useWindowControlsStyle();
+  const detected = detectPlatform();
 
   const status = (msg: string) => useArcStore.getState().setStatusMessage(msg);
 
@@ -140,14 +143,33 @@ export function ThemeSettings() {
 
       <div className="flex items-center gap-2 border-t border-base-300 pt-2">
         <Button onClick={() => fileRef.current?.click()}>
-          <FolderInput size={13} /> Import theme…
+          <FolderInput size={13} /> Import theme
         </Button>
         <Button onClick={() => void exportActive()}>
-          <Download size={13} /> Export…
+          <Download size={13} /> Export
         </Button>
         <Button onClick={duplicateActive} title="Create an editable copy of the current theme">
           <Plus size={13} /> New from current
         </Button>
+      </div>
+
+      <div className="flex flex-col gap-1.5 border-t border-base-300 pt-3">
+        <div className="text-[12px] font-medium text-base-800">Window Controls Style</div>
+        <div className="text-[11px] text-base-500">
+          Integrated minimize, maximize, and close buttons in the upper toolbar.
+        </div>
+        <div className="w-80 pt-1">
+          <SelectField
+            value={preference}
+            options={[
+              { value: "auto", label: `Auto (System default: ${detected})` },
+              { value: "windows", label: "Windows (Minimize, Maximize, Close on right)" },
+              { value: "macos", label: "macOS (Traffic lights on left)" },
+              { value: "linux", label: "Linux (Clean rounded buttons on right)" },
+            ]}
+            onChange={(val) => setPreference(val as WindowControlsStyle)}
+          />
+        </div>
       </div>
     </div>
   );

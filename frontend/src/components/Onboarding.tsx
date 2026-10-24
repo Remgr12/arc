@@ -166,7 +166,7 @@ function FolderStep({
           mono
         />
         <Button onClick={() => void browse()} disabled={busy}>
-          <FolderOpen size={14} /> Browse…
+          <FolderOpen size={14} /> Browse
         </Button>
       </div>
       {folderError && (

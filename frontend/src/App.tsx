@@ -94,7 +94,7 @@ export default function App() {
 
   return (
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
-      {view === "editor" && <TopBar />}
+      <TopBar />
       <div className="relative flex min-h-0 flex-1">
         {/* Keep the WebGL viewport mounted at all times; cover with dashboard when in home view. */}
         <div

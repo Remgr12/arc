@@ -140,7 +140,7 @@ export function StartupScreen() {
               <Plus size={16} /> New project
             </Button>
             <Button variant="ghost" onClick={() => void openOther()}>
-              <FolderOpen size={16} /> Open other…
+              <FolderOpen size={16} /> Open other
             </Button>
             {folder && (
               <span
@@ -152,7 +152,7 @@ export function StartupScreen() {
             )}
             <div className="mt-auto flex flex-col gap-2">
               <Button variant="ghost" onClick={() => void changeFolder()}>
-                Change folder…
+                Change folder
               </Button>
               <Button variant="ghost" onClick={startBlank}>
                 Start blank
@@ -203,7 +203,7 @@ export function StartupScreen() {
                       colSpan={3}
                       className="px-3 py-8 text-center text-[13px] text-base-500"
                     >
-                      Loading projects…
+                      Loading projects
                     </td>
                   </tr>
                 ) : sorted.length === 0 ? (

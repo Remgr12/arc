@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Command, Redo2, Settings, Undo2, ArrowLeft } from "lucide-react";
+import { Check, ChevronDown, Command, Redo2, Settings, Undo2, ArrowLeft, ArrowRight } from "lucide-react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { bindingHint } from "../lib/keybinds";
@@ -7,6 +7,8 @@ import { useKeybindStore } from "../lib/keybindProfiles";
 import { EXPORT_FORMATS } from "../data/tools";
 import { ipc } from "../lib/ipc";
 import { cn, IconButton } from "./ui";
+import { useWindowControlsStyle } from "../lib/platform";
+import { WindowControls } from "./WindowControls";
 import type { Settings as SettingsData } from "../lib/types";
 
 type MenuId = "file" | "edit" | "view";
@@ -103,6 +105,7 @@ function Menu({
 }
 
 export function TopBar({ children }: { children?: ReactNode }) {
+  const view = useArcStore((s) => s.view);
   const scene = useArcStore((s) => s.scene);
   const overview = useArcStore((s) => s.overview);
   const settings = useArcStore((s) => s.settings);
@@ -114,8 +117,19 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const keybindProfiles = useKeybindStore((s) => s.profiles);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
+  const { effectiveStyle } = useWindowControlsStyle();
   void keybindActiveId;
   void keybindProfiles;
+
+  const handleToggleMaximize = async (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button, input, select, [role='button']")) return;
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().toggleMaximize();
+    } catch {
+      // ignore in preview/unsupported environments
+    }
+  };
 
   useEffect(() => {
     if (!openMenu) return;
@@ -253,50 +267,128 @@ export function TopBar({ children }: { children?: ReactNode }) {
   ];
 
   return (
-    <header className="relative flex h-10 shrink-0 items-center gap-1.5 border-b border-base-200 bg-base-50 px-3">
+    <header
+      data-tauri-drag-region
+      onDoubleClick={handleToggleMaximize}
+      className={cn(
+        "relative flex h-10 shrink-0 items-center border-b border-base-200 bg-base-50 select-none",
+        effectiveStyle === "windows" ? "pl-3 pr-0" : "px-3",
+      )}
+    >
+      {/* macOS traffic lights on the far left */}
+      {effectiveStyle === "macos" && (
+        <div className="flex items-center">
+          <WindowControls variant="macos" />
+          <div className="h-4 w-px bg-base-200 ml-1 mr-2" />
+        </div>
+      )}
+
+      {/* Menus */}
       <div ref={menuBarRef} className="flex items-center gap-1.5">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
-        <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
-        <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
+        {view === "editor" && (
+          <>
+            <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
+            <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
+          </>
+        )}
       </div>
 
-      <div className="pointer-events-none absolute left-1/2 top-1/2 hidden max-w-[280px] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[12px] font-medium text-base-600 md:block">
-        {docTitle}
+      {/* Draggable spacer left of title */}
+      <div
+        data-tauri-drag-region
+        onDoubleClick={handleToggleMaximize}
+        className="flex-1 h-full min-w-4 cursor-default"
+      />
+
+      {/* Document title (or Arc Projects in dashboard) */}
+      <div
+        data-tauri-drag-region
+        onDoubleClick={handleToggleMaximize}
+        className="flex h-full items-center justify-center max-w-[320px] truncate px-2 text-center text-[12px] font-medium text-base-600 select-none cursor-default"
+      >
+        {view === "dashboard" ? "Arc — Projects" : docTitle}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        <IconButton
-          icon={<ArrowLeft size={16} strokeWidth={1.75} />}
-          onClick={() => useArcStore.getState().setView("dashboard")}
-          className="text-base-600 hover:bg-base-200"
-        />
+      {/* Draggable spacer right of title */}
+      <div
+        data-tauri-drag-region
+        onDoubleClick={handleToggleMaximize}
+        className="flex-1 h-full min-w-4 cursor-default"
+      />
 
-        {children}
-        <IconButton
-          icon={<Undo2 size={16} strokeWidth={1.75} />}
-          disabled={!scene?.canUndo}
-          onClick={() => void actions.undo()}
-          className="text-base-600 hover:bg-base-200"
-        />
-        <IconButton
-          icon={<Redo2 size={16} strokeWidth={1.75} />}
-          disabled={!scene?.canRedo}
-          onClick={() => void actions.redo()}
-          className="text-base-600 hover:bg-base-200"
-        />
+      {/* Right actions */}
+      <div className="flex items-center gap-1.5">
+        {view === "dashboard" ? (
+          <>
+            {overview?.active && (
+              <IconButton
+                icon={<ArrowRight size={16} strokeWidth={1.75} />}
+                title="Return to editor"
+                onClick={() => useArcStore.getState().setView("editor")}
+                className="text-base-600 hover:bg-base-200"
+              />
+            )}
+            <IconButton
+              icon={<Command size={16} strokeWidth={1.75} />}
+              title="Command palette"
+              onClick={() => useArcStore.getState().setPaletteOpen(true)}
+              className="text-base-600 hover:bg-base-200"
+            />
+            <IconButton
+              icon={<Settings size={16} strokeWidth={1.75} />}
+              title="Settings"
+              onClick={actions.openSettings}
+              className="text-base-600 hover:bg-base-200"
+            />
+          </>
+        ) : (
+          <>
+            <IconButton
+              icon={<ArrowLeft size={16} strokeWidth={1.75} />}
+              title="Return to projects dashboard"
+              onClick={() => useArcStore.getState().setView("dashboard")}
+              className="text-base-600 hover:bg-base-200"
+            />
 
-        <div className="h-5 w-px bg-base-200" />
+            {children}
+            <IconButton
+              icon={<Undo2 size={16} strokeWidth={1.75} />}
+              disabled={!scene?.canUndo}
+              onClick={() => void actions.undo()}
+              className="text-base-600 hover:bg-base-200"
+            />
+            <IconButton
+              icon={<Redo2 size={16} strokeWidth={1.75} />}
+              disabled={!scene?.canRedo}
+              onClick={() => void actions.redo()}
+              className="text-base-600 hover:bg-base-200"
+            />
 
-        <IconButton
-          icon={<Command size={16} strokeWidth={1.75} />}
-          onClick={() => useArcStore.getState().setPaletteOpen(true)}
-          className="text-base-600 hover:bg-base-200"
-        />
-        <IconButton
-          icon={<Settings size={16} strokeWidth={1.75} />}
-          onClick={actions.openSettings}
-          className="text-base-600 hover:bg-base-200"
-        />
+            <div className="h-4 w-px bg-base-200 mx-0.5" />
+
+            <IconButton
+              icon={<Command size={16} strokeWidth={1.75} />}
+              title="Command palette"
+              onClick={() => useArcStore.getState().setPaletteOpen(true)}
+              className="text-base-600 hover:bg-base-200"
+            />
+            <IconButton
+              icon={<Settings size={16} strokeWidth={1.75} />}
+              title="Settings"
+              onClick={actions.openSettings}
+              className="text-base-600 hover:bg-base-200"
+            />
+          </>
+        )}
+
+        {/* Windows and Linux window controls on the right */}
+        {effectiveStyle !== "macos" && (
+          <>
+            <div className="h-4 w-px bg-base-200 mx-1" />
+            <WindowControls variant={effectiveStyle} />
+          </>
+        )}
       </div>
     </header>
   );
