@@ -1,9 +1,10 @@
 /* =========================================================
    arc: Modern 3D CAD Website Stylesheet
    Designed to match the arc CAD interface:
-   Deep graphite backgrounds, vibrant cyan accents,
-   floating glass panels, precision pill badges, and clean typography.
-   Deeply optimized for mobile, tablet, and desktop viewports.
+   Deep graphite surfaces, crisp hairlines, precision pill badges,
+   matte contrast, and clean engineering typography.
+   No pulsing lights, no glowing shadows, no neon halos.
+   Optimized for mobile, tablet, and desktop viewports.
    ========================================================= */
 
 :root {
@@ -25,12 +26,10 @@
   --accent: #00e8ff;
   --accent-hover: #53f0ff;
   --accent-ink: #00b8d8;
-  --accent-glow: rgba(0, 232, 255, 0.25);
-  --accent-soft: rgba(0, 232, 255, 0.1);
+  --accent-soft: rgba(0, 232, 255, 0.08);
 
   --shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.65);
   --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-glow: 0 0 24px rgba(0, 232, 255, 0.18);
 
   --kbd-bg: #1c202a;
   --kbd-border: #313a4d;
@@ -75,10 +74,6 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 232, 255, 0.08), transparent 70%),
-    linear-gradient(to bottom, transparent, var(--bg-app) 400px);
-  background-repeat: no-repeat;
 }
 
 ::selection {
@@ -122,7 +117,7 @@ header.site {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(18, 20, 26, 0.88);
+  background: rgba(18, 20, 26, 0.92);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
@@ -151,15 +146,14 @@ header.site .wrap {
 
 .brand img {
   display: block;
-  filter: drop-shadow(0 0 8px rgba(0, 232, 255, 0.35));
 }
 
 .brand .ver-badge {
   font-size: 11px;
   font-weight: 700;
   color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid rgba(0, 232, 255, 0.25);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--line);
   padding: 2px 7px;
   border-radius: 999px;
   margin-left: 2px;
@@ -195,13 +189,13 @@ nav.top a.gh {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--accent);
-  border: 1px solid rgba(0, 232, 255, 0.3);
-  background: var(--accent-soft);
+  color: var(--ink-bright);
+  border: 1px solid var(--line);
+  background: var(--bg-surface);
 }
 nav.top a.gh:hover {
-  background: rgba(0, 232, 255, 0.2);
-  border-color: var(--accent);
+  background: var(--bg-surface-elevated);
+  border-color: var(--line-strong);
   color: #ffffff;
 }
 
@@ -231,27 +225,11 @@ main {
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid rgba(0, 232, 255, 0.25);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--line);
   padding: 4px 12px;
   border-radius: 999px;
   margin-bottom: 22px;
-}
-
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  display: inline-block;
-  flex-shrink: 0;
-  animation: pulse 2.4s infinite ease-in-out;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.85); }
 }
 
 .hero {
@@ -273,7 +251,6 @@ h1 {
 
 h1 .accent {
   color: var(--accent);
-  text-shadow: 0 0 24px rgba(0, 232, 255, 0.35);
 }
 
 .tag {
@@ -315,24 +292,24 @@ h1 .accent {
 .btn.primary {
   background: var(--accent);
   color: #0c1017;
-  box-shadow: 0 4px 18px rgba(0, 232, 255, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 .btn.primary:hover {
   background: var(--accent-hover);
   color: #06080c;
-  box-shadow: 0 6px 24px rgba(0, 232, 255, 0.45);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   transform: translateY(-1px);
 }
 
 .btn.ghost {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--ink-bright);
   border-color: var(--line-strong);
 }
 
 .btn.ghost:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.08);
   border-color: var(--accent);
   color: #ffffff;
   transform: translateY(-1px);
@@ -380,8 +357,8 @@ h1 .accent {
 
 .viewport-modes span.active {
   color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid rgba(0, 232, 255, 0.25);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--line-strong);
   font-weight: 700;
 }
 
@@ -425,14 +402,13 @@ h1 .accent {
 }
 
 .cad-model-showcase img {
-  filter: drop-shadow(0 0 20px rgba(0, 232, 255, 0.4));
-  transition: transform 300ms ease;
+  transition: transform 200ms ease;
   max-width: 100%;
   height: auto;
 }
 
 .viewport-preview:hover .cad-model-showcase img {
-  transform: scale(1.04);
+  transform: scale(1.02);
 }
 
 /* Floating CAD indicators */
@@ -442,10 +418,10 @@ h1 .accent {
   font-size: 11px;
   font-weight: 700;
   color: var(--accent);
-  background: rgba(18, 20, 26, 0.88);
+  background: rgba(18, 20, 26, 0.92);
   padding: 3px 8px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 232, 255, 0.3);
+  border: 1px solid var(--line);
   backdrop-filter: blur(4px);
   z-index: 3;
 }
@@ -652,7 +628,7 @@ kbd {
   border: 1px solid var(--kbd-border);
   border-radius: 5px;
   background: var(--kbd-bg);
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   color: var(--kbd-text);
   display: inline-block;
 }
@@ -769,11 +745,10 @@ kbd {
 .listing figcaption::before {
   content: "";
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.7;
+  background: var(--line-strong);
 }
 
 .listing pre {
