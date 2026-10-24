@@ -75,7 +75,7 @@
                 <span>Wireframe</span>
                 <span>X-Ray</span>
               </div>
-              <div style="color: var(--accent); font-weight: 600;">Perspective · Top-Right</div>
+              <div class="viewport-label">Perspective</div>
             </div>
 
             <div class="viewport-canvas">
@@ -90,13 +90,13 @@
               </div>
 
               <div class="viewport-hud">
-                <span>Extrude [<b>E</b>]</span>
+                <span>Extrude <b class="kbd-hint">[E]</b></span>
                 <span>·</span>
-                <span>Fillet [<b>F</b>]</span>
+                <span>Fillet <b class="kbd-hint">[F]</b></span>
                 <span>·</span>
-                <span>Move [<b>M</b>]</span>
-                <span>·</span>
-                <span>Deselect [<b>Esc</b>]</span>
+                <span>Move <b class="kbd-hint">[M]</b></span>
+                <span class="hud-extra">·</span>
+                <span class="hud-extra">Deselect <b class="kbd-hint">[Esc]</b></span>
               </div>
             </div>
           </div>
@@ -241,34 +241,49 @@ arc.<span class="fn">on</span>(<span class="str">"new"</span>, <span class="k">f
           <div class="way">
             <em>Prebuilt Packages</em>
             <p>
-              Download installers directly from <a href="https://github.com/Remgr12/arc/releases">GitHub Releases</a>.
-              Includes MSI and NSIS for Windows, universal DMG for macOS, and AppImage, DEB, and RPM for Linux.
+              Download official binaries for your platform:
             </p>
+            <div class="install-targets">
+              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
+                <span class="os">Windows</span>
+                <span class="ext">MSI · NSIS</span>
+              </a>
+              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
+                <span class="os">macOS</span>
+                <span class="ext">Universal DMG</span>
+              </a>
+              <a class="target-chip" href="https://github.com/Remgr12/arc/releases">
+                <span class="os">Linux</span>
+                <span class="ext">AppImage · DEB · RPM</span>
+              </a>
+            </div>
+            <p class="install-subhead">Or install via Flatpak:</p>
             <figure class="listing">
-              <figcaption>Linux · Flatpak</figcaption>
-              <pre><code><span class="cmt"># Add the official arc Flatpak repository</span>
-flatpak <span class="k">remote-add</span> arc https://remgr12.github.io/arc/flatpak-repo
+              <figcaption>Terminal · Flatpak</figcaption>
+              <pre><code><span class="cmt"># Add repository remote</span>
+flatpak remote-add arc https://remgr12.github.io/arc/flatpak-repo
 
-<span class="cmt"># Install the latest release</span>
-flatpak <span class="k">install</span> arc com.arc.cad</code></pre>
+<span class="cmt"># Install arc</span>
+flatpak install arc com.arc.cad</code></pre>
             </figure>
-            <p class="hint">Built-in auto-updater notifies you when a new release is available.</p>
+            <p class="hint">Includes auto-updater that alerts you when a new release is available.</p>
           </div>
 
           <div class="way">
             <em>Build from Source</em>
             <p>
-              Requires Node.js 20+ and the Rust toolchain (<span class="mono">rustup</span>).
-              Clone the repository and build the frontend and backend with two simple commands:
+              Requires Node.js 20+ and the Rust toolchain (<span class="mono">rustup</span>):
             </p>
             <figure class="listing">
-              <figcaption>Terminal</figcaption>
+              <figcaption>Terminal · Shell</figcaption>
               <pre><code><span class="cmt"># Clone repository</span>
-<span class="k">git clone</span> https://github.com/Remgr12/arc.git &amp;&amp; <span class="k">cd</span> arc
+git clone https://github.com/Remgr12/arc.git
+cd arc
 
-<span class="cmt"># Build and run locally</span>
-npm --prefix frontend <span class="k">install</span> &amp;&amp; npm --prefix frontend run build
-cargo tauri <span class="k">dev</span></code></pre>
+<span class="cmt"># Install &amp; launch dev build</span>
+npm --prefix frontend install
+npm --prefix frontend run build
+cargo tauri dev</code></pre>
             </figure>
             <p class="hint">Use <code>cargo tauri build</code> to produce an optimized production release bundle.</p>
           </div>
