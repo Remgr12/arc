@@ -4,22 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Keybinds: arc docs</title>
-  <meta name="description" content="Default keybindings in arc and how to customize them with keybind profiles in Settings → Keyboard." />
+  <meta name="description" content="Complete keybinding reference for arc: modeling tools, navigation, file operations, and profile customization." />
   <link rel="canonical" href="https://remgr12.github.io/arc/docs/keybinds.html" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-  <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#12141a" />
   <link rel="preload" href="assets/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="site">
     <div class="wrap">
-      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" />arc<span class="docs-badge">docs</span></a>
+      <a class="brand" href="index.html">
+        <img src="assets/icon.svg" alt="arc icon" />
+        arc
+        <span class="docs-badge">docs</span>
+      </a>
       <nav class="top">
         <a class="keep" href="../index.html">Home</a>
         <a class="keep" href="index.html">Docs</a>
-        <a href="getting-started.html">Getting started</a>
+        <a href="getting-started.html">Getting Started</a>
         <a href="modeling.html">Modeling</a>
         <a href="navigation.html">Navigation</a>
         <a href="keybinds.html" aria-current="page">Keybinds</a>
@@ -27,7 +30,7 @@
         <a href="themes.html">Themes</a>
         <a href="automation.html">Automation</a>
         <a href="https://github.com/Remgr12/arc" class="gh">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           GitHub
         </a>
       </nav>
@@ -38,7 +41,7 @@
     <aside class="toc">
       <div class="label">Docs</div>
       <a href="index.html">Overview</a>
-      <a href="getting-started.html">Getting started</a>
+      <a href="getting-started.html">Getting Started</a>
       <a href="modeling.html">Modeling</a>
       <a href="navigation.html">Navigation</a>
       <a class="on" href="keybinds.html">Keybinds</a>
@@ -46,116 +49,112 @@
       <a href="themes.html">Themes</a>
       <a href="automation.html">Automation</a>
       <div class="label">On this page</div>
-      <a href="#profiles">Profiles</a>
-      <a href="#defaults">Default bindings</a>
-      <a href="#mouse">Mouse bindings</a>
-      <a href="#customize">Customizing</a>
+      <a href="#classic-tools">Modeling Tools</a>
+      <a href="#classic-commands">Commands &amp; Editing</a>
+      <a href="#quick-actions">Quick Action Keys</a>
+      <a href="#customizing">Custom Profiles</a>
     </aside>
 
     <main class="page">
       <h1>Keybinds</h1>
       <p class="subline">
-        Every tool sits under one key so tools are picked without leaving the drawing. Bindings are
-        stored as named profiles you can edit, share, and switch between.
+        Every tool has a direct single-key shortcut for fluid, distraction-free modeling.
+        Bindings can be customized, shared, and remapped under <strong>Settings → Keyboard</strong>.
       </p>
 
-      <section class="doc" id="profiles">
-        <h2>Profiles</h2>
-        <p>
-          A keybind profile maps every action (tools plus file, edit, view, and app commands) to one
-          or more key bindings, written canonically as <span class="mono">ctrl+shift+z</span>,
-          <span class="mono">delete</span>, <span class="mono">b</span>, or <span class="mono">f5</span>.
-          arc ships one built-in profile, <strong>Classic</strong>, which contains the default layout
-          below. Your own profiles are stored in your profile data and survive restarts.
-        </p>
+      <section class="doc" id="classic-tools">
+        <h2>Modeling Tools</h2>
+        <table class="tbl">
+          <caption>Classic Profile · Modeling Tools</caption>
+          <thead><tr><th class="keys">Key</th><th>Tool</th><th>Category</th></tr></thead>
+          <tbody>
+            <tr><td class="keys"><kbd>V</kbd></td><td>Select</td><td>Transform</td></tr>
+            <tr><td class="keys"><kbd>M</kbd></td><td>Move</td><td>Transform</td></tr>
+            <tr><td class="keys"><kbd>L</kbd></td><td>Line</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>J</kbd></td><td>Polyline</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>R</kbd></td><td>Rectangle</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>C</kbd></td><td>Circle</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>A</kbd></td><td>Arc</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>N</kbd></td><td>Polygon</td><td>Sketch</td></tr>
+            <tr><td class="keys"><kbd>E</kbd></td><td>Extrude / Extrude Face</td><td>Solid</td></tr>
+            <tr><td class="keys"><kbd>F</kbd></td><td>Fillet / Fillet Edge</td><td>Modify / Solid</td></tr>
+            <tr><td class="keys"><kbd>O</kbd></td><td>Offset</td><td>Modify</td></tr>
+            <tr><td class="keys"><kbd>T</kbd></td><td>Trim</td><td>Modify</td></tr>
+            <tr><td class="keys"><kbd>X</kbd></td><td>Extend</td><td>Modify</td></tr>
+            <tr><td class="keys"><kbd>I</kbd></td><td>Mirror</td><td>Modify</td></tr>
+            <tr><td class="keys"><kbd>W</kbd></td><td>Revolve</td><td>Solid</td></tr>
+            <tr><td class="keys"><kbd>S</kbd></td><td>Sweep</td><td>Solid</td></tr>
+            <tr><td class="keys"><kbd>K</kbd></td><td>Loft</td><td>Solid</td></tr>
+            <tr><td class="keys"><kbd>B</kbd></td><td>Box</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>G</kbd></td><td>Sphere</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>Q</kbd></td><td>Cylinder</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>Z</kbd></td><td>Cone</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>Y</kbd></td><td>Torus</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>P</kbd></td><td>Plane</td><td>Construct</td></tr>
+            <tr><td class="keys"><kbd>D</kbd></td><td>Dimension</td><td>Inspect</td></tr>
+            <tr><td class="keys"><kbd>H</kbd></td><td>Wall</td><td>Inspect</td></tr>
+          </tbody>
+        </table>
       </section>
 
-      <section class="doc" id="defaults">
-        <h2>Default bindings</h2>
-        <p>These are the bindings of the built-in Classic profile:</p>
+      <section class="doc" id="classic-commands">
+        <h2>Commands &amp; Editing</h2>
         <table class="tbl">
-          <caption>Classic · tools</caption>
-          <thead><tr><th class="keys">Keys</th><th>Action</th></tr></thead>
+          <caption>File &amp; Document Commands</caption>
+          <thead><tr><th class="keys">Key Combination</th><th>Action</th></tr></thead>
           <tbody>
-            <tr><td class="keys"><kbd>V</kbd></td><td>Select tool</td></tr>
-            <tr><td class="keys"><kbd>M</kbd></td><td>Move tool</td></tr>
-            <tr><td class="keys"><kbd>B</kbd> <kbd>Y</kbd> <kbd>C</kbd> <kbd>O</kbd> <kbd>T</kbd> <kbd>P</kbd></td><td>Box, sphere, cylinder, cone, torus, plane</td></tr>
-            <tr><td class="keys"><kbd>G</kbd> <kbd>L</kbd> <kbd>J</kbd> <kbd>R</kbd> <kbd>D</kbd> <kbd>H</kbd></td><td>Circle, line, polyline, rectangle, dimension, wall</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>N</kbd></td><td>New document</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>O</kbd></td><td>Open document</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Save document</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>E</kbd></td><td>Export model (STEP / OBJ / STL)</td></tr>
           </tbody>
         </table>
+
         <table class="tbl">
-          <caption>Classic · file</caption>
-          <thead><tr><th class="keys">Keys</th><th>Action</th></tr></thead>
+          <caption>Edit &amp; View Commands</caption>
+          <thead><tr><th class="keys">Key Combination</th><th>Action</th></tr></thead>
           <tbody>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>New document</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Open…</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>S</kbd></td><td>Save</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>E</kbd></td><td>Export model</td></tr>
-          </tbody>
-        </table>
-        <table class="tbl">
-          <caption>Classic · edit and view</caption>
-          <thead><tr><th class="keys">Keys</th><th>Action</th></tr></thead>
-          <tbody>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>Z</kbd></td><td>Undo</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>Y</kbd></td><td>Redo</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>A</kbd></td><td>Select all</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>D</kbd></td><td>Duplicate</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd></td><td>Redo</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>A</kbd></td><td>Select all</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>D</kbd></td><td>Duplicate selection</td></tr>
             <tr><td class="keys"><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selection</td></tr>
             <tr><td class="keys"><kbd>F</kbd></td><td>Fit view to selection</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>K</kbd></td><td>Command palette</td></tr>
+            <tr><td class="keys"><kbd>Ctrl</kbd> + <kbd>,</kbd></td><td>Settings</td></tr>
           </tbody>
         </table>
-        <table class="tbl">
-          <caption>Classic · app</caption>
-          <thead><tr><th class="keys">Keys</th><th>Action</th></tr></thead>
-          <tbody>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>Command palette</td></tr>
-            <tr><td class="keys"><kbd>Ctrl</kbd> <kbd>,</kbd></td><td>Settings</td></tr>
-          </tbody>
-        </table>
+      </section>
+
+      <section class="doc" id="quick-actions">
+        <h2>Quick Action Keys</h2>
         <div class="note">
-          <strong>Fixed behavior, not part of profiles:</strong> <kbd>Esc</kbd> always closes the
-          command palette or clears the current selection, even while typing in a field.
-          <strong>Save As…, Explode selection, and Reload plugins</strong> have no key in the Classic
-          profile, use the command palette (<span class="mono">Ctrl K</span>) or the File menu.
+          <ul>
+            <li><strong><kbd>Enter</kbd></strong>: Commits the active tool or confirms vertex placement.</li>
+            <li><strong><kbd>Esc</kbd></strong>: Cancels the active tool, closes menus, or clears the current selection.</li>
+            <li><strong><kbd>Shift</kbd></strong>: While using Line, polyline, or rectangle, locks drawing to 45° / 90° orthogonal constraints.</li>
+          </ul>
         </div>
       </section>
 
-      <section class="doc" id="mouse">
-        <h2>Mouse bindings</h2>
+      <section class="doc" id="customizing">
+        <h2>Customizing Keybind Profiles</h2>
         <p>
-          Mouse navigation is fixed: middle-drag orbits, right-drag pans, the wheel zooms, and
-          double-clicking an entity zooms to it, see <a href="navigation.html">Navigation</a>.
-          The view cube also supports click-to-focus and drag-to-orbit.
-        </p>
-      </section>
-
-      <section class="doc" id="customize">
-        <h2>Customizing</h2>
-        <p>
-          Open <strong>Settings → Keyboard</strong> (<span class="mono">Ctrl ,</span>). There you can:
+          Open <strong>Settings → Keyboard</strong> to configure keybindings:
         </p>
         <ul>
-          <li><strong>Create and switch</strong> profiles; a new profile starts as a copy of the currently active one.</li>
-          <li><strong>Rename</strong> profiles or <strong>delete</strong> them (the built-in Classic profile cannot be deleted).</li>
-          <li><strong>Rebind any action</strong> with a live capture field: press the new key combination and it is recorded, modifiers included.</li>
-          <li><strong>Assign multiple bindings</strong> to one action; for example Redo has both <span class="mono">Ctrl Shift Z</span> and <span class="mono">Ctrl Y</span> by default.</li>
-          <li><strong>Reset</strong> a profile back to the Classic defaults at any time.</li>
+          <li><strong>Create Profiles</strong>: Duplicate the built-in Classic profile to create custom presets for blender-style or CAD-standard workflows.</li>
+          <li><strong>Live Capture</strong>: Click any command shortcut field and press your desired key combination to record it instantly.</li>
+          <li><strong>Conflict Detection</strong>: Highlights any duplicate shortcut assignments automatically.</li>
         </ul>
-        <p>
-          Conflicts inside a profile are detected: if a key is already taken by another action, arc
-          tells you which action owns it. The <em>Help</em> menu in the top bar shows a live list of
-          the keybinds of the active profile.
-        </p>
       </section>
     </main>
   </div>
 
   <footer class="site">
     <div class="wrap">
-      <img src="assets/icon.svg" alt="" />
       <div class="who">
-        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon
+        <a href="https://github.com/Remgr12/arc">arc</a> is written and maintained by Zsombor Simon.
       </div>
       <div class="right">
         <a href="../index.html">Website</a>
@@ -166,8 +165,8 @@
       <div class="legal">
         <small>
           Dual-licensed under <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-MIT">MIT</a> or
-          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
-          Not affiliated with the Arc browser, a product of The Browser Company.
+          <a href="https://github.com/Remgr12/arc/blob/main/LICENSE-APACHE">Apache-2.0</a>.
+          Not affiliated with the Arc browser by The Browser Company.
         </small>
       </div>
     </div>
