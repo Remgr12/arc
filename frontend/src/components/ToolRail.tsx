@@ -71,22 +71,22 @@ function ShaprRow({
     >
       <span
         className={cn(
-          "flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border transition-colors shadow-md backdrop-blur-md",
+          "flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl border transition-colors shadow-sm",
           active
             ? "border-accent-500 bg-accent-500 text-white"
             : danger
-              ? "border-base-300/80 bg-base-100/90 text-base-600 group-hover:border-danger-500/60 group-hover:bg-danger-500/20 group-hover:text-danger-500"
-              : "border-base-300/80 bg-base-100/90 text-base-700 group-hover:border-base-400 group-hover:bg-base-200/95 group-hover:text-base-900",
+              ? "border-base-300 bg-base-100 text-base-600 group-hover:border-danger-500/60 group-hover:bg-danger-500/20 group-hover:text-danger-500"
+              : "border-base-300/80 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
         )}
       >
         {icon}
       </span>
       <span
         className={cn(
-          "flex flex-col justify-center rounded-lg border px-2.5 py-1 shadow-md backdrop-blur-md transition-colors",
+          "flex flex-col justify-center rounded-lg border px-2.5 py-1 shadow-sm transition-colors",
           active
-            ? "border-accent-500/60 bg-base-100/95 text-base-900"
-            : "border-base-300/70 bg-base-100/88 text-base-800 group-hover:bg-base-200/95",
+            ? "border-accent-500/60 bg-base-100 text-base-900"
+            : "border-base-300/70 bg-base-100 text-base-800 group-hover:bg-base-200",
         )}
       >
         <span className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-semibold leading-tight">

@@ -48,8 +48,8 @@ export function ModeBanner() {
       {(tool !== "select" || drafting || sketchMode) && (
         <div
           className={cn(
-            "anim-slide-down pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full border border-base-200",
-            "bg-base-50/95 px-3 py-1 shadow-lg shadow-black/20 backdrop-blur-md",
+            "anim-slide-down pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full border border-base-300",
+            "bg-base-100 px-3 py-1 shadow-lg shadow-black/20",
           )}
         >
           <span className="h-2 w-2 rounded-full bg-accent-500" />
@@ -170,8 +170,8 @@ export function ModeBanner() {
       {sectionView && (
         <div
           className={cn(
-            "anim-slide-down pointer-events-auto flex items-center gap-2 rounded-full border border-base-200",
-            "bg-base-50/95 px-3 py-1 shadow-lg shadow-black/20 backdrop-blur-md",
+            "anim-slide-down pointer-events-auto flex items-center gap-2 rounded-full border border-base-300",
+            "bg-base-100 px-3 py-1 shadow-lg shadow-black/20",
           )}
         >
           <Slice size={13} className="text-accent-500" />

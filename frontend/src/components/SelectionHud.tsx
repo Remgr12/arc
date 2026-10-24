@@ -356,7 +356,7 @@ export function SelectionHud() {
     <div className="anim-slide-up pointer-events-none absolute bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-340px)] -translate-x-1/2 flex-col items-center gap-1.5">
       {/* Optional parameter sub-bar for Shell, Chamfer, or Pattern */}
       {subPanel === "shell" && (
-        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-1.5 text-[11.5px] shadow-md">
           <Box size={13} className="text-accent-500" />
           <span className="font-semibold text-base-800">Shell Wall Thickness:</span>
           <button
@@ -396,7 +396,7 @@ export function SelectionHud() {
       )}
 
       {subPanel === "chamfer" && (
-        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-1.5 text-[11.5px] shadow-md">
           <Slice size={13} className="text-accent-500" />
           <span className="font-semibold text-base-800">Chamfer Distance (45°):</span>
           <button
@@ -436,7 +436,7 @@ export function SelectionHud() {
       )}
 
       {subPanel === "pattern" && (
-        <div className="anim-slide-up pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-50/95 px-3 py-1.5 text-[11.5px] shadow-md backdrop-blur-md">
+        <div className="anim-slide-up pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-1.5 text-[11.5px] shadow-md">
           <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
             <button
               type="button"
@@ -537,7 +537,7 @@ export function SelectionHud() {
         </div>
       )}
 
-      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-base-200 bg-base-50/95 px-3 py-1.5 shadow-lg shadow-black/25 backdrop-blur-md">
+      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-base-300 bg-base-100 px-3 py-1.5 shadow-lg shadow-black/25">
         {/* Selection badge */}
         <div className="flex max-w-[180px] items-center gap-1.5 pr-1">
           <span className="h-2 w-2 shrink-0 rounded-full bg-accent-500" />

@@ -44,10 +44,10 @@ function RightShaprRow({
     >
       <span
         className={cn(
-          "flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[12px] font-medium shadow-md shadow-black/25 backdrop-blur-md transition-all",
+          "flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[12px] font-medium shadow-sm transition-colors",
           active
-            ? "border-[#28b5f5]/50 bg-base-100/95 text-[#28b5f5]"
-            : "border-base-300/70 bg-base-100/88 text-base-700 group-hover:border-base-400 group-hover:bg-base-200/95 group-hover:text-base-900",
+            ? "border-[#28b5f5]/50 bg-base-100 text-[#28b5f5]"
+            : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
         )}
       >
         <span className="flex flex-col items-end leading-tight">
@@ -61,10 +61,10 @@ function RightShaprRow({
       </span>
       <span
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-md shadow-black/25 backdrop-blur-md transition-all",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors",
           active
             ? "border-[#28b5f5] bg-[#28b5f5] text-white shadow-[#28b5f5]/25"
-            : "border-base-300/70 bg-base-100/90 text-base-700 group-hover:border-base-400 group-hover:bg-base-200/95 group-hover:text-base-900",
+            : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
         )}
       >
         {icon}
@@ -120,30 +120,32 @@ export function UtilityRail() {
   return (
     <>
       {/* 1. Top-Right Vertical Shapr3D Pill (next to the 3D ViewCube) */}
-      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-0.5 rounded-xl border border-base-300/70 bg-base-100/90 p-1 shadow-md shadow-black/25 backdrop-blur-md">
+      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-2 rounded-2xl border border-base-300/80 bg-base-100 p-2 shadow-md">
         <button
           type="button"
           onClick={toggleSnap}
+          title={snapOn ? "Snap ON (click to disable)" : "Snap OFF (click to enable)"}
           className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-lg transition-colors",
+            "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
             snapOn
               ? "bg-[#28b5f5]/18 text-[#28b5f5]"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",
           )}
         >
-          <Magnet size={14} strokeWidth={1.8} />
+          <Magnet size={16} strokeWidth={1.9} />
         </button>
 
-        {/* Tiny stacked "2 / cm" grid scale indicator box */}
+        {/* Stacked "2 / cm" grid scale indicator box */}
         <button
           type="button"
           onClick={cycleGridSize}
-          className="flex h-8 w-7 flex-col items-center justify-center rounded-lg border border-base-300/60 bg-base-200/70 leading-none text-base-800 transition-colors hover:border-[#28b5f5]/60 hover:text-[#28b5f5]"
+          title="Grid scale (click to cycle 1 / 2 / 5 / 10)"
+          className="flex h-8.5 w-8 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-[#28b5f5]/60 hover:text-[#28b5f5]"
         >
-          <span className="font-mono text-[11px] font-bold leading-none">
+          <span className="font-mono text-[11.5px] font-bold leading-none">
             {gridSize}
           </span>
-          <span className="mt-0.5 font-mono text-[8.5px] text-base-500 leading-none">
+          <span className="mt-0.5 font-mono text-[9px] text-base-500 leading-none">
             {unit}
           </span>
         </button>
@@ -151,14 +153,15 @@ export function UtilityRail() {
         <button
           type="button"
           onClick={toggleGrid}
+          title={gridOn ? "Grid & Axes visible" : "Grid & Axes hidden"}
           className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-lg transition-colors",
+            "flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
             gridOn
               ? "bg-[#28b5f5]/18 text-[#28b5f5]"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",
           )}
         >
-          <Axis3D size={14} strokeWidth={1.8} />
+          <Axis3D size={16} strokeWidth={1.9} />
         </button>
       </div>
 
@@ -175,7 +178,7 @@ export function UtilityRail() {
               <div
                 className={cn(
                   "anim-pop pointer-events-auto absolute right-full top-0 z-40 mr-2 flex flex-col gap-0.5",
-                  "rounded-xl border border-base-300/70 bg-base-100/95 p-1 shadow-lg shadow-black/30 backdrop-blur-md",
+                  "rounded-xl border border-base-300/70 bg-base-100 p-1 shadow-lg shadow-black/30",
                 )}
               >
                 {(["shaded", "wireframe"] as const).map((mode) => (

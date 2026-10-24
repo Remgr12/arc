@@ -4,7 +4,6 @@ import { initEvents } from "./lib/events";
 import { installKeybinds } from "./lib/keybinds";
 import { Viewport } from "./components/Viewport";
 import { TopBar } from "./components/TopBar";
-import { StatusBar } from "./components/StatusBar";
 import { ToolRail } from "./components/ToolRail";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { PropertiesPanel } from "./components/PropertiesPanel";
@@ -123,7 +122,6 @@ export default function App() {
           </div>
         )}
       </div>
-      {view === "editor" && <StatusBar />}
       <CommandLine />
       <CommandPalette />
       <SettingsDialog />

@@ -68,7 +68,7 @@ const FACES: FaceDef[] = [
 ];
 
 const GIZMO_SIZE = 104; // css px
-const GIZMO_RIGHT_MARGIN = 58;
+const GIZMO_RIGHT_MARGIN = 66;
 const GIZMO_TOP_MARGIN = 10;
 const TEX_SIZE = 256;
 const BEVEL_FRAC = 0.2; // 20% border zone for edges & corners

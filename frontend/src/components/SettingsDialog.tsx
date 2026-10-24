@@ -79,11 +79,21 @@ function GeneralTab({
   settings: Settings | null;
   patch: (updates: Partial<Settings>) => void;
 }) {
+  const lowSpecMode = useArcStore((s) => s.lowSpecMode);
+  const setLowSpecMode = useArcStore((s) => s.setLowSpecMode);
+
   if (!settings) {
     return <div className="text-[12px] text-base-500">Loading…</div>;
   }
   return (
     <div className="flex flex-col gap-1">
+      <Row label="Performance">
+        <Checkbox
+          checked={lowSpecMode}
+          onChange={(checked) => setLowSpecMode(checked)}
+          label="Fast mode (laptop battery & low-spec GPU optimization)"
+        />
+      </Row>
       <Row label="Units">
         <SelectField
           value={settings.units}

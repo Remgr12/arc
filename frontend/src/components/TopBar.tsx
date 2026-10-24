@@ -21,21 +21,6 @@ interface MenuItem {
 
 type MenuEntry = MenuItem | "-";
 
-function useOutsideClose(onClose: () => void) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const timer = window.setTimeout(() => document.addEventListener("mousedown", handler), 0);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener("mousedown", handler);
-    };
-  }, [onClose]);
-  return ref;
-}
-
 const recentLabel = (path: string) => {
   const name = path.split(/[\\/]/).pop() ?? path;
   return `Open recent — ${name}`;
@@ -54,16 +39,18 @@ function Menu({
   onOpen: (id: MenuId | null) => void;
   entries: MenuEntry[];
 }) {
-  const ref = useOutsideClose(() => onOpen(null));
   const isOpen = open === id;
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
         type="button"
         onMouseEnter={() => {
           if (open !== null && open !== id) onOpen(id);
         }}
-        onClick={() => onOpen(isOpen ? null : id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(isOpen ? null : id);
+        }}
         className={cn(
           "flex h-6 items-center gap-0.5 rounded px-2 text-[12px] transition-colors",
           isOpen ? "bg-base-200 text-base-800" : "text-base-600 hover:bg-base-200 hover:text-base-800",
@@ -73,7 +60,10 @@ function Menu({
         <ChevronDown size={11} className="text-base-500" />
       </button>
       {isOpen && (
-        <div className="anim-pop absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-lg border border-base-300 bg-base-150 p-1 shadow-lg shadow-black/40">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="anim-pop absolute top-full left-0 z-50 mt-1 flex w-60 flex-col rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg shadow-black/40"
+        >
           {entries.map((entry, index) =>
             entry === "-" ? (
               <div key={`sep-${index}`} className="mx-2 my-1 border-t border-base-300" />
@@ -119,8 +109,20 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const keybindActiveId = useKeybindStore((s) => s.activeId);
   const keybindProfiles = useKeybindStore((s) => s.profiles);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  const menuBarRef = useRef<HTMLDivElement>(null);
   void keybindActiveId;
   void keybindProfiles;
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu]);
 
   const patchSettings = (updates: Partial<SettingsData>) => {
     if (!settings) return;
@@ -237,7 +239,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
 
   return (
     <header className="relative flex h-9 shrink-0 items-center gap-1 border-b border-base-200 bg-base-50 px-2.5">
-      <div className="flex items-center gap-1">
+      <div ref={menuBarRef} className="flex items-center gap-1">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
         <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
         <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />

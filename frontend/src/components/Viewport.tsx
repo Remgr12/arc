@@ -63,7 +63,7 @@ interface ViewportRefs {
   entityRoot: THREE.Group;
   gridNode: THREE.Group;
   groundNode: THREE.Mesh;
-  axes: THREE.AxesHelper;
+  axes: THREE.Group;
   raycaster: THREE.Raycaster;
   columnMaterial: THREE.MeshStandardMaterial;
   lineMaterial: THREE.LineBasicMaterial;
@@ -172,6 +172,105 @@ function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
   return group;
 }
 
+/**
+ * Builds infinite X, Y, and Z axis reference lines extending across the world
+ * ([-100,000, +100,000] units). Solid vibrant color along positive axes
+ * (+X Red, +Y Green, +Z Blue) and translucent dashed/soft color along negative axes,
+ * providing immediate 3D spatial orientation at all camera distances and angles.
+ */
+function makeInfiniteAxes(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "infinite-axes";
+  const extent = 100000;
+
+  // X axis (Red): +X vibrant, -X subtle
+  const xPosGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, 0, extent, 0, 0], 3),
+  );
+  const xNegGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([-extent, 0, 0, 0, 0, 0], 3),
+  );
+  const xPosMat = new THREE.LineBasicMaterial({
+    color: 0xef4444,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
+  const xNegMat = new THREE.LineBasicMaterial({
+    color: 0xef4444,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false,
+  });
+  const xPosLine = new THREE.LineSegments(xPosGeo, xPosMat);
+  const xNegLine = new THREE.LineSegments(xNegGeo, xNegMat);
+  xPosLine.renderOrder = 2;
+  xNegLine.renderOrder = 2;
+  group.add(xPosLine);
+  group.add(xNegLine);
+
+  // Y axis (Green): +Y vibrant, -Y subtle
+  const yPosGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, 0, 0, extent, 0], 3),
+  );
+  const yNegGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, -extent, 0, 0, 0, 0], 3),
+  );
+  const yPosMat = new THREE.LineBasicMaterial({
+    color: 0x22c55e,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
+  const yNegMat = new THREE.LineBasicMaterial({
+    color: 0x22c55e,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false,
+  });
+  const yPosLine = new THREE.LineSegments(yPosGeo, yPosMat);
+  const yNegLine = new THREE.LineSegments(yNegGeo, yNegMat);
+  yPosLine.renderOrder = 2;
+  yNegLine.renderOrder = 2;
+  group.add(yPosLine);
+  group.add(yNegLine);
+
+  // Z axis (Blue): +Z vibrant, -Z subtle
+  const zPosGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, extent], 3),
+  );
+  const zNegGeo = new THREE.BufferGeometry().setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, -extent, 0, 0, 0], 3),
+  );
+  const zPosMat = new THREE.LineBasicMaterial({
+    color: 0x3b82f6,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
+  const zNegMat = new THREE.LineBasicMaterial({
+    color: 0x3b82f6,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false,
+  });
+  const zPosLine = new THREE.LineSegments(zPosGeo, zPosMat);
+  const zNegLine = new THREE.LineSegments(zNegGeo, zNegMat);
+  zPosLine.renderOrder = 2;
+  zNegLine.renderOrder = 2;
+  group.add(zPosLine);
+  group.add(zNegLine);
+
+  group.position.y = 0.02; // Small vertical offset so ground plane does not z-fight
+  return group;
+}
+
 function updateScaleBar(ref: ViewportRefs): void {
   const settings = useArcStore.getState().settings;
   const isImperial =
@@ -263,8 +362,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   groundNode.receiveShadow = true;
   sceneRoot.add(groundNode);
 
-  const axes = new THREE.AxesHelper(240);
-  axes.position.y = 0.2;
+  const axes = makeInfiniteAxes();
   sceneRoot.add(axes);
 
   const measureEl = document.createElement("div");
@@ -1459,11 +1557,16 @@ function pickFaceAt(
   if (!scene || ref.meshObjects.length === 0) return null;
   ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
 
+  const hits = ref.raycaster.intersectObjects(ref.meshObjects, false);
+  if (hits.length === 0) return null;
+
   // If a closed sketch profile face (`isProfileFill`) lies in front of or coplanar
   // with the solid face, let `pickEntityAt` select the sketch profile instead!
   let closestSketchFillDist = Infinity;
-  for (const obj of ref.objects.values()) {
-    if (!obj.visible) continue;
+  for (const entity of scene.entities) {
+    if (entity.category !== "sketch" || !entity.visible || entity.locked) continue;
+    const obj = ref.objects.get(entity.id);
+    if (!obj || !obj.visible) continue;
     for (const child of obj.children) {
       if (child.userData.isProfileFill) {
         const fillHits = ref.raycaster.intersectObject(child, false);
@@ -1474,7 +1577,6 @@ function pickFaceAt(
     }
   }
 
-  const hits = ref.raycaster.intersectObjects(ref.meshObjects, false);
   for (const hit of hits) {
     if (!hit.object.visible || !hit.face) continue;
     if (closestSketchFillDist <= hit.distance + 0.6) return null;
@@ -1724,10 +1826,10 @@ function attachHandlers(ref: ViewportRefs): () => void {
     if (store.scene) {
       const now = performance.now();
       const handler = handlerFor(store.tool);
-      // Throttle hover picking on laptops (~40Hz max) and skip while orbiting/panning.
+      // Throttle hover picking on laptops (~30Hz max) and skip while orbiting/panning.
       if (
         event.buttons === 0 &&
-        now - ref.lastHoverAt >= 24 &&
+        now - ref.lastHoverAt >= 32 &&
         handler &&
         (store.tool === "select" ||
           store.tool === "move" ||
@@ -1739,27 +1841,43 @@ function attachHandlers(ref: ViewportRefs): () => void {
         // Single-pass face hit shared with edge occlusion test.
         const face = pickFaceAt(ref, point, store.scene);
         const edge = pickEdgeAt(ref, point, store.scene, 7, face);
+        const prevHover = store.hoverObj;
+
         if (edge) {
-          store.setHoverObj({
-            entityId: edge.entityId,
-            kind: "edge",
-            face: null,
-            edge: edge.key,
-            point: edge.point,
-            normal: [0, 0, 0],
-          });
+          if (
+            prevHover?.kind !== "edge" ||
+            prevHover.entityId !== edge.entityId ||
+            prevHover.edge !== edge.key
+          ) {
+            store.setHoverObj({
+              entityId: edge.entityId,
+              kind: "edge",
+              face: null,
+              edge: edge.key,
+              point: edge.point,
+              normal: [0, 0, 0],
+            });
+          }
         } else if (face) {
-          store.setHoverObj({
-            entityId: face.entityId,
-            kind: "face",
-            face: face.faceIndex,
-            edge: null,
-            point: face.point,
-            normal: face.normal,
-          });
+          if (
+            prevHover?.kind !== "face" ||
+            prevHover.entityId !== face.entityId ||
+            prevHover.face !== face.faceIndex
+          ) {
+            store.setHoverObj({
+              entityId: face.entityId,
+              kind: "face",
+              face: face.faceIndex,
+              edge: null,
+              point: face.point,
+              normal: face.normal,
+            });
+          }
+        } else if (prevHover !== null) {
+          store.setHoverObj(null);
         } else {
           const id = pickEntityAt(ref, point);
-          if (id !== store.hoverEntity || store.hoverObj !== null) {
+          if (id !== store.hoverEntity) {
             store.setHoverEntity(id);
           }
         }
