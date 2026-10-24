@@ -67,8 +67,9 @@ const FACES: FaceDef[] = [
   },
 ];
 
-const GIZMO_SIZE = 112; // css px
-const GIZMO_MARGIN = 14;
+const GIZMO_SIZE = 104; // css px
+const GIZMO_RIGHT_MARGIN = 58;
+const GIZMO_TOP_MARGIN = 10;
 const TEX_SIZE = 256;
 const BEVEL_FRAC = 0.2; // 20% border zone for edges & corners
 
@@ -371,11 +372,11 @@ export class ViewCube {
     this.redrawAllFaces();
   }
 
-  /** Gizmo rect in CSS top-left coordinates of the host (pinned top-right). */
+  /** Gizmo rect in CSS top-left coordinates of the host (pinned top-right, left of the Snap/Scale pill). */
   rect(hostW: number, _hostH: number): { x: number; y: number; size: number } {
     return {
-      x: Math.max(0, hostW - GIZMO_SIZE - GIZMO_MARGIN),
-      y: GIZMO_MARGIN,
+      x: Math.max(0, hostW - GIZMO_SIZE - GIZMO_RIGHT_MARGIN),
+      y: GIZMO_TOP_MARGIN,
       size: GIZMO_SIZE,
     };
   }

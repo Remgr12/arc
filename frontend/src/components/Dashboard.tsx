@@ -13,7 +13,6 @@ import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
 import { Button, IconButton, Modal, TextField, cn } from "./ui";
-import { Logo } from "./Logo";
 import type { ProjectSummary } from "../lib/types";
 
 export function Dashboard() {
@@ -116,13 +115,7 @@ export function Dashboard() {
     <div className="flex h-full">
       {/* Workspace sidebar */}
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-base-200 bg-base-100">
-        <div className="flex items-center gap-2.5 border-b border-base-200 px-4 py-3.5">
-          <Logo size={26} />
-          <span className="text-[14px] font-semibold tracking-tight text-base-900">
-            arc
-          </span>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-3 pt-4">
           <section className="flex flex-col gap-1">
             <SectionLabel>Workspace</SectionLabel>
             <span
@@ -376,19 +369,13 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 rounded-xl border border-base-300 border-dashed p-10 text-center">
-      <Logo size={40} />
       <div className="flex flex-col gap-1">
         <span className="text-[13px] font-medium text-base-800">
           {loading
             ? "Loading projects…"
             : hasFolder
-              ? "Nothing in this workspace yet"
+              ? "No projects yet"
               : "No workspace folder set"}
-        </span>
-        <span className="max-w-[380px] text-[11.5px] text-base-600">
-          {hasFolder
-            ? "Create a project, import an existing file, or open a document from anywhere on disk."
-            : "Run through setup to pick a folder where your projects will live."}
         </span>
       </div>
       <div className="flex items-center gap-2">

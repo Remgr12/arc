@@ -31,7 +31,6 @@ function cycleGridSize() {
 export function StatusBar() {
   const scene = useArcStore((s) => s.scene);
   const settings = useArcStore((s) => s.settings);
-  const statusMessage = useArcStore((s) => s.statusMessage);
   const cursorWorld = useArcStore((s) => s.cursorWorld);
   const selKind = useArcStore((s) => s.selKind);
   const sketchMode = useArcStore((s) => s.sketchMode);
@@ -52,7 +51,6 @@ export function StatusBar() {
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          title="Toggle reference grid"
           disabled={!settings}
           onClick={() => toggleSetting("show_grid")}
           className={cn(
@@ -69,7 +67,6 @@ export function StatusBar() {
         {gridLabel && (
           <button
             type="button"
-            title="Click to cycle grid spacing (1 / 2 / 5 / 10 cm)"
             onClick={cycleGridSize}
             className="flex h-5 shrink-0 items-center rounded border border-base-200 bg-base-100 px-1.5 font-mono text-[10.5px] text-base-700 transition-colors hover:bg-base-200"
           >
@@ -79,7 +76,6 @@ export function StatusBar() {
 
         <button
           type="button"
-          title="Toggle grid & dimension snapping"
           disabled={!settings}
           onClick={() => toggleSetting("snap_enabled")}
           className={cn(
@@ -93,10 +89,7 @@ export function StatusBar() {
           Snap
         </button>
 
-        <div
-          className="flex h-5 shrink-0 items-center gap-0.5 rounded border border-base-200 bg-base-100 px-1"
-          title="Dimension snap increment (hold Alt while dragging for 0.1 cm fine step)"
-        >
+        <div className="flex h-5 shrink-0 items-center gap-0.5 rounded border border-base-200 bg-base-100 px-1">
           <Ruler size={11} className="mr-0.5 text-base-500" />
           {SNAP_STEPS.map((step) => (
             <button
@@ -117,18 +110,7 @@ export function StatusBar() {
         </div>
       </div>
 
-      <span className="h-4 w-px bg-base-200" />
-
-      {/* Active status / tool hint */}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span
-          className={cn(
-            "h-1.5 w-1.5 shrink-0 rounded-full",
-            sketchMode || selKind !== "entity" ? "bg-accent-500" : "bg-base-400",
-          )}
-        />
-        <span className="truncate font-medium text-base-700">{statusMessage}</span>
-      </div>
+      <div className="min-w-0 flex-1" />
 
       {sketchMode && (
         <span className="flex shrink-0 items-center gap-1 rounded bg-accent-500/15 px-2 py-0.5 font-mono text-[10.5px] text-accent-500">
@@ -143,25 +125,19 @@ export function StatusBar() {
         </span>
       )}
 
-      <span className="h-4 w-px bg-base-200" />
-
-      <span
-        className="shrink-0 font-mono text-[11px] tabular-nums text-base-500"
-        title="Cursor X · Y · Z coordinates"
-      >
+      <span className="shrink-0 font-mono text-[11px] tabular-nums text-base-500">
         X {fmt(cursorWorld[0])} · Y {fmt(cursorWorld[1])} · Z {fmt(cursorWorld[2])}
       </span>
 
       <span className="h-4 w-px bg-base-200" />
 
-        <span className="shrink-0 tabular-nums text-base-500">
+      <span className="shrink-0 tabular-nums text-base-500">
         {scene ? `${scene.entities.length} items` : "no doc"}
       </span>
 
       <button
         type="button"
         onClick={() => setLowSpecMode(!lowSpecMode)}
-        title="Toggle Laptop Performance Mode (1.0x pixel ratio, disables shadows & PBR IBL)"
         className={cn(
           "flex h-5 shrink-0 items-center gap-1 rounded px-2 text-[11px] font-medium transition-colors",
           lowSpecMode

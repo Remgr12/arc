@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { FolderOpen, Check } from "lucide-react";
 import { Button, TextField, cn } from "./ui";
-import { Logo } from "./Logo";
 import { useArcStore } from "../lib/store";
 import { commitWorkspaceFolder } from "../lib/workspace";
 import { BUILTIN_THEMES, useThemeStore } from "../lib/themes";
@@ -68,16 +67,10 @@ export function Onboarding() {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-base-50">
       <div className="flex w-[620px] flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-2xl">
-        <div className="flex items-center gap-3 border-b border-base-300 px-6 py-5">
-          <Logo size={34} />
-          <div className="flex flex-col">
-            <span className="text-[18px] font-semibold text-base-800">
-              Welcome to arc
-            </span>
-            <span className="text-[12px] text-base-600">
-              Three quick steps to set up your workspace
-            </span>
-          </div>
+        <div className="flex items-center border-b border-base-300 px-6 py-4">
+          <span className="text-[16px] font-semibold text-base-800">
+            Workspace Setup
+          </span>
         </div>
         <div className="flex items-center gap-2 px-6 pt-4">
           {STEP_LABELS.map((label, index) => (
@@ -163,8 +156,7 @@ function FolderStep({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12.5px] text-base-700">
-        Where should arc store your projects? Files you save and create will
-        live in this folder.
+        Choose a folder where your projects will be stored.
       </p>
       <div className="flex gap-2">
         <TextField

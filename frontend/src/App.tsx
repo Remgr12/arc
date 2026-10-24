@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { X } from "lucide-react";
 import { initEvents } from "./lib/events";
 import { installKeybinds } from "./lib/keybinds";
 import { Viewport } from "./components/Viewport";
@@ -19,7 +20,6 @@ import { useArcStore } from "./lib/store";
 import { useMaterialsPanelMount } from "./components/MaterialsPanel";
 import { CommandLine } from "./components/CommandLine";
 
-import { ContextDock } from "./components/ContextDock";
 import { ModeBanner } from "./components/ModeBanner";
 import { SelectionHud } from "./components/SelectionHud";
 import { UtilityRail } from "./components/UtilityRail";
@@ -62,6 +62,9 @@ export default function App() {
   }, []);
 
   const view = useArcStore((s) => s.view);
+  const leftSidebarOpen = useArcStore((s) => s.leftSidebarOpen);
+  const rightSidebarOpen = useArcStore((s) => s.rightSidebarOpen);
+  const setRightSidebarOpen = useArcStore((s) => s.setRightSidebarOpen);
 
   return (
     <div className="flex h-full w-full flex-col bg-base-50 text-base-800">
@@ -74,28 +77,45 @@ export default function App() {
             (view === "dashboard" ? "invisible pointer-events-none" : "")
           }
         >
-          <ToolRail />
+          {/* Shapr3D Left "Items" Sidebar (collapsible via Items button in ToolRail) */}
+          {leftSidebarOpen && (
+            <aside className="anim-slide-right flex w-[236px] shrink-0 flex-col border-r border-base-200 bg-base-50">
+              <div className="min-h-0 flex-1">
+                <ProjectPanel />
+              </div>
+            </aside>
+          )}
+
+          {/* Center 3D Viewport with floating Shapr3D Left Dock & Right Controls */}
           <div className="relative min-w-0 flex-1">
             <Viewport />
-            <ContextDock />
+            <ToolRail />
             <ModeBanner />
             <SelectionHud />
-            {/* Positioned below the top-right 3D ViewCube (112px + 14px margin) */}
-            <div className="pointer-events-none absolute right-3 top-[140px] z-30">
-              <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md">
-                <UtilityRail />
-              </div>
-            </div>
+            <UtilityRail />
             <ContextMenu />
           </div>
-          <aside className="flex w-[280px] shrink-0 flex-col border-l border-base-200 bg-base-50">
-            <div className="min-h-0 flex-1">
-              <ProjectPanel />
-            </div>
-            <div className="h-[320px] shrink-0 border-t border-base-200">
-              <PropertiesPanel />
-            </div>
-          </aside>
+
+          {/* Shapr3D Right "History & Inspector" Sidebar (collapsible via History button) */}
+          {rightSidebarOpen && (
+            <aside className=" flex w-[268px] shrink-0 flex-col border-l border-base-200 bg-base-50">
+              <div className="flex h-9 shrink-0 items-center justify-between border-b border-base-200 px-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-base-600">
+                  History & Inspector
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRightSidebarOpen(false)}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+                >
+                  <X size={13} strokeWidth={1.8} />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <PropertiesPanel />
+              </div>
+            </aside>
+          )}
         </div>
         {view === "dashboard" && (
           <div className="view-fade-in absolute inset-0 z-20 overflow-hidden bg-base-50">

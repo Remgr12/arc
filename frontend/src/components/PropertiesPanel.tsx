@@ -82,10 +82,8 @@ export function PropertiesPanel() {
     return (
       <div className="flex h-full min-h-0 flex-col bg-base-50">
         <PanelHeader title="Properties" />
-        <div className="flex flex-1 items-start px-3 pt-3">
-          <p className="text-[12px] leading-relaxed text-base-500">
-            Select an item to inspect its transform, layer, and parametric dimensions.
-          </p>
+        <div className="flex flex-1 items-center justify-center px-3">
+          <p className="text-[12px] text-base-500">No selection</p>
         </div>
       </div>
     );

@@ -236,7 +236,6 @@ function DimPill({
 
   return (
     <div
-      title={`${spec.fullLabel} · click to type or use - / + (${spec.step || 1}${spec.isInteger ? "" : ` ${unitLabel}`} step)`}
       className={cn(
         "flex h-7 items-center gap-1 rounded-lg border px-1.5 transition-colors",
         spec.isActiveFaceParam
@@ -252,7 +251,6 @@ function DimPill({
         tabIndex={-1}
         onClick={() => stepBy(-1)}
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
-        title={`Decrease ${spec.fullLabel}`}
       >
         <Minus size={10} strokeWidth={2.2} />
       </button>
@@ -295,7 +293,6 @@ function DimPill({
         tabIndex={-1}
         onClick={() => stepBy(1)}
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-base-500 transition-colors hover:bg-base-200 hover:text-base-800 active:scale-95"
-        title={`Increase ${spec.fullLabel}`}
       >
         <Plus size={10} strokeWidth={2.2} />
       </button>
@@ -568,7 +565,6 @@ export function SelectionHud() {
                       ? "bg-accent-500 text-white shadow-xs"
                       : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
                   )}
-                  title="Push/Pull this face along its normal (E)"
                 >
                   <ArrowUpDown size={13} strokeWidth={2} />
                   Extrude Face
@@ -584,7 +580,6 @@ export function SelectionHud() {
                       ? "bg-accent-500 text-white shadow-xs"
                       : "text-base-700 hover:bg-base-200",
                   )}
-                  title="Offset this face"
                 >
                   <Scaling size={13} strokeWidth={1.8} />
                   Offset
@@ -599,7 +594,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
-                title="Hollow out this solid leaving the selected face open"
               >
                 <Box size={13} strokeWidth={1.8} />
                 Shell
@@ -620,7 +614,6 @@ export function SelectionHud() {
                   );
                 }}
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium text-base-700 transition-colors hover:bg-base-200"
-                title="Start a 2D sketch on this face's plane (horizontal, vertical, or angled)"
               >
                 <PencilRuler size={13} strokeWidth={1.8} />
                 Sketch on Face
@@ -643,7 +636,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
                 )}
-                title="Round this edge interactively (F)"
               >
                 <Sparkles size={13} strokeWidth={2} />
                 Fillet Edge
@@ -657,7 +649,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
-                title="Bevel this edge at 45°"
               >
                 <Slice size={13} strokeWidth={1.8} />
                 Chamfer
@@ -680,7 +671,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
-                title="Hollow out this solid to a wall thickness"
               >
                 <Box size={13} strokeWidth={1.8} />
                 Shell
@@ -694,7 +684,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
-                title="Create a Linear or Circular Pattern / Array"
               >
                 <Grid3X3 size={13} strokeWidth={1.8} />
                 Pattern
@@ -720,7 +709,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "bg-accent-500/15 text-accent-500 hover:bg-accent-500 hover:text-white",
                 )}
-                title="Extrude this closed sketch profile (drag outward to add, or inward into a solid to Cut)"
               >
                 <ArrowUpDown size={13} strokeWidth={2} />
                 Extrude / Cut
@@ -734,7 +722,6 @@ export function SelectionHud() {
                     ? "bg-accent-500 text-white shadow-xs"
                     : "text-base-700 hover:bg-base-200",
                 )}
-                title="Create a Linear or Circular Pattern / Array"
               >
                 <Grid3X3 size={13} strokeWidth={1.8} />
                 Pattern

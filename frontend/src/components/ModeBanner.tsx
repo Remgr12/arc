@@ -68,7 +68,6 @@ export function ModeBanner() {
                       ? "bg-accent-500 font-semibold text-white"
                       : "text-base-600 hover:bg-base-200",
                   )}
-                  title="Sketch on Horizontal Top Plane (XZ)"
                 >
                   XZ
                 </button>
@@ -81,7 +80,6 @@ export function ModeBanner() {
                       ? "bg-accent-500 font-semibold text-white"
                       : "text-base-600 hover:bg-base-200",
                   )}
-                  title="Sketch on Vertical Front Plane (XY)"
                 >
                   XY
                 </button>
@@ -94,7 +92,6 @@ export function ModeBanner() {
                       ? "bg-accent-500 font-semibold text-white"
                       : "text-base-600 hover:bg-base-200",
                   )}
-                  title="Sketch on Vertical Side Plane (YZ)"
                 >
                   YZ
                 </button>
@@ -105,7 +102,6 @@ export function ModeBanner() {
               {Math.abs(sketchPlaneHeight) > 1e-4 && (
                 <button
                   type="button"
-                  title="Reset sketch plane offset to 0"
                   onClick={() => setSketchPlane(0)}
                   className="flex h-5 items-center gap-1 rounded px-1.5 text-[11px] text-base-600 hover:bg-base-200 hover:text-base-800"
                 >
@@ -115,7 +111,6 @@ export function ModeBanner() {
               )}
               <button
                 type="button"
-                title="Align camera normal to active sketch plane"
                 onClick={() => alignNormalView()}
                 className="flex h-5 items-center gap-1 rounded bg-base-200 px-2 text-[11px] font-medium text-base-700 transition-colors hover:bg-base-300 hover:text-base-900"
               >
@@ -134,7 +129,6 @@ export function ModeBanner() {
                   type="button"
                   onClick={() => setPolygonSides(polygonSides - 1)}
                   className="flex h-5 w-5 items-center justify-center rounded bg-base-200 text-base-700 hover:bg-base-300"
-                  title="Decrease sides ([)"
                 >
                   <Minus size={11} />
                 </button>
@@ -145,7 +139,6 @@ export function ModeBanner() {
                   type="button"
                   onClick={() => setPolygonSides(polygonSides + 1)}
                   className="flex h-5 w-5 items-center justify-center rounded bg-base-200 text-base-700 hover:bg-base-300"
-                  title="Increase sides (])"
                 >
                   <Plus size={11} />
                 </button>
@@ -156,7 +149,6 @@ export function ModeBanner() {
           {sketchMode ? (
             <button
               type="button"
-              title="Finish Sketch (Esc)"
               onClick={exitSketchMode}
               className="ml-1 flex h-5 items-center gap-1 rounded-full bg-accent-500 px-2 text-[11px] font-medium text-white transition-colors hover:bg-accent-600"
             >
@@ -166,7 +158,6 @@ export function ModeBanner() {
           ) : (
             <button
               type="button"
-              title={def?.tip ?? "Cancel (Esc)"}
               onClick={() => window.dispatchEvent(new CustomEvent("arc-draft-cancel"))}
               className="flex h-5 w-5 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
             >

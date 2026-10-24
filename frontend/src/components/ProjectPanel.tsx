@@ -353,7 +353,7 @@ export function ProjectPanel() {
           <div className="flex flex-col gap-2">
             {!scene || scene.entities.length === 0 ? (
               <div className="rounded-lg border border-dashed border-base-300 px-3 py-6 text-center text-[12px] text-base-500">
-                No items in scene yet. Select a sketch or primitive tool on the left rail and click in the viewport.
+                No items
               </div>
             ) : (
               grouped.map((group) => (

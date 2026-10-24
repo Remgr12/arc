@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, FolderOpen, Plus, RefreshCw } from "lucide-react";
 import { Button, IconButton, Modal, TextField, cn } from "./ui";
-import { Logo } from "./Logo";
 import { ipc } from "../lib/ipc";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
@@ -135,20 +134,8 @@ export function StartupScreen() {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-base-50 backdrop-blur-sm">
       <div className="flex h-[540px] w-[820px] overflow-hidden rounded-xl border border-base-200 bg-base-100 shadow-xl">
-        <div className="flex w-[240px] shrink-0 flex-col border-r border-base-200 bg-base-50 p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/10 text-accent-600">
-              <Logo size={28} />
-            </div>
-            <span className="text-[20px] font-semibold tracking-tight text-base-900">
-              arc
-            </span>
-          </div>
-          <span className="mt-3 text-[13px] leading-relaxed text-base-600">
-            A lightweight CAD workspace. Pick a project below or start something
-            new.
-          </span>
-          <div className="mt-5 flex flex-col gap-2">
+        <div className="flex w-[220px] shrink-0 flex-col border-r border-base-200 bg-base-50 p-4">
+          <div className="flex flex-1 flex-col gap-2">
             <Button variant="primary" onClick={() => setNaming("")}>
               <Plus size={16} /> New project
             </Button>

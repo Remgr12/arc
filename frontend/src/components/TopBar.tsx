@@ -8,7 +8,6 @@ import { EXPORT_FORMATS } from "../data/tools";
 import { ipc } from "../lib/ipc";
 import { cn, IconButton } from "./ui";
 import type { Settings as SettingsData } from "../lib/types";
-import { Logo } from "./Logo";
 
 type MenuId = "file" | "edit" | "view";
 
@@ -237,31 +236,20 @@ export function TopBar({ children }: { children?: ReactNode }) {
   ];
 
   return (
-    <header className="relative flex h-9 shrink-0 items-center gap-1 border-b border-base-200 bg-base-50 px-3">
-      <div className="flex items-center gap-1.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-500/10 text-accent-600">
-          <Logo size={16} />
-        </div>
-        <span className="text-[13px] font-semibold text-base-800">arc</span>
-      </div>
-
-      <div className="ml-4 flex items-center gap-1.5">
+    <header className="relative flex h-9 shrink-0 items-center gap-1 border-b border-base-200 bg-base-50 px-2.5">
+      <div className="flex items-center gap-1">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
         <Menu id="edit" label="Edit" open={openMenu} onOpen={setOpenMenu} entries={editMenu} />
         <Menu id="view" label="View" open={openMenu} onOpen={setOpenMenu} entries={viewMenu} />
       </div>
 
-      <div
-        title={docTitle}
-        className="pointer-events-none absolute left-1/2 top-1/2 hidden max-w-[280px] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[12px] font-medium text-base-600 md:block"
-      >
+      <div className="pointer-events-none absolute left-1/2 top-1/2 hidden max-w-[280px] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[12px] font-medium text-base-600 md:block">
         {docTitle}
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
         <IconButton
           icon={<ArrowLeft size={16} strokeWidth={1.75} />}
-          title="Back to dashboard"
           onClick={() => useArcStore.getState().setView("dashboard")}
           className="text-base-600 hover:bg-base-200"
         />
@@ -269,14 +257,12 @@ export function TopBar({ children }: { children?: ReactNode }) {
         {children}
         <IconButton
           icon={<Undo2 size={16} strokeWidth={1.75} />}
-          title={`Undo${bindingHint("edit:undo") ? ` (${bindingHint("edit:undo")})` : ""}`}
           disabled={!scene?.canUndo}
           onClick={() => void actions.undo()}
           className="text-base-600 hover:bg-base-200"
         />
         <IconButton
           icon={<Redo2 size={16} strokeWidth={1.75} />}
-          title={`Redo${bindingHint("edit:redo") ? ` (${bindingHint("edit:redo")})` : ""}`}
           disabled={!scene?.canRedo}
           onClick={() => void actions.redo()}
           className="text-base-600 hover:bg-base-200"
@@ -286,13 +272,11 @@ export function TopBar({ children }: { children?: ReactNode }) {
 
         <IconButton
           icon={<Command size={16} strokeWidth={1.75} />}
-          title={`Command palette${bindingHint("app:palette") ? ` (${bindingHint("app:palette")})` : ""}`}
           onClick={() => useArcStore.getState().setPaletteOpen(true)}
           className="text-base-600 hover:bg-base-200"
         />
         <IconButton
           icon={<Settings size={16} strokeWidth={1.75} />}
-          title={`Settings${bindingHint("app:settings") ? ` (${bindingHint("app:settings")})` : ""}`}
           onClick={actions.openSettings}
           className="text-base-600 hover:bg-base-200"
         />

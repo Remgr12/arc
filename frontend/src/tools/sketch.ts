@@ -88,6 +88,9 @@ async function createSketchEntity(
       false,
     );
   }
+  if (id) {
+    await ctx.setSelection([id], id);
+  }
   return id;
 }
 
@@ -181,19 +184,191 @@ export function previewRing(
 
 // ---------------------------------------------------------------------- line
 
+/** Snap to any existing sketch vertex (or chain start) within tolerance so lines connect cleanly. */
+function snapToSketchVertex(
+  raw: THREE.Vector3,
+  ctx: ToolContext,
+  chainPoints: THREE.Vector3[] = [],
+): THREE.Vector3 {
+  const tol = Math.max(1.2, ctx.settings.gridSize * 0.65);
+  let best: THREE.Vector3 | null = null;
+  let bestDist = tol;
+
+  for (const pt of chainPoints) {
+    const d = raw.distanceTo(pt);
+    if (d < bestDist) {
+      bestDist = d;
+      best = pt.clone();
+    }
+  }
+
+  for (const e of ctx.scene()?.entities ?? []) {
+    if (!e.visible || e.locked || e.category !== "sketch") continue;
+    const pos = new THREE.Vector3(...e.transform.position);
+    const quat = new THREE.Quaternion(...e.transform.rotation);
+    const scale = new THREE.Vector3(...e.transform.scale);
+    const toWorld = (lx: number, ly: number, lz: number) =>
+      new THREE.Vector3(lx, ly, lz).multiply(scale).applyQuaternion(quat).add(pos);
+
+    const g = e.geometry;
+    if (g.type === "line_curve" && Array.isArray(g.end)) {
+      const end = g.end as [number, number, number];
+      const p0 = toWorld(0, 0, 0);
+      const p1 = toWorld(end[0], end[1], end[2]);
+      for (const v of [p0, p1]) {
+        const d = raw.distanceTo(v);
+        if (d < bestDist) {
+          bestDist = d;
+          best = v;
+        }
+      }
+    } else if (g.type === "polyline_curve" && Array.isArray(g.points)) {
+      for (const p of g.points as [number, number, number][]) {
+        const v = toWorld(p[0], p[1], p[2]);
+        const d = raw.distanceTo(v);
+        if (d < bestDist) {
+          bestDist = d;
+          best = v;
+        }
+      }
+    }
+  }
+
+  return best ?? ctx.snap(raw).point;
+}
+
+/**
+ * Inspect all open `line_curve` and open `polyline_curve` entities in the scene.
+ * If the newly added segment completes a closed cycle of >= 3 vertices, merge
+ * those connected segments into a single closed `polyline_curve` so it immediately
+ * gets a shaded, extrudable face (Shapr3D style).
+ */
+async function tryMergeClosedLineLoop(
+  ctx: ToolContext,
+  seedEntityId: string,
+): Promise<boolean> {
+  const entities = ctx.scene()?.entities ?? [];
+  const tol = Math.max(0.8, ctx.settings.gridSize * 0.45);
+
+  interface ChainSeg {
+    id: string;
+    pts: THREE.Vector3[];
+  }
+
+  const segs: ChainSeg[] = [];
+  for (const e of entities) {
+    if (!e.visible || e.locked) continue;
+    const pos = new THREE.Vector3(...e.transform.position);
+    const quat = new THREE.Quaternion(...e.transform.rotation);
+    const scale = new THREE.Vector3(...e.transform.scale);
+    const toWorld = (lx: number, ly: number, lz: number) =>
+      new THREE.Vector3(lx, ly, lz).multiply(scale).applyQuaternion(quat).add(pos);
+
+    if (e.geometry.type === "line_curve" && Array.isArray(e.geometry.end)) {
+      const end = e.geometry.end as [number, number, number];
+      const p0 = toWorld(0, 0, 0);
+      const p1 = toWorld(end[0], end[1], end[2]);
+      if (p0.distanceTo(p1) > 1e-4) {
+        segs.push({ id: e.id, pts: [p0, p1] });
+      }
+    } else if (
+      e.geometry.type === "polyline_curve" &&
+      Array.isArray(e.geometry.points) &&
+      e.geometry.points.length >= 2
+    ) {
+      const pts = (e.geometry.points as [number, number, number][]).map((p) =>
+        toWorld(p[0], p[1], p[2]),
+      );
+      if (pts[0].distanceTo(pts[pts.length - 1]) > tol) {
+        segs.push({ id: e.id, pts });
+      }
+    }
+  }
+
+  const seed = segs.find((s) => s.id === seedEntityId);
+  if (!seed) return false;
+
+  const targetStart = seed.pts[0];
+  const initialEnd = seed.pts[seed.pts.length - 1];
+
+  // DFS from `initialEnd` back to `targetStart` using other open segments
+  const visited = new Set<string>([seed.id]);
+  const dfs = (
+    cur: THREE.Vector3,
+    accPts: THREE.Vector3[],
+    usedIds: string[],
+  ): { pts: THREE.Vector3[]; ids: string[] } | null => {
+    if (accPts.length >= 3 && cur.distanceTo(targetStart) <= tol) {
+      return { pts: accPts, ids: usedIds };
+    }
+    if (usedIds.length > 24) return null;
+    for (const seg of segs) {
+      if (visited.has(seg.id)) continue;
+      const s0 = seg.pts[0];
+      const s1 = seg.pts[seg.pts.length - 1];
+      if (cur.distanceTo(s0) <= tol) {
+        visited.add(seg.id);
+        const res = dfs(
+          s1,
+          [...accPts, ...seg.pts.slice(1)],
+          [...usedIds, seg.id],
+        );
+        if (res) return res;
+        visited.delete(seg.id);
+      } else if (cur.distanceTo(s1) <= tol) {
+        visited.add(seg.id);
+        const rev = [...seg.pts].reverse();
+        const res = dfs(
+          s0,
+          [...accPts, ...rev.slice(1)],
+          [...usedIds, seg.id],
+        );
+        if (res) return res;
+        visited.delete(seg.id);
+      }
+    }
+    return null;
+  };
+
+  const loop = dfs(initialEnd, [...seed.pts], [seed.id]);
+  if (!loop || loop.pts.length < 3) return false;
+
+  // Ensure exact closure [p0, p1, ..., p0]
+  const closedPts = [...loop.pts];
+  if (closedPts[0].distanceTo(closedPts[closedPts.length - 1]) <= tol) {
+    closedPts[closedPts.length - 1] = closedPts[0].clone();
+  } else {
+    closedPts.push(closedPts[0].clone());
+  }
+
+  await ctx.deleteEntities(loop.ids);
+  const flat = closedPts.map((p) => [p.x, p.y, p.z] as [number, number, number]);
+  const closedId = await ctx.createEntity({ type: "polyline_curve", points: flat }, [0, 0, 0]);
+  if (closedId) {
+    await ctx.setSelection([closedId], closedId);
+  }
+  return true;
+}
+
 function makeLineTool(id: "line" | "polyline"): ToolHandler {
   let state = freshState();
   let points: THREE.Vector3[] = [];
+  let chainIds: string[] = [];
 
   const reset = (ctx: ToolContext): void => {
     state = freshState();
     points = [];
+    chainIds = [];
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   };
 
   const draftPreview = (cursor: THREE.Vector3, ctx: ToolContext): void => {
-    ctx.setPreview(previewLine([...points, cursor], ctx), "draft");
+    if (id === "line" && points.length > 0) {
+      ctx.setPreview(previewLine([points[points.length - 1], cursor], ctx), "draft");
+    } else {
+      ctx.setPreview(previewLine([...points, cursor], ctx), "draft");
+    }
   };
 
   const updateLinePreview = (ctx: ToolContext): void => {
@@ -213,18 +388,36 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
   };
 
   const addSegmentTo = (target: THREE.Vector3, ctx: ToolContext): void => {
+    const closeTol = Math.max(1.2, ctx.settings.gridSize * 0.65);
+
     if (id === "line") {
-      const [a] = points;
-      if (distXZ(a, target) > 1e-4) {
-        void ctx.createEntity(
-          { type: "line_curve", end: [target.x - a.x, target.y - a.y, target.z - a.z] },
-          [a.x, a.y, a.z],
+      const from = points[points.length - 1];
+      if (distXZ(from, target) <= 1e-4) return;
+
+      // If this segment closes the current chain of >= 3 points back to points[0],
+      // replace the chain's individual lines with a closed extrudable polyline face!
+      if (points.length >= 3 && distXZ(target, points[0]) <= closeTol) {
+        const closedChain = [...points, points[0].clone()].map(
+          (p) => [p.x, p.y, p.z] as [number, number, number],
         );
-        ctx.setStatus("Line created · continue from endpoint (Enter or Esc finishes chain)");
+        const idsToRemove = [...chainIds];
+        reset(ctx);
+        void (async () => {
+          if (idsToRemove.length > 0) await ctx.deleteEntities(idsToRemove);
+          const closedId = await ctx.createEntity(
+            { type: "polyline_curve", points: closedChain },
+            [0, 0, 0],
+          );
+          if (closedId) await ctx.setSelection([closedId], closedId);
+        })();
+        return;
       }
-      points = [target];
+
+      const startPt = from.clone();
+      const endPt = target.clone();
+      points.push(endPt);
       state = {
-        anchor: target,
+        anchor: endPt,
         lastCursor: state.lastCursor,
         lastScreen: state.lastScreen,
         press: null,
@@ -233,14 +426,37 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       };
       ctx.clearPreview("draft");
       ctx.showMeasure(null);
+
+      void (async () => {
+        const lineId = await ctx.createEntity(
+          {
+            type: "line_curve",
+            end: [endPt.x - startPt.x, endPt.y - startPt.y, endPt.z - startPt.z],
+          },
+          [startPt.x, startPt.y, startPt.z],
+        );
+        if (lineId) {
+          chainIds.push(lineId);
+          const merged = await tryMergeClosedLineLoop(ctx, lineId);
+          if (merged) {
+            reset(ctx);
+          }
+        }
+      })();
       return;
     }
-    if (points.length >= 3 && distXZ(target, points[0]) < ctx.settings.gridSize * 0.6) {
+
+    if (points.length >= 3 && distXZ(target, points[0]) <= closeTol) {
       const flat = [...points, points[0].clone()].map(
         (p) => [p.x, p.y, p.z] as [number, number, number],
       );
-      void ctx.createEntity({ type: "polyline_curve", points: flat }, [0, 0, 0]);
-      ctx.setStatus("Closed polyline created");
+      void (async () => {
+        const closedId = await ctx.createEntity(
+          { type: "polyline_curve", points: flat },
+          [0, 0, 0],
+        );
+        if (closedId) await ctx.setSelection([closedId], closedId);
+      })();
       reset(ctx);
       return;
     }
@@ -248,7 +464,6 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     state.anchor = target;
     state.typed = "";
     draftPreview(target, ctx);
-    ctx.setStatus("Click to add points (or type length + Enter) · Enter finishes · Esc cancels");
   };
 
   return {
@@ -256,7 +471,6 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     cursor: "crosshair",
     onActivate(ctx) {
       reset(ctx);
-      ctx.setStatus(this.hint!(ctx));
     },
     onDeactivate(ctx) {
       reset(ctx);
@@ -265,12 +479,13 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     onPointerDown(event, ctx) {
       const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) return true;
-      const snapped = ctx.snap(raw).point;
+      const snapped = snapToSketchVertex(raw, ctx, points);
       if (points.length === 0) {
         state.anchor = snapped;
         state.lastCursor = snapped.clone();
         state.lastScreen = ctx.screenPoint(event);
         points = [snapped];
+        chainIds = [];
         state.press = { x: event.clientX, y: event.clientY };
         state.dragged = false;
         state.typed = "";
@@ -289,7 +504,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     onPointerMove(event, ctx) {
       const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) return;
-      const cursor = ctx.snap(raw).point;
+      const cursor = snapToSketchVertex(raw, ctx, points);
       state.lastScreen = ctx.screenPoint(event);
       if (state.press && Math.hypot(event.clientX - state.press.x, event.clientY - state.press.y) > 5) {
         state.dragged = true;
@@ -318,7 +533,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
         return;
       }
       const from = points[points.length - 1];
-      let target = ortho(from, ctx.snap(raw).point, event.shiftKey);
+      let target = ortho(from, snapToSketchVertex(raw, ctx, points), event.shiftKey);
       const parsed = state.typed ? Number.parseFloat(state.typed) : Number.NaN;
       if (Number.isFinite(parsed) && parsed > 0) {
         target = pointAlongDirection(from, target, parsed);
@@ -349,9 +564,13 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       }
       if (id === "polyline" && points.length >= 2) {
         const flat = points.map((p) => [p.x, p.y, p.z] as [number, number, number]);
-        void ctx.createEntity({ type: "polyline_curve", points: flat }, [0, 0, 0]);
-        ctx.setStatus("Polyline created");
         reset(ctx);
+        void (async () => {
+          const polyId = await ctx.createEntity({ type: "polyline_curve", points: flat }, [0, 0, 0]);
+          if (polyId) {
+            await tryMergeClosedLineLoop(ctx, polyId);
+          }
+        })();
         return true;
       }
       if (id === "line" && points.length > 0) {

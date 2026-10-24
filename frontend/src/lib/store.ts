@@ -40,6 +40,10 @@ interface ArcState {
   dimSnapStep: number;
   /** Laptop performance mode: disables shadows, IBL, and caps DPR at 1.0. */
   lowSpecMode: boolean;
+  /** Left Items/Layers sidebar open state (Shapr3D Items toggle). */
+  leftSidebarOpen: boolean;
+  /** Right History/Properties sidebar open state (Shapr3D History toggle). */
+  rightSidebarOpen: boolean;
   contextMenu: {
     open: boolean;
     x: number;
@@ -93,6 +97,8 @@ interface ArcState {
   setPolygonSides: (sides: number) => void;
   setDimSnapStep: (step: number) => void;
   setLowSpecMode: (enabled: boolean) => void;
+  setLeftSidebarOpen: (open: boolean) => void;
+  setRightSidebarOpen: (open: boolean) => void;
   openContextMenu: (x: number, y: number, items: Array<{ label: string; run: () => void; disabled?: boolean }>) => void;
   closeContextMenu: () => void;
 }
@@ -148,6 +154,8 @@ export const useArcStore = create<ArcState>((set) => ({
   polygonSides: 6,
   dimSnapStep: 1,
   lowSpecMode: false,
+  leftSidebarOpen: true,
+  rightSidebarOpen: true,
   contextMenu: { open: false, x: 0, y: 0, items: [] },
   view: "dashboard",
 
@@ -272,6 +280,8 @@ export const useArcStore = create<ArcState>((set) => ({
   setPolygonSides: (sides) => set({ polygonSides: Math.max(3, Math.min(32, Math.round(sides))) }),
   setDimSnapStep: (step) => set({ dimSnapStep: Math.max(0, step) }),
   setLowSpecMode: (lowSpecMode) => set({ lowSpecMode }),
+  setLeftSidebarOpen: (leftSidebarOpen) => set({ leftSidebarOpen }),
+  setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
   setView: (view) => set({ view }),
   openContextMenu: (x, y, items) => set({ contextMenu: { open: true, x, y, items } }),
   closeContextMenu: () => set((st) => (st.contextMenu.open ? { contextMenu: { ...st.contextMenu, open: false } } : st)),

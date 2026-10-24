@@ -154,58 +154,36 @@ function themeToPalette(p: ViewportPalette): ViewPalette {
 
 function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
   const step = Math.max(0.5, Math.min(100, gridSize || 2));
-  const majorCells = 40;
-  const extent = step * 10 * majorCells;
-  const minorDivs = majorCells * 10;
-  const majorDivs = majorCells;
+  const divisions = 200;
+  const extent = step * divisions;
 
   const group = new THREE.Group();
-  const minorColor = new THREE.Color(p.gridLine);
-  const majorColor = new THREE.Color(p.grid).lerp(new THREE.Color(p.accent500), 0.22);
-  const centerColor = new THREE.Color(p.accent500);
-
-  const minor = new THREE.GridHelper(extent, minorDivs, minorColor.getHex(), minorColor.getHex());
-  const minorMat = minor.material as THREE.LineBasicMaterial;
-  minorMat.transparent = true;
-  minorMat.opacity = 0.34;
-  minorMat.depthWrite = false;
-
-  const major = new THREE.GridHelper(extent, majorDivs, centerColor.getHex(), majorColor.getHex());
-  const majorMat = major.material as THREE.LineBasicMaterial;
-  majorMat.transparent = true;
-  majorMat.opacity = 0.78;
-  majorMat.depthWrite = false;
-  major.position.y = 0.015;
-
-  group.add(minor);
-  group.add(major);
+  const grid = new THREE.GridHelper(
+    extent,
+    divisions,
+    new THREE.Color(p.grid).getHex(),
+    new THREE.Color(p.gridLine).getHex(),
+  );
+  const mat = grid.material as THREE.LineBasicMaterial;
+  mat.transparent = true;
+  mat.opacity = 0.45;
+  mat.depthWrite = false;
+  group.add(grid);
   return group;
 }
 
 function updateScaleBar(ref: ViewportRefs): void {
-  const h = ref.host.clientHeight || 600;
-  const dist = Math.max(1, ref.camera.position.distanceTo(ref.controls.target));
-  const fovRad = (ref.camera.fov * Math.PI) / 180;
-  const worldHeight = 2 * dist * Math.tan(fovRad * 0.5);
-  const worldPerPx = worldHeight / h;
-
-  // Target bar width between 56px and 130px using clean 1-2-5 steps
-  const rawUnits = worldPerPx * 85;
-  const exp = Math.pow(10, Math.floor(Math.log10(Math.max(0.01, rawUnits))));
-  const norm = rawUnits / exp;
-  const niceMult = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
-  const barUnits = Math.max(0.5, Math.round(niceMult * exp * 100) / 100);
-  const barPx = Math.max(36, Math.min(150, Math.round(barUnits / worldPerPx)));
-
   const settings = useArcStore.getState().settings;
   const isImperial =
     settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
   const unit = isImperial ? "in" : "cm";
   const gridSize = settings?.grid_size ?? 2;
 
-  ref.scaleBarLineEl.style.width = `${barPx}px`;
-  ref.scaleBarLabelEl.textContent = `${barUnits} ${unit}`;
-  ref.scaleGridBtnEl.textContent = `1 sq = ${gridSize} ${unit}  ·  maj = ${Math.round(gridSize * 10 * 10) / 10} ${unit}`;
+  // Map gridSize (1, 2, 5, 10) to a tiny visual square box size (12px -> 22px)
+  const boxPx = gridSize <= 1 ? 12 : gridSize <= 2 ? 15 : gridSize <= 5 ? 18 : 22;
+  ref.scaleBarLineEl.style.width = `${boxPx}px`;
+  ref.scaleBarLineEl.style.height = `${boxPx}px`;
+  ref.scaleBarLabelEl.textContent = `${gridSize} ${unit}`;
 }
 
 function createViewport(host: HTMLDivElement): ViewportRefs {
@@ -295,47 +273,10 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   measureEl.style.display = "none";
   host.appendChild(measureEl);
 
-  // Live bottom-left CAD Scale Bar + Grid Legend
-  const scaleWrap = document.createElement("div");
-  scaleWrap.className =
-    "pointer-events-auto absolute bottom-3 left-3 z-20 flex items-center gap-2.5 rounded-xl border border-base-200 bg-base-50/90 px-2.5 py-1.5 font-mono text-[10.5px] text-base-600 shadow-md backdrop-blur-md transition-all";
-  const rulerWrap = document.createElement("div");
-  rulerWrap.className = "flex flex-col items-center gap-0.5";
-  const scaleBarLabelEl = document.createElement("span");
-  scaleBarLabelEl.className = "text-[10px] font-semibold leading-none text-base-800 tabular-nums";
-  scaleBarLabelEl.textContent = "10 cm";
-  const scaleBarLineEl = document.createElement("div");
-  scaleBarLineEl.className =
-    "h-1.5 border-x-2 border-b-2 border-accent-500 transition-[width] duration-150";
-  scaleBarLineEl.style.width = "72px";
-  rulerWrap.appendChild(scaleBarLabelEl);
-  rulerWrap.appendChild(scaleBarLineEl);
-
-  const sep = document.createElement("span");
-  sep.className = "h-4 w-px bg-base-200";
-
+  // Scale indicator is rendered in the top-right Shapr3D pill (UtilityRail)
   const scaleGridBtnEl = document.createElement("button");
-  scaleGridBtnEl.type = "button";
-  scaleGridBtnEl.title = "Click to cycle 3D grid scale (1 / 2 / 5 / 10 cm per square)";
-  scaleGridBtnEl.className =
-    "rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900";
-  scaleGridBtnEl.textContent = "1 sq = 2 cm";
-  scaleGridBtnEl.addEventListener("click", () => {
-    const settings = useArcStore.getState().settings;
-    if (!settings) return;
-    const steps = [1, 2, 5, 10];
-    const idx = steps.indexOf(settings.grid_size);
-    const nextGrid = steps[(idx + 1) % steps.length];
-    void ipc
-      .setSettings({ ...settings, grid_size: nextGrid })
-      .then((next) => useArcStore.getState().updateSettings(next))
-      .catch(() => undefined);
-  });
-
-  scaleWrap.appendChild(rulerWrap);
-  scaleWrap.appendChild(sep);
-  scaleWrap.appendChild(scaleGridBtnEl);
-  host.appendChild(scaleWrap);
+  const scaleBarLineEl = document.createElement("div");
+  const scaleBarLabelEl = document.createElement("span");
 
   const tc = new TransformControls(camera, renderer.domElement);
   tc.setMode("translate");
@@ -698,7 +639,18 @@ function syncSceneToThree(ref: ViewportRefs): void {
   updateOverlays(ref);
 
   const settings = state.settings;
-  const gridVis = settings?.show_grid ?? true;
+  const isCreatingOrSketching =
+    state.sketchMode ||
+    state.drafting ||
+    (state.tool !== "select" &&
+      state.tool !== "move" &&
+      state.tool !== "rotate" &&
+      state.tool !== "scale" &&
+      state.tool !== "extrude-face" &&
+      state.tool !== "offset-face" &&
+      state.tool !== "fillet-edge");
+  // Shapr3D behavior: no grid in normal 3D view; grid appears when sketching or creating!
+  const gridVis = (settings?.show_grid ?? true) && isCreatingOrSketching;
   const axesVis = settings?.show_axes ?? true;
   const gridSize = settings?.grid_size ?? 2;
   const gridSizeChanged = gridSize !== ref.lastGridSize;
@@ -828,21 +780,21 @@ function updateOverlays(ref: ViewportRefs): void {
 
   const hover = state.hoverObj;
   if (hover?.kind === "face" && hover.face != null) {
-    ref.hoverOverlay = makeFace(hover.entityId, hover.face, ref.palette.hover, 0.3);
+    ref.hoverOverlay = makeFace(hover.entityId, hover.face, SHAPR_CYAN, 0.32);
   } else if (hover?.kind === "edge" && hover.edge != null) {
     const parts = hover.edge.split(":");
     const seg = Number(parts[parts.length - 1]);
     if (Number.isInteger(seg)) {
-      ref.hoverEdgeOverlay = makeEdge(hover.entityId, seg, ref.palette.hover);
+      ref.hoverEdgeOverlay = makeEdge(hover.entityId, seg, SHAPR_CYAN);
     }
   }
   if (state.selKind === "face" && state.selFace) {
-    ref.selOverlay = makeFace(state.selFace.entityId, state.selFace.face, ref.palette.selection, 0.4);
+    ref.selOverlay = makeFace(state.selFace.entityId, state.selFace.face, SHAPR_CYAN, 0.55);
   } else if (state.selKind === "edge" && state.selEdge) {
     const parts = state.selEdge.key.split(":");
     const seg = Number(parts[parts.length - 1]);
     if (Number.isInteger(seg)) {
-      ref.selEdgeOverlay = makeEdge(state.selEdge.entityId, seg, ref.palette.selection);
+      ref.selEdgeOverlay = makeEdge(state.selEdge.entityId, seg, SHAPR_CYAN);
     }
   }
 }
@@ -981,37 +933,114 @@ function buildClosedSketchFill(lineData: number[], entityId: string, color: THRE
   if (lineData.length < 18) return null;
   const nSegs = Math.floor(lineData.length / 6);
   const fx = lineData[0];
+  const fy = lineData[1];
   const fz = lineData[2];
   const lx = lineData[(nSegs - 1) * 6 + 3];
+  const ly = lineData[(nSegs - 1) * 6 + 4];
   const lz = lineData[(nSegs - 1) * 6 + 5];
-  if (Math.hypot(fx - lx, fz - lz) > 0.5) return null;
+  if (Math.hypot(fx - lx, fy - ly, fz - lz) > 0.8) return null;
 
-  const shape = new THREE.Shape();
-  shape.moveTo(fx, -fz);
+  const pts3D: THREE.Vector3[] = [new THREE.Vector3(fx, fy, fz)];
   for (let s = 0; s < nSegs; s++) {
     const px = lineData[s * 6 + 3];
+    const py = lineData[s * 6 + 4];
     const pz = lineData[s * 6 + 5];
-    shape.lineTo(px, -pz);
+    const v = new THREE.Vector3(px, py, pz);
+    if (v.distanceTo(pts3D[pts3D.length - 1]) > 1e-4) {
+      pts3D.push(v);
+    }
+  }
+  if (pts3D.length > 3 && pts3D[0].distanceTo(pts3D[pts3D.length - 1]) <= 0.8) {
+    pts3D.pop();
+  }
+  if (pts3D.length < 3) return null;
+
+  // Compute plane normal via Newell's method so horizontal, vertical, and angled faces all work
+  const normal = new THREE.Vector3();
+  for (let i = 0; i < pts3D.length; i++) {
+    const cur = pts3D[i];
+    const next = pts3D[(i + 1) % pts3D.length];
+    normal.x += (cur.y - next.y) * (cur.z + next.z);
+    normal.y += (cur.z - next.z) * (cur.x + next.x);
+    normal.z += (cur.x - next.x) * (cur.y + next.y);
+  }
+  if (normal.lengthSq() < 1e-8) normal.set(0, 1, 0);
+  else normal.normalize();
+
+  const refAxis = Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().crossVectors(refAxis, normal).normalize();
+  const v = new THREE.Vector3().crossVectors(normal, u).normalize();
+  const origin = pts3D[0];
+
+  const shape = new THREE.Shape();
+  for (let i = 0; i < pts3D.length; i++) {
+    const d = pts3D[i].clone().sub(origin);
+    const x2 = d.dot(u);
+    const y2 = d.dot(v);
+    if (i === 0) shape.moveTo(x2, y2);
+    else shape.lineTo(x2, y2);
   }
   shape.closePath();
+
   const geo = new THREE.ShapeGeometry(shape);
-  geo.rotateX(-Math.PI / 2);
-  const y = lineData[1] ?? 0;
-  if (Math.abs(y) > 1e-4) geo.translate(0, y, 0);
+  const posAttr = geo.getAttribute("position");
+  for (let i = 0; i < posAttr.count; i++) {
+    const x2 = posAttr.getX(i);
+    const y2 = posAttr.getY(i);
+    const p3 = origin
+      .clone()
+      .addScaledVector(u, x2)
+      .addScaledVector(v, y2);
+    posAttr.setXYZ(i, p3.x, p3.y, p3.z);
+  }
+  posAttr.needsUpdate = true;
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+
   const mat = new THREE.MeshBasicMaterial({
     color,
     transparent: true,
-    opacity: 0.1,
+    opacity: 0.26,
     side: THREE.DoubleSide,
     depthWrite: false,
     polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const fillMesh = new THREE.Mesh(geo, mat);
   fillMesh.userData.isProfileFill = true;
   fillMesh.userData.entityId = entityId;
   return fillMesh;
+}
+
+function buildSketchVertexDots(entity: EntityData): THREE.Points | null {
+  const g = entity.geometry;
+  const coords: number[] = [];
+  if (g.type === "line_curve" && Array.isArray(g.end)) {
+    const end = g.end as [number, number, number];
+    coords.push(0, 0, 0, end[0], end[1], end[2]);
+  } else if (g.type === "polyline_curve" && Array.isArray(g.points)) {
+    for (const p of g.points as [number, number, number][]) {
+      coords.push(p[0], p[1], p[2]);
+    }
+  } else if (g.type === "rectangle_curve" && typeof g.width === "number" && typeof g.depth === "number") {
+    const hw = g.width / 2;
+    const hd = g.depth / 2;
+    coords.push(-hw, 0, -hd, hw, 0, -hd, hw, 0, hd, -hw, 0, hd);
+  }
+  if (coords.length === 0) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xa855f7,
+    size: 5,
+    sizeAttenuation: false,
+    depthTest: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.renderOrder = 995;
+  pts.userData.isSolidOutline = true; // ignore in raycast
+  return pts;
 }
 
 function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D | null {
@@ -1025,8 +1054,10 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     const material = ref.lineMaterial.clone();
     obj = new THREE.LineSegments(geometry, material);
     if (entity.category === "sketch") {
-      const fill = buildClosedSketchFill(lineData, entity.id, ref.palette.selection);
+      const fill = buildClosedSketchFill(lineData, entity.id, new THREE.Color(0xc8ccd4));
       if (fill) obj.add(fill);
+      const dots = buildSketchVertexDots(entity);
+      if (dots) obj.add(dots);
     } else if (entity.kind === "dimension" && entity.geometry?.type === "dimension") {
       const s = entity.geometry.start as [number, number, number] | undefined;
       const e = entity.geometry.end as [number, number, number] | undefined;
@@ -1054,17 +1085,17 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     obj.castShadow = true;
     obj.receiveShadow = true;
 
-    // Subtle CAD edge outline for B-rep solids
+    // Crisp Shapr3D-style dark B-rep feature edge outlines on gray solids
     const edgeGeo = lineData
       ? new THREE.BufferGeometry().setAttribute(
           "position",
           new THREE.Float32BufferAttribute(lineData.slice(), 3),
         )
-      : new THREE.EdgesGeometry(geometry, 28);
+      : new THREE.EdgesGeometry(geometry, 24);
     const edgeMat = new THREE.LineBasicMaterial({
-      color: 0x11151f,
+      color: 0x0f1013,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.72,
       depthWrite: false,
     });
     const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
@@ -1186,18 +1217,21 @@ function present(
     if (entity.locked) mat.opacity = 0.55;
     else mat.opacity = material?.transparent ? 0.55 : 1.0;
     mat.transparent = entity.locked || !!material?.transparent;
-    mat.emissive.copy(selected ? ref.palette.selection : hovered ? ref.palette.hover : BLACK);
-    mat.emissiveIntensity = selected ? 0.45 : hovered ? 0.16 : 0;
+    const wholeBodySelected = selected && st.selKind === "entity";
+    mat.emissive.copy(
+      wholeBodySelected ? SHAPR_CYAN : hovered ? SHAPR_CYAN : BLACK,
+    );
+    mat.emissiveIntensity = wholeBodySelected ? 0.12 : hovered ? 0.06 : 0;
   } else if ((obj as THREE.Line).isLine) {
     const mat = (obj as THREE.Line).material as THREE.LineBasicMaterial;
-    mat.color.copy(selected ? ref.palette.line : hovered ? ref.palette.hover : color);
+    mat.color.copy(selected ? SHAPR_CYAN : hovered ? SHAPR_CYAN : SKETCH_LINE_COLOR);
     mat.opacity = entity.locked ? 0.5 : 1;
     mat.transparent = entity.locked;
     for (const child of obj.children) {
       if (child.userData.isProfileFill) {
         const fillMat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
-        fillMat.color.copy(selected ? ref.palette.selection : ref.palette.line);
-        fillMat.opacity = selected ? 0.24 : hovered ? 0.18 : 0.09;
+        fillMat.color.copy(selected || hovered ? SHAPR_CYAN : SKETCH_FILL_GRAY);
+        fillMat.opacity = selected ? 0.45 : hovered ? 0.35 : 0.25;
       }
     }
   }
@@ -1214,6 +1248,9 @@ function applySpawnScale(obj: THREE.Object3D, now: number): void {
 }
 
 const BLACK = new THREE.Color(0x000000);
+const SHAPR_CYAN = new THREE.Color(0x28b5f5);
+const SKETCH_FILL_GRAY = new THREE.Color(0xc8ccd4);
+const SKETCH_LINE_COLOR = new THREE.Color(0x1f2329);
 const SPAWN_DURATION = 220;
 
 function layerVisible(layer: LayerData | undefined): boolean {
@@ -1421,9 +1458,26 @@ function pickFaceAt(
 ): FaceHit | null {
   if (!scene || ref.meshObjects.length === 0) return null;
   ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
+
+  // If a closed sketch profile face (`isProfileFill`) lies in front of or coplanar
+  // with the solid face, let `pickEntityAt` select the sketch profile instead!
+  let closestSketchFillDist = Infinity;
+  for (const obj of ref.objects.values()) {
+    if (!obj.visible) continue;
+    for (const child of obj.children) {
+      if (child.userData.isProfileFill) {
+        const fillHits = ref.raycaster.intersectObject(child, false);
+        if (fillHits.length > 0 && fillHits[0].distance < closestSketchFillDist) {
+          closestSketchFillDist = fillHits[0].distance;
+        }
+      }
+    }
+  }
+
   const hits = ref.raycaster.intersectObjects(ref.meshObjects, false);
   for (const hit of hits) {
     if (!hit.object.visible || !hit.face) continue;
+    if (closestSketchFillDist <= hit.distance + 0.6) return null;
     const entity = scene.entities.find((e) => e.id === hit.object.userData.entityId);
     if (!entity || entity.locked) continue;
     const tags = entity.triFaceIds;
