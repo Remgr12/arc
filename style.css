@@ -3,6 +3,7 @@
    Designed to match the arc CAD interface:
    Deep graphite backgrounds, vibrant cyan accents,
    floating glass panels, precision pill badges, and clean typography.
+   Deeply optimized for mobile, tablet, and desktop viewports.
    ========================================================= */
 
 :root {
@@ -50,7 +51,15 @@
   }
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
 
 html {
   scroll-behavior: smooth;
@@ -80,7 +89,7 @@ body {
 .wrap {
   max-width: 1140px;
   margin: 0 auto;
-  padding: 0 28px;
+  padding: 0 24px;
 }
 
 h1, h2, h3, h4 {
@@ -113,7 +122,7 @@ header.site {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(18, 20, 26, 0.85);
+  background: rgba(18, 20, 26, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
@@ -137,6 +146,7 @@ header.site .wrap {
   letter-spacing: -0.02em;
   color: var(--ink-bright);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .brand img {
@@ -158,7 +168,7 @@ header.site .wrap {
 nav.top {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -169,14 +179,16 @@ nav.top a {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-soft);
-  padding: 6px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 nav.top a:hover {
   color: var(--ink-bright);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 nav.top a.gh {
@@ -233,6 +245,7 @@ main {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
   display: inline-block;
+  flex-shrink: 0;
   animation: pulse 2.4s infinite ease-in-out;
 }
 
@@ -252,7 +265,7 @@ main {
 h1 {
   font-family: var(--sans);
   font-weight: 800;
-  font-size: clamp(2.5rem, 5.2vw, 4rem);
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
   line-height: 1.08;
   letter-spacing: -0.035em;
   color: var(--ink-bright);
@@ -296,6 +309,7 @@ h1 .accent {
   border: 1px solid transparent;
   transition: all 160ms ease;
   cursor: pointer;
+  min-height: 46px;
 }
 
 .btn.primary {
@@ -413,6 +427,8 @@ h1 .accent {
 .cad-model-showcase img {
   filter: drop-shadow(0 0 20px rgba(0, 232, 255, 0.4));
   transition: transform 300ms ease;
+  max-width: 100%;
+  height: auto;
 }
 
 .viewport-preview:hover .cad-model-showcase img {
@@ -431,6 +447,7 @@ h1 .accent {
   border-radius: 4px;
   border: 1px solid rgba(0, 232, 255, 0.3);
   backdrop-filter: blur(4px);
+  z-index: 3;
 }
 
 .cad-dimension.top { top: 22px; right: 28px; }
@@ -506,7 +523,6 @@ section > .wrap {
   padding-top: 84px;
   padding-bottom: 84px;
   border-bottom: 1px solid var(--line);
-  max-width: 1140px;
 }
 
 section:last-of-type > .wrap {
@@ -638,6 +654,7 @@ kbd {
   background: var(--kbd-bg);
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
   color: var(--kbd-text);
+  display: inline-block;
 }
 
 /* Architecture Chart */
@@ -762,6 +779,7 @@ kbd {
 .listing pre {
   margin: 0;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .listing code {
@@ -852,32 +870,262 @@ footer.site .titleblock .widecell {
   * { transition: none !important; animation: none !important; }
 }
 
-/* ---------------- responsive ---------------- */
+/* ---------------- responsive optimization ---------------- */
 
 @media (max-width: 960px) {
-  .hero { grid-template-columns: 1fr; }
-  .viewport-preview { max-width: 540px; margin: 0 auto; width: 100%; }
-  .titleblock, footer.site .titleblock { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .viewport-preview {
+    max-width: 540px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .titleblock, footer.site .titleblock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .titleblock > *:nth-child(n + 3) { border-top: 1px solid var(--line); }
   .titleblock > div:nth-child(even) { border-right: 0; }
   .titleblock > div:nth-child(5) { grid-column: 1 / -1; border-right: 0; }
   footer.site .titleblock .widecell { border-top: 1px solid var(--line); }
-  .chart { grid-template-columns: 1fr; gap: 16px; }
-  .chart .link { flex-direction: row; justify-content: flex-start; padding: 4px 12px; }
-  .chart .link i { width: 34px; height: 0; flex: 0 0 auto; border-left: 0; border-top: 1px dashed var(--line-strong); }
-  .chart .link em { background: transparent; padding: 0; writing-mode: horizontal-tb; }
-  .obtain { grid-template-columns: 1fr; }
-  section > .wrap { padding-top: 56px; padding-bottom: 56px; }
+  .chart {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .chart .link {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 4px 12px;
+  }
+  .chart .link i {
+    width: 34px;
+    height: 0;
+    flex: 0 0 auto;
+    border-left: 0;
+    border-top: 1px dashed var(--line-strong);
+  }
+  .chart .link em {
+    background: transparent;
+    padding: 0;
+    writing-mode: horizontal-tb;
+  }
+  .obtain {
+    grid-template-columns: 1fr;
+  }
+  section > .wrap {
+    padding-top: 60px;
+    padding-bottom: 60px;
+  }
 }
 
-@media (max-width: 640px) {
-  .wrap { padding: 0 18px; }
-  header.site .wrap { min-height: 56px; gap: 12px; }
-  nav.top { margin-left: auto; justify-content: flex-end; gap: 4px 8px; }
-  nav.top a { font-size: 11px; padding: 6px 8px; }
-  .sheet { padding: 24px 18px 0; margin-top: 20px; }
-  h1 { font-size: clamp(2rem, 8vw, 2.7rem); }
-  .hero { padding-bottom: 30px; gap: 32px; }
-  .features-grid { grid-template-columns: 1fr; }
-  .keysline { gap: 8px 14px; font-size: 12px; }
+@media (max-width: 680px) {
+  .wrap {
+    padding: 0 16px;
+  }
+  header.site .wrap {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    min-height: auto;
+  }
+  nav.top {
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    margin: 0 -4px;
+    padding: 2px 2px 4px;
+  }
+  nav.top::-webkit-scrollbar {
+    display: none;
+  }
+  nav.top a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 11.5px;
+    padding: 6px 10px;
+  }
+  .sheet {
+    padding: 22px 14px 0;
+    margin-top: 16px;
+    border-radius: 12px;
+  }
+  .pill-status {
+    font-size: 11px;
+    padding: 4px 10px;
+    line-height: 1.4;
+    margin-bottom: 16px;
+    white-space: normal;
+    text-align: left;
+  }
+  h1 {
+    font-size: clamp(1.85rem, 7.5vw, 2.5rem);
+    line-height: 1.12;
+  }
+  .tag {
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 16px 0 24px;
+  }
+  .cta {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    padding: 12px 18px;
+    font-size: 13.5px;
+  }
+  .viewport-preview {
+    margin-top: 8px;
+    border-radius: 10px;
+  }
+  .viewport-header {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+  .viewport-canvas {
+    height: 220px;
+  }
+  .cad-model-showcase img {
+    width: 140px;
+    height: 140px;
+  }
+  .cad-dimension {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+  .cad-dimension.top { top: 12px; right: 12px; }
+  .cad-dimension.bottom { bottom: 12px; left: 12px; }
+  .viewport-hud {
+    font-size: 9.5px;
+    padding: 4px 10px;
+    gap: 5px;
+    max-width: 94%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    bottom: 8px;
+  }
+  .titleblock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .titleblock > div {
+    padding: 10px 12px;
+  }
+  .titleblock em {
+    font-size: 9px;
+    margin-bottom: 2px;
+  }
+  .titleblock b {
+    font-size: 11.5px;
+  }
+  section > .wrap {
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+  .section-title {
+    font-size: clamp(1.65rem, 6.5vw, 2.2rem);
+    line-height: 1.15;
+  }
+  .sect {
+    font-size: 15px;
+    margin-top: 12px;
+  }
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 26px;
+  }
+  .feature-card {
+    padding: 18px 16px;
+    border-radius: 10px;
+  }
+  .feature-card h3 {
+    font-size: 15px;
+  }
+  .feature-card p {
+    font-size: 14px;
+  }
+  .keysline {
+    margin-top: 24px;
+    padding: 12px 14px;
+    gap: 8px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .chart {
+    margin-top: 26px;
+    gap: 12px;
+  }
+  .chart .box {
+    padding: 16px 16px;
+  }
+  .chart .box b {
+    font-size: 14.5px;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .chart .box p {
+    font-size: 13.5px;
+    margin-top: 8px;
+  }
+  .listing figcaption {
+    padding: 8px 14px;
+    font-size: 11px;
+  }
+  .listing code {
+    padding: 14px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .obtain {
+    margin-top: 26px;
+    gap: 18px;
+  }
+  .way {
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+  footer.site {
+    margin-top: 28px;
+  }
+  footer.site .titleblock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  footer.site .titleblock > div {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .wrap {
+    padding: 0 12px;
+  }
+  .sheet {
+    padding: 16px 10px 0;
+  }
+  .titleblock {
+    grid-template-columns: 1fr;
+  }
+  .titleblock > div {
+    border-right: 0 !important;
+    border-top: 1px solid var(--line);
+  }
+  .titleblock > div:first-child {
+    border-top: 0;
+  }
+  footer.site .titleblock {
+    grid-template-columns: 1fr;
+  }
+  footer.site .titleblock > div {
+    border-right: 0 !important;
+  }
 }
