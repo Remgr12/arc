@@ -57,6 +57,14 @@ export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
       event,
       ctx,
     );
+    const entity = ctx.entityById(edge.entityId);
+    if (
+      !event.shiftKey &&
+      entity &&
+      (faceEditable(entity.kind) || entity.category === "solid" || entity.kind === "solid_fillet" || entity.kind === "csg")
+    ) {
+      useArcStore.getState().setTool("fillet-edge");
+    }
     return;
   }
   const face = ctx.pickFace(event);

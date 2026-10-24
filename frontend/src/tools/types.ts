@@ -11,11 +11,25 @@ export interface ViewPalette {
   line: THREE.Color;
 }
 
-export type SnapKind = "grid" | "endpoint" | "midpoint" | "center" | "origin" | "axis" | "aligned";
+export type SnapKind =
+  | "grid"
+  | "endpoint"
+  | "midpoint"
+  | "center"
+  | "origin"
+  | "axis"
+  | "aligned"
+  | "intersection"
+  | "perpendicular"
+  | "quadrant"
+  | "tangent"
+  | "nearest"
+  | "polar";
 
 export interface SnapResult {
   point: THREE.Vector3;
   kind: SnapKind;
+  polarAngle?: number;
 }
 
 export interface ScreenPoint {
@@ -56,8 +70,11 @@ export interface ToolContext {
   /** Project a world point to host-relative screen coordinates. */
   worldToScreen(p: THREE.Vector3): ScreenPoint | null;
 
-  /** Snap to grid, sketch endpoints, origin and axes. */
-  snap(world: THREE.Vector3, opts?: { grid?: boolean }): SnapResult;
+  /** Snap to grid, sketch endpoints, origin, axes, intersections, perpendiculars, quadrants, and polar tracking. */
+  snap(
+    world: THREE.Vector3,
+    opts?: { grid?: boolean; anchor?: THREE.Vector3 | null; allowPolar?: boolean },
+  ): SnapResult;
   snapGrid(v: THREE.Vector3): THREE.Vector3;
   /** Snap a scalar dimension (length, width, height, radius) to the active dimension increment (e.g. 1 cm or 2 cm). */
   snapDim(value: number, fine?: boolean): number;

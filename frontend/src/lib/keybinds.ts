@@ -109,6 +109,27 @@ function runAction(def: ActionDef): void {
     case "commandLine":
       actions.openCommandLine();
       return;
+    case "workplane":
+      actions.activateWorkplane();
+      return;
+    case "construction":
+      void actions.toggleConstruction();
+      return;
+    case "front":
+      actions.setStandardView("front");
+      return;
+    case "top":
+      actions.setStandardView("top");
+      return;
+    case "right":
+      actions.setStandardView("right");
+      return;
+    case "iso":
+      actions.setStandardView("iso");
+      return;
+    case "isolate":
+      void actions.isolateSelection();
+      return;
     case "clear":
       if (st.paletteOpen) st.setPaletteOpen(false);
       else if (st.scene && st.scene.selection.length > 0) void actions.clearSelection();
@@ -175,12 +196,16 @@ export function installKeybinds(): () => void {
       return;
     }
 
-    if (st.sketchMode && e.code === "Space" && !isInputFocused()) {
+    if (e.code === "Space" && !isInputFocused()) {
       e.preventDefault();
-      const n = st.sketchPlaneNormal;
-      window.dispatchEvent(
-        new CustomEvent("arc-focus-plane", { detail: { normal: n } }),
-      );
+      if (st.sketchMode) {
+        const n = st.sketchPlaneNormal;
+        window.dispatchEvent(
+          new CustomEvent("arc-focus-plane", { detail: { normal: n } }),
+        );
+      } else {
+        actions.togglePalette();
+      }
       return;
     }
 

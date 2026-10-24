@@ -9,6 +9,8 @@ import {
   Layers,
   Maximize2,
   Move,
+  MoveHorizontal,
+  MoveVertical,
   Orbit,
   Paintbrush,
   PencilRuler,
@@ -19,6 +21,7 @@ import {
   Search,
   Slice,
   Sparkles,
+  Square,
   Trash2,
   Wrench,
   X,
@@ -32,7 +35,7 @@ import { facePlaneInfo } from "../tools/topology";
 import { faceEditable } from "../tools/faceTools";
 import { SKETCH_ENTITY_KINDS } from "../lib/selectionContext";
 import { cn } from "./ui";
-import type { ToolId } from "../lib/types";
+import type { ToolId, Geometry } from "../lib/types";
 import type { ReactNode } from "react";
 
 interface ShaprRowProps {
@@ -308,6 +311,7 @@ export function ToolRail() {
                   icon={<PencilRuler size={15} strokeWidth={1.75} />}
                   label="Sketch"
                   sub="On Face"
+                  shortcut="W"
                   onClick={() => startSketch()}
                 />
                 <ShaprRow
@@ -396,6 +400,61 @@ export function ToolRail() {
                   { id: "offset", key: "O" },
                   { id: "trim", key: "T" },
                 ])}
+                {primaryEntity && (primaryEntity.kind === "line" || primaryEntity.kind === "line_curve") && (
+                  <>
+                    <ShaprRow
+                      icon={<MoveHorizontal size={15} strokeWidth={1.75} />}
+                      label="Horizontal"
+                      shortcut="H"
+                      onClick={() => {
+                        const g = primaryEntity.geometry as Record<string, unknown>;
+                        const end = (g.end as [number, number, number]) ?? [10, 0, 0];
+                        const len = Math.hypot(end[0], end[1], end[2]) || 10;
+                        const sign = end[0] < 0 ? -1 : 1;
+                        void ipc.updateGeometry(docId, primaryEntity.id, {
+                          ...g,
+                          end: [sign * len, 0, 0],
+                        } as unknown as Geometry);
+                      }}
+                    />
+                    <ShaprRow
+                      icon={<MoveVertical size={15} strokeWidth={1.75} />}
+                      label="Vertical"
+                      shortcut="V"
+                      onClick={() => {
+                        const g = primaryEntity.geometry as Record<string, unknown>;
+                        const end = (g.end as [number, number, number]) ?? [0, 0, 10];
+                        const len = Math.hypot(end[0], end[1], end[2]) || 10;
+                        const sign = end[2] < 0 ? -1 : 1;
+                        void ipc.updateGeometry(docId, primaryEntity.id, {
+                          ...g,
+                          end: [0, 0, sign * len],
+                        } as unknown as Geometry);
+                      }}
+                    />
+                  </>
+                )}
+                {primaryEntity && (primaryEntity.kind === "rectangle" || primaryEntity.kind === "rectangle_curve") && (
+                  <ShaprRow
+                    icon={<Square size={15} strokeWidth={1.75} />}
+                    label="Square"
+                    onClick={() => {
+                      const g = primaryEntity.geometry as Record<string, unknown>;
+                      const w = typeof g.width === "number" ? g.width : 10;
+                      void ipc.updateGeometry(docId, primaryEntity.id, {
+                        ...g,
+                        width: w,
+                        depth: w,
+                      } as unknown as Geometry);
+                    }}
+                  />
+                )}
+                <ShaprRow
+                  icon={<PencilRuler size={15} strokeWidth={1.75} />}
+                  label="Construction"
+                  shortcut="X"
+                  onClick={() => void actions.toggleConstruction()}
+                />
                 <ShaprRow
                   icon={<Move size={15} strokeWidth={1.75} />}
                   label="Move/Rotate"

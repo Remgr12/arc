@@ -1,5 +1,25 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Box, Check, Grid3X3, Minus, Orbit, PencilRuler, Plus, Scaling, Slice, Sparkles } from "lucide-react";
+import {
+  ArrowUpDown,
+  Box,
+  Check,
+  Combine,
+  Download,
+  Eye,
+  Grid3X3,
+  Layers,
+  Minus,
+  MoveHorizontal,
+  MoveVertical,
+  Orbit,
+  PencilRuler,
+  Plus,
+  Scaling,
+  Scissors,
+  Slice,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { ipc } from "../lib/ipc";
 import { actions } from "../lib/actions";
@@ -352,8 +372,102 @@ export function SelectionHud() {
   const isSketch = entity.category === "sketch";
   const canEditFace = faceEditable(entity.kind);
 
+  let multiInfo: {
+    dist: number;
+    dx: number;
+    dy: number;
+    dz: number;
+    canBoolean: boolean;
+  } | null = null;
+
+  if (scene.selection.length >= 2) {
+    const e1 = scene.entities.find((e) => e.id === scene.selection[0]);
+    const e2 = scene.entities.find((e) => e.id === scene.selection[1]);
+    if (e1 && e2) {
+      const p1 = new THREE.Vector3(...e1.transform.position);
+      const p2 = new THREE.Vector3(...e2.transform.position);
+      const d = p1.distanceTo(p2);
+      const dx = Math.abs(p2.x - p1.x);
+      const dy = Math.abs(p2.y - p1.y);
+      const dz = Math.abs(p2.z - p1.z);
+      const canBoolean =
+        (e1.category === "solid" || e1.category === "primitive" || e1.kind === "csg") &&
+        (e2.category === "solid" || e2.category === "primitive" || e2.kind === "csg");
+      multiInfo = { dist: round2(d), dx: round2(dx), dy: round2(dy), dz: round2(dz), canBoolean };
+    }
+  }
+
+  let bbox: { w: number; d: number; h: number } | null = null;
+  if (!isSketch && !isFace && !isEdge && entity.triPositions && entity.triPositions.length >= 9) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    const pos = entity.triPositions;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+    const sx = entity.transform.scale[0] || 1;
+    const sy = entity.transform.scale[1] || 1;
+    const sz = entity.transform.scale[2] || 1;
+    bbox = {
+      w: round2((maxX - minX) * sx),
+      h: round2((maxY - minY) * sy),
+      d: round2((maxZ - minZ) * sz),
+    };
+  }
+
   return (
     <div className="anim-slide-up pointer-events-none absolute bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-340px)] -translate-x-1/2 flex-col items-center gap-1.5">
+      {/* Multi-selection live clearance, delta, and boolean bar */}
+      {multiInfo && (
+        <div className="anim-slide-up pointer-events-auto flex items-center gap-2.5 rounded-full border border-base-300 bg-base-100 px-3.5 py-1 text-[11px] shadow-md backdrop-blur-md">
+          <span className="font-semibold text-accent-600">
+            {scene.selection.length} Selected
+          </span>
+          <span className="font-mono text-base-700">
+            Dist: <strong className="font-semibold">{multiInfo.dist}</strong> {unitLabel}
+          </span>
+          <span className="font-mono text-base-500">
+            ΔX: {multiInfo.dx} · ΔY: {multiInfo.dy} · ΔZ: {multiInfo.dz}
+          </span>
+          {multiInfo.canBoolean && (
+            <>
+              <span className="h-3 w-px bg-base-300" />
+              <button
+                type="button"
+                title="Union"
+                onClick={() => void actions.booleanApply("union")}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Combine size={12} strokeWidth={2} />
+                <span>Union</span>
+              </button>
+              <button
+                type="button"
+                title="Subtract"
+                onClick={() => void actions.booleanApply("difference")}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Scissors size={12} strokeWidth={2} />
+                <span>Cut</span>
+              </button>
+              <button
+                type="button"
+                title="Intersect"
+                onClick={() => void actions.booleanApply("intersection")}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Layers size={12} strokeWidth={2} />
+                <span>Intersect</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Optional parameter sub-bar for Shell, Chamfer, or Pattern */}
       {subPanel === "shell" && (
         <div className="anim-slide-up pointer-events-auto flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-3 py-1.5 text-[11.5px] shadow-md">
@@ -719,6 +833,24 @@ export function SelectionHud() {
                 <Grid3X3 size={13} strokeWidth={1.8} />
                 Pattern
               </button>
+              <button
+                type="button"
+                title="Isolate (Alt+I)"
+                onClick={() => void actions.isolateSelection()}
+                className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12px] font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Eye size={13} strokeWidth={1.8} />
+                Isolate
+              </button>
+              <button
+                type="button"
+                title="Export STL"
+                onClick={() => void actions.exportSelectedStl()}
+                className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12px] font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Download size={13} strokeWidth={1.8} />
+                STL
+              </button>
             </div>
           </>
         )}
@@ -767,6 +899,83 @@ export function SelectionHud() {
                 <ArrowUpDown size={13} strokeWidth={2} />
                 Extrude
               </button>
+
+              {/* SolveSpace-style rapid geometric constraints with Lucide icons */}
+              {(entity.kind === "line" || entity.kind === "line_curve") && (
+                <>
+                  <button
+                    type="button"
+                    title="Horizontal (H)"
+                    onClick={() => {
+                      const g = entity.geometry as Record<string, unknown>;
+                      const end = (g.end as [number, number, number]) ?? [10, 0, 0];
+                      const len = Math.hypot(end[0], end[1], end[2]) || 10;
+                      const sign = end[0] < 0 ? -1 : 1;
+                      void ipc.updateGeometry(docId, entity.id, {
+                        ...g,
+                        end: [sign * len, 0, 0],
+                      } as unknown as Geometry);
+                    }}
+                    className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
+                  >
+                    <MoveHorizontal size={13} strokeWidth={2} />
+                    <span>Horiz</span>
+                  </button>
+                  <button
+                    type="button"
+                    title="Vertical (V)"
+                    onClick={() => {
+                      const g = entity.geometry as Record<string, unknown>;
+                      const end = (g.end as [number, number, number]) ?? [0, 0, 10];
+                      const len = Math.hypot(end[0], end[1], end[2]) || 10;
+                      const sign = end[2] < 0 ? -1 : 1;
+                      void ipc.updateGeometry(docId, entity.id, {
+                        ...g,
+                        end: [0, 0, sign * len],
+                      } as unknown as Geometry);
+                    }}
+                    className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
+                  >
+                    <MoveVertical size={13} strokeWidth={2} />
+                    <span>Vert</span>
+                  </button>
+                </>
+              )}
+              {(entity.kind === "rectangle" || entity.kind === "rectangle_curve") && (
+                <button
+                  type="button"
+                  title="Square"
+                  onClick={() => {
+                    const g = entity.geometry as Record<string, unknown>;
+                    const w = typeof g.width === "number" ? g.width : 10;
+                    void ipc.updateGeometry(docId, entity.id, {
+                      ...g,
+                      width: w,
+                      depth: w,
+                    } as unknown as Geometry);
+                  }}
+                  className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
+                >
+                  <Square size={13} strokeWidth={2} />
+                  <span>Square</span>
+                </button>
+              )}
+
+              {/* Construction toggle (X key) */}
+              <button
+                type="button"
+                title="Construction (X)"
+                onClick={() => void actions.toggleConstruction()}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2 font-mono text-[11px] font-semibold transition-colors",
+                  entity.name?.startsWith("[C] ")
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "bg-base-200/90 text-base-700 hover:bg-base-200 hover:text-base-900",
+                )}
+              >
+                <PencilRuler size={13} strokeWidth={2} />
+                <span>{entity.name?.startsWith("[C] ") ? "Const [X]" : "Const"}</span>
+              </button>
             </div>
           </>
         )}
@@ -779,6 +988,17 @@ export function SelectionHud() {
               {dims.map((spec) => (
                 <DimPill key={`${entity.id}-${spec.key}`} spec={spec} unitLabel={unitLabel} />
               ))}
+            </div>
+          </>
+        )}
+
+        {/* Live bounding box dimensions */}
+        {bbox && (
+          <>
+            <span className="h-4 w-px bg-base-200" />
+            <div className="flex items-center gap-1.5 font-mono text-[11px] text-base-600">
+              <span className="font-semibold text-base-500 uppercase text-[9px]">Box</span>
+              <span>{bbox.w} × {bbox.h} × {bbox.d} {unitLabel}</span>
             </div>
           </>
         )}

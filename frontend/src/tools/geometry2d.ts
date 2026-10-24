@@ -79,6 +79,8 @@ export function ringPoints(center: THREE.Vector3, radius: number, segments = 64)
 /** Extract the world-space polyline of any drawable sketch entity. */
 export function chainFromEntity(entity: EntityData, object: THREE.Object3D | null): Chain | null {
   if (!entity) return null;
+  // Ignore construction / reference geometry for solid operations
+  if (entity.name?.startsWith("[C] ")) return null;
   const g = entity.geometry as Record<string, unknown>;
   const type = String(g.type ?? "");
   const matrix = object ? object.matrixWorld.clone() : new THREE.Matrix4();
@@ -467,4 +469,70 @@ export function filletCorner(
     arc.push(new THREE.Vector3(center.x + r * Math.cos(ang), p.y, center.z + r * Math.sin(ang)));
   }
   return { trimStart: t, trimEnd: t, arc };
+}
+
+/**
+ * Compute the 2D intersection point between two line segments (p1 -> p2) and (p3 -> p4).
+ * Returns the intersection point [u, v] if the segments cross (with small tolerance), or null.
+ */
+export function intersectSegments2D(
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  p4: [number, number],
+  tol = 1e-4,
+): [number, number] | null {
+  const d1x = p2[0] - p1[0];
+  const d1y = p2[1] - p1[1];
+  const d2x = p4[0] - p3[0];
+  const d2y = p4[1] - p3[1];
+
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-8) return null; // parallel or collinear
+
+  const dx = p3[0] - p1[0];
+  const dy = p3[1] - p1[1];
+
+  const t1 = (dx * d2y - dy * d2x) / cross;
+  const t2 = (dx * d1y - dy * d1x) / cross;
+
+  if (t1 >= -tol && t1 <= 1 + tol && t2 >= -tol && t2 <= 1 + tol) {
+    return [p1[0] + t1 * d1x, p1[1] + t1 * d1y];
+  }
+  return null;
+}
+
+/** Project point P onto segment (A -> B). Returns closest point Q, parameter t in [0, 1], and distSq. */
+export function projectPointToSegment2D(
+  p: [number, number],
+  a: [number, number],
+  b: [number, number],
+): { point: [number, number]; t: number; distSq: number } {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-10) {
+    const dSq = (p[0] - a[0]) ** 2 + (p[1] - a[1]) ** 2;
+    return { point: a, t: 0, distSq: dSq };
+  }
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / lenSq));
+  const qx = a[0] + t * dx;
+  const qy = a[1] + t * dy;
+  const distSq = (p[0] - qx) ** 2 + (p[1] - qy) ** 2;
+  return { point: [qx, qy], t, distSq };
+}
+
+/** Standard polar tracking increments in degrees (AutoCAD / CADCraft style). */
+export const POLAR_TRACKING_ANGLES = [
+  0, 30, 45, 60, 90, 120, 135, 150, 180, -30, -45, -60, -90, -120, -135, -150,
+];
+
+/** Snap an angle (degrees) to the closest polar tracking angle within threshold. */
+export function snapPolarAngle(deg: number, thresholdDeg = 3.5): number | null {
+  for (const target of POLAR_TRACKING_ANGLES) {
+    let diff = Math.abs(deg - target);
+    if (diff > 180) diff = 360 - diff;
+    if (diff <= thresholdDeg) return target;
+  }
+  return null;
 }

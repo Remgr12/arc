@@ -1,12 +1,28 @@
-import { Box, Combine, Copy, Grid3X3, Layers, Orbit, Paintbrush, PencilRuler, Scissors, Slice, Trash2 } from "lucide-react";
+import {
+  Box,
+  Combine,
+  Copy,
+  Grid3X3,
+  Layers,
+  MoveHorizontal,
+  MoveVertical,
+  Orbit,
+  Paintbrush,
+  PencilRuler,
+  Scissors,
+  Slice,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { deriveSelectionContext, SKETCH_ENTITY_KINDS, type SelectionContext } from "../lib/selectionContext";
 import { actions } from "../lib/actions";
+import { ipc } from "../lib/ipc";
 import { TOOL_BY_ID } from "../data/tools";
 import { bindingHint } from "../lib/keybinds";
 import { armExtrudeSelectedSketch } from "../tools/solid";
 import { facePlaneInfo } from "../tools/topology";
-import type { EntityData, ToolId } from "../lib/types";
+import type { EntityData, ToolId, Geometry } from "../lib/types";
 import { cn, Tip } from "./ui";
 import type { ReactNode } from "react";
 
@@ -229,22 +245,100 @@ function dockGroups(
       ].filter((item): item is DockItem => item !== null),
     });
   } else if (context === "sketch" && hasSketchSelected) {
+    const sketchItems: (DockItem | null)[] = [
+      toolItem("extrude", "E"),
+      toolItem("revolve", "V"),
+      toolItem("sweep", "S"),
+      toolItem("loft", "K"),
+      toolItem("offset", "O"),
+      toolItem("trim", "T"),
+      toolItem("fillet", "F"),
+      toolItem("mirror", "I"),
+    ];
+
+    if (primaryEntity && (primaryEntity.kind === "line" || primaryEntity.kind === "line_curve")) {
+      sketchItems.push(
+        actionItem(
+          "horiz",
+          "Horizontal",
+          <MoveHorizontal size={15} strokeWidth={1.6} />,
+          () => {
+            const docId = useArcStore.getState().overview?.active;
+            if (!docId) return;
+            const g = primaryEntity.geometry as Record<string, unknown>;
+            const end = (g.end as [number, number, number]) ?? [10, 0, 0];
+            const len = Math.hypot(end[0], end[1], end[2]) || 10;
+            const sign = end[0] < 0 ? -1 : 1;
+            void ipc.updateGeometry(docId, primaryEntity.id, {
+              ...g,
+              end: [sign * len, 0, 0],
+            } as unknown as Geometry);
+          },
+          "Horizontal (H)",
+        ),
+        actionItem(
+          "vert",
+          "Vertical",
+          <MoveVertical size={15} strokeWidth={1.6} />,
+          () => {
+            const docId = useArcStore.getState().overview?.active;
+            if (!docId) return;
+            const g = primaryEntity.geometry as Record<string, unknown>;
+            const end = (g.end as [number, number, number]) ?? [0, 0, 10];
+            const len = Math.hypot(end[0], end[1], end[2]) || 10;
+            const sign = end[2] < 0 ? -1 : 1;
+            void ipc.updateGeometry(docId, primaryEntity.id, {
+              ...g,
+              end: [0, 0, sign * len],
+            } as unknown as Geometry);
+          },
+          "Vertical (V)",
+        ),
+      );
+    }
+
+    if (primaryEntity && (primaryEntity.kind === "rectangle" || primaryEntity.kind === "rectangle_curve")) {
+      sketchItems.push(
+        actionItem(
+          "square",
+          "Square",
+          <Square size={15} strokeWidth={1.6} />,
+          () => {
+            const docId = useArcStore.getState().overview?.active;
+            if (!docId) return;
+            const g = primaryEntity.geometry as Record<string, unknown>;
+            const w = typeof g.width === "number" ? g.width : 10;
+            void ipc.updateGeometry(docId, primaryEntity.id, {
+              ...g,
+              width: w,
+              depth: w,
+            } as unknown as Geometry);
+          },
+          "Square",
+        ),
+      );
+    }
+
+    sketchItems.push(
+      actionItem(
+        "construction",
+        "Construction",
+        <PencilRuler size={15} strokeWidth={1.6} />,
+        () => void actions.toggleConstruction(),
+        "Construction (X)",
+      ),
+    );
+
+    sketchItems.push(
+      linearPatternItem(),
+      circularPatternItem(),
+      duplicateItem(),
+      deleteItem(),
+    );
+
     groups.push({
       title: "Sketch Profile",
-      items: [
-        toolItem("extrude", "E"),
-        toolItem("revolve", "V"),
-        toolItem("sweep", "S"),
-        toolItem("loft", "K"),
-        toolItem("offset", "O"),
-        toolItem("trim", "T"),
-        toolItem("fillet", "F"),
-        toolItem("mirror", "I"),
-        linearPatternItem(),
-        circularPatternItem(),
-        duplicateItem(),
-        deleteItem(),
-      ].filter((item): item is DockItem => item !== null),
+      items: sketchItems.filter((item): item is DockItem => item !== null),
     });
   }
 

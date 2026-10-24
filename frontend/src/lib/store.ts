@@ -1,5 +1,16 @@
 import { create } from "zustand";
+import type { ReactNode } from "react";
 import type { AppOverview, SceneData, ToolId } from "./types";
+
+export interface ContextMenuItem {
+  label: string;
+  run: () => void;
+  disabled?: boolean;
+  icon?: ReactNode;
+  shortcut?: string;
+  danger?: boolean;
+  separator?: boolean;
+}
 
 interface ArcState {
   overview: AppOverview | null;
@@ -48,7 +59,7 @@ interface ArcState {
     open: boolean;
     x: number;
     y: number;
-    items: Array<{ label: string; run: () => void; disabled?: boolean }>;
+    items: ContextMenuItem[];
   };
   view: "dashboard" | "editor";
   setView: (view: "dashboard" | "editor") => void;
@@ -99,7 +110,7 @@ interface ArcState {
   setLowSpecMode: (enabled: boolean) => void;
   setLeftSidebarOpen: (open: boolean) => void;
   setRightSidebarOpen: (open: boolean) => void;
-  openContextMenu: (x: number, y: number, items: Array<{ label: string; run: () => void; disabled?: boolean }>) => void;
+  openContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
   closeContextMenu: () => void;
 }
 

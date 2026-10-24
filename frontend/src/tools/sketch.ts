@@ -158,57 +158,24 @@ export function previewRing(
 
 // ---------------------------------------------------------------------- line
 
-/** Snap to any existing sketch vertex (or chain start) within tolerance so lines connect cleanly. */
+/** Snap to any existing sketch vertex, intersection, quadrant, perpendicular, or polar ray so geometry connects cleanly. */
 function snapToSketchVertex(
   raw: THREE.Vector3,
   ctx: ToolContext,
   chainPoints: THREE.Vector3[] = [],
+  anchor?: THREE.Vector3 | null,
 ): THREE.Vector3 {
   const tol = Math.max(1.2, ctx.settings.gridSize * 0.65);
-  let best: THREE.Vector3 | null = null;
-  let bestDist = tol;
-
+  // Prioritize closing the current in-progress chain back to an earlier vertex
   for (const pt of chainPoints) {
     const d = raw.distanceTo(pt);
-    if (d < bestDist) {
-      bestDist = d;
-      best = pt.clone();
+    if (d < tol) {
+      return pt.clone();
     }
   }
 
-  for (const e of ctx.scene()?.entities ?? []) {
-    if (!e.visible || e.locked || e.category !== "sketch") continue;
-    const pos = new THREE.Vector3(...e.transform.position);
-    const quat = new THREE.Quaternion(...e.transform.rotation);
-    const scale = new THREE.Vector3(...e.transform.scale);
-    const toWorld = (lx: number, ly: number, lz: number) =>
-      new THREE.Vector3(lx, ly, lz).multiply(scale).applyQuaternion(quat).add(pos);
-
-    const g = e.geometry;
-    if (g.type === "line_curve" && Array.isArray(g.end)) {
-      const end = g.end as [number, number, number];
-      const p0 = toWorld(0, 0, 0);
-      const p1 = toWorld(end[0], end[1], end[2]);
-      for (const v of [p0, p1]) {
-        const d = raw.distanceTo(v);
-        if (d < bestDist) {
-          bestDist = d;
-          best = v;
-        }
-      }
-    } else if (g.type === "polyline_curve" && Array.isArray(g.points)) {
-      for (const p of g.points as [number, number, number][]) {
-        const v = toWorld(p[0], p[1], p[2]);
-        const d = raw.distanceTo(v);
-        if (d < bestDist) {
-          bestDist = d;
-          best = v;
-        }
-      }
-    }
-  }
-
-  return best ?? ctx.snap(raw).point;
+  // Use the full CAD precision snapping engine (endpoints, midpoints, centers, quadrants, intersections, perpendicular, polar tracking)
+  return ctx.snap(raw, { anchor }).point;
 }
 
 /**
@@ -355,9 +322,20 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     }
     draftPreview(target, ctx);
     const u = ctx.settings.unitLabel;
+
+    // SolveSpace-style Auto-constraint inference
+    const basis = activePlaneBasis(from);
+    const delta = target.clone().sub(from);
+    const du = delta.dot(basis.u);
+    const dv = delta.dot(basis.v);
+    const deg = (Math.atan2(dv, du) * 180) / Math.PI;
+    const isHoriz = Math.abs(deg) <= 1.5 || Math.abs(Math.abs(deg) - 180) <= 1.5;
+    const isVert = Math.abs(Math.abs(deg) - 90) <= 1.5;
+    const constraintTag = isHoriz ? " [H]" : isVert ? " [V]" : "";
+
     const label = state.typed
-      ? `L ${state.typed}| ${u} · ${angleLabel(from, target)}`
-      : `${lenLabel(from, target)} ${u} · ${angleLabel(from, target)}`;
+      ? `L: ${state.typed}| ${u}${constraintTag} · [Enter]`
+      : `${lenLabel(from, target)} ${u}${constraintTag} · ${angleLabel(from, target)}`;
     ctx.showMeasure(label, state.lastScreen);
   };
 
@@ -478,7 +456,8 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     onPointerMove(event, ctx) {
       const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) return;
-      const cursor = snapToSketchVertex(raw, ctx, points);
+      const from = points.length > 0 ? points[points.length - 1] : null;
+      const cursor = snapToSketchVertex(raw, ctx, points, from);
       state.lastScreen = ctx.screenPoint(event);
       if (state.press && Math.hypot(event.clientX - state.press.x, event.clientY - state.press.y) > 5) {
         state.dragged = true;
@@ -488,8 +467,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
         ctx.showMeasure(null);
         return;
       }
-      const from = points[points.length - 1];
-      state.lastCursor = ortho(from, cursor, event.shiftKey);
+      state.lastCursor = ortho(from!, cursor, event.shiftKey);
       updateLinePreview(ctx);
     },
     onPointerUp(event, ctx) {
@@ -507,7 +485,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
         return;
       }
       const from = points[points.length - 1];
-      let target = ortho(from, snapToSketchVertex(raw, ctx, points), event.shiftKey);
+      let target = ortho(from, snapToSketchVertex(raw, ctx, points, from), event.shiftKey);
       const parsed = state.typed ? Number.parseFloat(state.typed) : Number.NaN;
       if (Number.isFinite(parsed) && parsed > 0) {
         target = pointAlongDirection(from, target, parsed);
@@ -738,7 +716,7 @@ export const rectangleTool: ToolHandler = {
     if (rect.press && Math.hypot(event.clientX - rect.press.x, event.clientY - rect.press.y) > 5) {
       rect.dragged = true;
     }
-    rect.lastCursor = ctx.snap(raw).point;
+    rect.lastCursor = ctx.snap(raw, { anchor: rect.anchor }).point;
     rect.lastScreen = ctx.screenPoint(event);
     if (!rect.anchor) {
       ctx.showMeasure(null);
@@ -754,7 +732,7 @@ export const rectangleTool: ToolHandler = {
       return;
     }
     const raw = sketchPlanePoint(ctx, event, rect.anchor);
-    if (raw) commitRect(ctx, ctx.snap(raw).point, event.shiftKey);
+    if (raw) commitRect(ctx, ctx.snap(raw, { anchor: rect.anchor }).point, event.shiftKey);
     ctx.releasePointer(event);
   },
   onKey(event, ctx) {
@@ -862,7 +840,7 @@ export const circleTool: ToolHandler = {
     if (circ.press && Math.hypot(event.clientX - circ.press.x, event.clientY - circ.press.y) > 5) {
       circ.dragged = true;
     }
-    circ.lastCursor = ctx.snap(raw).point;
+    circ.lastCursor = ctx.snap(raw, { anchor: circ.anchor }).point;
     circ.lastScreen = ctx.screenPoint(event);
     if (!circ.anchor) {
       ctx.showMeasure(null);
@@ -878,7 +856,7 @@ export const circleTool: ToolHandler = {
       return;
     }
     const raw = sketchPlanePoint(ctx, event, circ.anchor);
-    if (raw) commitCircle(ctx, ctx.snap(raw).point);
+    if (raw) commitCircle(ctx, ctx.snap(raw, { anchor: circ.anchor }).point);
     ctx.releasePointer(event);
   },
   onKey(event, ctx) {

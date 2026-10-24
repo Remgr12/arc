@@ -405,10 +405,8 @@ function commitExtrude(event: PointerEvent, ctx: ToolContext): void {
   commitExtrudeHeight(h, ctx);
 }
 
-let armSelectedSketchOnce = false;
-
 export function armExtrudeSelectedSketch(): void {
-  armSelectedSketchOnce = true;
+  // Backwards-compatible hook: onActivate auto-detects selection directly
 }
 
 export const extrudeTool: ToolHandler = {
@@ -418,23 +416,19 @@ export const extrudeTool: ToolHandler = {
     ext = null;
     clearDraft(ctx);
     ctx.showMeasure(null);
-    // Only auto-start extruding a selected sketch when explicitly triggered from a sketch's action menu.
-    if (armSelectedSketchOnce) {
-      armSelectedSketchOnce = false;
-      for (const id of ctx.selection()) {
-        const entity = ctx.entityById(id);
-        if (!entity || entity.category !== "sketch") continue;
-        const chain = chainFromEntity(entity, ctx.objectFor(id));
-        if (chain && chain.closed && chain.points.length >= 3) {
-          startExtrude(chain, ctx);
-          return;
-        }
+    // Auto-start extruding if a closed sketch profile is already selected!
+    for (const id of ctx.selection()) {
+      const entity = ctx.entityById(id);
+      if (!entity || entity.category !== "sketch") continue;
+      const chain = chainFromEntity(entity, ctx.objectFor(id));
+      if (chain && chain.closed && chain.points.length >= 3) {
+        startExtrude(chain, ctx);
+        return;
       }
     }
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate(ctx) {
-    armSelectedSketchOnce = false;
     ext = null;
     clearDraft(ctx);
     ctx.showMeasure(null);

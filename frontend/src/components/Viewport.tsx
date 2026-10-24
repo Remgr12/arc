@@ -3,24 +3,50 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import {
+  Box,
+  Circle,
+  Combine,
+  Compass,
+  Copy,
+  Cylinder,
+  Download,
+  Eye,
+  Layers,
+  Maximize2,
+  Move,
+  Paintbrush,
+  PencilRuler,
+  Redo,
+  RotateCw,
+  Scissors,
+  Slice,
+  Sparkles,
+  Trash2,
+  Undo,
+} from "lucide-react";
 import { ipc } from "../lib/ipc";
-import { useArcStore } from "../lib/store";
+import { useArcStore, type ContextMenuItem } from "../lib/store";
 import { useThemeStore, viewportPalette, type ViewportPalette } from "../lib/themes";
 import { ViewCube } from "../lib/viewcube";
 import { MATERIALS } from "../lib/materials";
 import { actions } from "../lib/actions";
 import { TOOL_BY_ID } from "../data/tools";
 import { handlerFor } from "../tools/registry";
-import type { ToolContext, ViewPalette, GizmoMode } from "../tools/types";
+import type { ToolContext, ViewPalette, GizmoMode, SnapKind } from "../tools/types";
 import type { EntityData, LayerData, SceneData, ToolId, Transform } from "../lib/types";
 import type { EdgeHit, FaceHit } from "../tools/topology";
 import {
   edgeOverlayGeometry,
   faceOverlayGeometry,
-  facePlaneInfo,
   pickEdgeScreen,
 } from "../tools/topology";
-import { computePlaneBasis } from "../tools/geometry2d";
+import {
+  computePlaneBasis,
+  intersectSegments2D,
+  projectPointToSegment2D,
+  snapPolarAngle,
+} from "../tools/geometry2d";
 import { uiCapture } from "../lib/uiCapture";
 
 interface ViewAnim {
@@ -41,12 +67,6 @@ interface MarqueeState {
   x0: number;
   y0: number;
   additive: boolean;
-}
-
-interface MenuItem {
-  label: string;
-  run: () => void;
-  disabled?: boolean;
 }
 
 interface ViewportRefs {
@@ -1191,14 +1211,29 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   const lineData = entity.lines && entity.lines.length > 0 ? entity.lines : null;
   let obj: THREE.Object3D;
   if (lineData && !tris) {
+    const isConstruction = entity.name?.startsWith("[C] ");
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData.slice(), 3));
-    const material = ref.lineMaterial.clone();
-    obj = new THREE.LineSegments(geometry, material);
-    if (entity.category === "sketch") {
-      const fill = buildClosedSketchFill(lineData, entity.id, new THREE.Color(0xc8ccd4));
-      if (fill) obj.add(fill);
-    } else if (entity.kind === "dimension" && entity.geometry?.type === "dimension") {
+    if (isConstruction) {
+      const dashMat = new THREE.LineDashedMaterial({
+        color: 0xf59e0b,
+        dashSize: 2.0,
+        gapSize: 1.2,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const segs = new THREE.LineSegments(geometry, dashMat);
+      segs.computeLineDistances();
+      obj = segs;
+    } else {
+      const material = ref.lineMaterial.clone();
+      obj = new THREE.LineSegments(geometry, material);
+      if (entity.category === "sketch") {
+        const fill = buildClosedSketchFill(lineData, entity.id, new THREE.Color(0xc8ccd4));
+        if (fill) obj.add(fill);
+      }
+    }
+    if (entity.kind === "dimension" && entity.geometry?.type === "dimension") {
       const s = entity.geometry.start as [number, number, number] | undefined;
       const e = entity.geometry.end as [number, number, number] | undefined;
       if (s && e) {
@@ -1358,9 +1393,9 @@ function present(
       mat.metalness = 0.05;
     }
     if (st.sketchMode && entity.category !== "sketch") {
-      mat.opacity = 0.35;
+      mat.opacity = 0.28;
       mat.transparent = true;
-      mat.depthWrite = true;
+      mat.depthWrite = false;
     } else if (entity.locked) {
       mat.opacity = 0.55;
       mat.transparent = true;
@@ -1442,13 +1477,9 @@ function closeContextMenu(): void {
   useArcStore.getState().closeContextMenu();
 }
 
-function openContextMenu(ref: ViewportRefs, hostX: number, hostY: number, items: MenuItem[]): void {
+function openContextMenu(ref: ViewportRefs, hostX: number, hostY: number, items: ContextMenuItem[]): void {
   void ref;
-  useArcStore.getState().openContextMenu(
-    hostX,
-    hostY,
-    items.map((item) => ({ label: item.label, run: item.run, disabled: item.disabled })),
-  );
+  useArcStore.getState().openContextMenu(hostX, hostY, items);
 }
 
 
@@ -1476,7 +1507,7 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
     if (!scene.selection.includes(hitId)) void ipc.setSelection(docId, [hitId], hitId);
     const selectedCount = scene.selection.includes(hitId) ? scene.selection.length : 1;
 
-    const topItems: MenuItem[] = [];
+    const topItems: ContextMenuItem[] = [];
     if (edgeHit) {
       useArcStore.getState().setSelectionRef({
         entityId: edgeHit.entityId,
@@ -1488,12 +1519,21 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
       });
       topItems.push(
         {
-          label: "Fillet Edge (F)",
+          label: "Fillet Edge",
+          icon: <Sparkles size={13} strokeWidth={2} />,
+          shortcut: "F",
           run: () => useArcStore.getState().setTool("fillet-edge"),
         },
         {
-          label: "Chamfer Edge (45° · 2 cm)",
+          label: "Chamfer Edge",
+          icon: <Slice size={13} strokeWidth={1.8} />,
           run: () => void actions.chamferSelectedEdge(2),
+        },
+        {
+          label: "Isolate Edge Solid",
+          icon: <Eye size={13} strokeWidth={1.8} />,
+          shortcut: "Alt+I",
+          run: () => void actions.isolateSelection(),
         },
       );
     } else if (faceHit) {
@@ -1507,104 +1547,165 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
       });
       topItems.push(
         {
-          label: "Extrude / Push-Pull Face (E)",
+          label: "Extrude Face",
+          icon: <Maximize2 size={13} strokeWidth={1.8} />,
+          shortcut: "E",
           run: () => useArcStore.getState().setTool("extrude-face"),
         },
         {
           label: "Offset Face",
+          icon: <Move size={13} strokeWidth={1.8} />,
           run: () => useArcStore.getState().setTool("offset-face"),
         },
         {
-          label: "Shell / Hollow Solid (2 cm)",
-          run: () => void actions.shellSelection(2),
+          label: "Sketch on Face",
+          icon: <PencilRuler size={13} strokeWidth={1.8} />,
+          shortcut: "W",
+          run: () => actions.activateWorkplane(),
         },
         {
-          label: "Sketch on this Face",
-          run: () => {
-            if (!entity) return;
-            const info = facePlaneInfo(entity, faceHit.faceIndex);
-            useArcStore.getState().enterSketchMode({
-              height: info.height,
-              origin: info.origin,
-              normal: info.normal,
-              label: info.label,
-              tool: "rectangle",
-            });
-            window.dispatchEvent(
-              new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
-            );
-          },
+          label: "Section on Face",
+          icon: <Slice size={13} strokeWidth={1.8} />,
+          run: () => void actions.sectionOnFace(faceHit.entityId, faceHit.faceIndex),
+        },
+        {
+          label: "Shell Solid (2 cm)",
+          icon: <Box size={13} strokeWidth={1.8} />,
+          run: () => void actions.shellSelection(2),
         },
       );
     } else if (entity?.category === "sketch") {
       topItems.push(
         {
-          label: "Edit / Draw on this Sketch",
-          run: () => {
-            const rot = entity.transform.rotation;
-            const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
-            const normalVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
-            const normal: [number, number, number] = [normalVec.x, normalVec.y, normalVec.z];
-            const origin: [number, number, number] = [
-              entity.transform.position[0],
-              entity.transform.position[1],
-              entity.transform.position[2],
-            ];
-            useArcStore.getState().enterSketchMode({
-              origin,
-              normal,
-              label: `Edit ${entity.name || "Sketch"}`,
-              tool: "line",
-            });
-            window.dispatchEvent(
-              new CustomEvent("arc-focus-plane", { detail: { normal } }),
-            );
-          },
+          label: "Draw on Sketch",
+          icon: <PencilRuler size={13} strokeWidth={1.8} />,
+          shortcut: "W",
+          run: () => actions.activateWorkplane(),
         },
         {
-          label: "Extrude Profile (E)",
+          label: "Extrude Profile",
+          icon: <Maximize2 size={13} strokeWidth={1.8} />,
+          shortcut: "E",
           run: () => useArcStore.getState().setTool("extrude"),
         },
         {
-          label: "Revolve Profile (V)",
+          label: "Revolve Profile",
+          icon: <RotateCw size={13} strokeWidth={1.8} />,
+          shortcut: "V",
           run: () => useArcStore.getState().setTool("revolve"),
         },
         {
-          label: "Offset Sketch (O)",
-          run: () => useArcStore.getState().setTool("offset"),
+          label: "Toggle Construction",
+          icon: <PencilRuler size={13} strokeWidth={1.8} />,
+          shortcut: "X",
+          run: () => void actions.toggleConstruction(),
+        },
+      );
+    } else {
+      topItems.push(
+        {
+          label: "Isolate Body",
+          icon: <Eye size={13} strokeWidth={1.8} />,
+          shortcut: "Alt+I",
+          run: () => void actions.isolateSelection(),
+        },
+        {
+          label: "Export STL",
+          icon: <Download size={13} strokeWidth={1.8} />,
+          run: () => void actions.exportSelectedStl(),
         },
       );
     }
 
     openContextMenu(ref, x, y, [
       ...topItems,
-      { label: "Delete", run: () => void actions.deleteSelection() },
-      { label: "Duplicate", run: () => void actions.duplicateSelection() },
-      { label: "Linear Pattern (3× X)", run: () => void actions.linearPattern({ count: 3, spacing: 30, axis: "x" }) },
-      { label: "Circular Pattern (6× Y)", run: () => void actions.circularPattern({ count: 6, angleDeg: 360, axis: "y" }) },
-      { label: "Fit view", run: () => actions.fitView() },
-      { label: "Boolean union", disabled: selectedCount < 2, run: () => void actions.booleanApply("union") },
+      { label: "", separator: true, run: () => {} },
       {
-        label: "Boolean difference",
+        label: "Duplicate",
+        icon: <Copy size={13} strokeWidth={1.8} />,
+        shortcut: "Ctrl+D",
+        run: () => void actions.duplicateSelection(),
+      },
+      {
+        label: "Boolean Union",
+        icon: <Combine size={13} strokeWidth={1.8} />,
+        disabled: selectedCount < 2,
+        run: () => void actions.booleanApply("union"),
+      },
+      {
+        label: "Boolean Subtract",
+        icon: <Scissors size={13} strokeWidth={1.8} />,
         disabled: selectedCount < 2,
         run: () => void actions.booleanApply("difference"),
       },
       {
-        label: "Boolean intersection",
+        label: "Boolean Intersect",
+        icon: <Layers size={13} strokeWidth={1.8} />,
         disabled: selectedCount < 2,
         run: () => void actions.booleanApply("intersection"),
       },
       {
         label: "Materials…",
+        icon: <Paintbrush size={13} strokeWidth={1.8} />,
         run: () => window.dispatchEvent(new CustomEvent("arc-materials-toggle", { detail: true })),
+      },
+      { label: "", separator: true, run: () => {} },
+      {
+        label: "Delete",
+        icon: <Trash2 size={13} strokeWidth={1.8} />,
+        shortcut: "Del",
+        danger: true,
+        run: () => void actions.deleteSelection(),
       },
     ]);
     return;
   }
+
+  // Empty canvas right click: Quick Creation & Navigation
   openContextMenu(ref, x, y, [
-    { label: "Fit view", run: () => actions.fitView() },
-    { label: "Undo", run: () => void actions.undo() },
-    { label: "Redo", run: () => void actions.redo() },
+    {
+      label: "New Sketch",
+      icon: <PencilRuler size={13} strokeWidth={1.8} />,
+      shortcut: "W",
+      run: () => actions.activateWorkplane(),
+    },
+    {
+      label: "Add Box",
+      icon: <Box size={13} strokeWidth={1.8} />,
+      shortcut: "B",
+      run: () => actions.setTool("box"),
+    },
+    {
+      label: "Add Cylinder",
+      icon: <Cylinder size={13} strokeWidth={1.8} />,
+      shortcut: "Q",
+      run: () => actions.setTool("cylinder"),
+    },
+    {
+      label: "Add Sphere",
+      icon: <Circle size={13} strokeWidth={1.8} />,
+      shortcut: "G",
+      run: () => actions.setTool("sphere"),
+    },
+    { label: "", separator: true, run: () => {} },
+    {
+      label: "Fit View",
+      icon: <Compass size={13} strokeWidth={1.8} />,
+      shortcut: "Ctrl+F",
+      run: () => actions.fitView(),
+    },
+    {
+      label: "Undo",
+      icon: <Undo size={13} strokeWidth={1.8} />,
+      shortcut: "Ctrl+Z",
+      run: () => void actions.undo(),
+    },
+    {
+      label: "Redo",
+      icon: <Redo size={13} strokeWidth={1.8} />,
+      shortcut: "Ctrl+Y",
+      run: () => void actions.redo(),
+    },
   ]);
 }
 
@@ -2205,6 +2306,11 @@ function attachHandlers(ref: ViewportRefs): () => void {
       focusPlane(ref, cur.negate());
       return;
     }
+    if (event.code === "Numpad0" || (event.altKey && event.code === "Digit0")) {
+      event.preventDefault();
+      focusPlane(ref, new THREE.Vector3(1, 1, 1).normalize());
+      return;
+    }
 
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const store = useArcStore.getState();
@@ -2262,6 +2368,18 @@ function attachHandlers(ref: ViewportRefs): () => void {
   };
   window.addEventListener("arc-focus-plane", focusPlaneEv);
 
+  const standardViewEv = (event: Event) => {
+    const v = (event as CustomEvent<{ view: string }>).detail?.view;
+    if (v === "front") focusPlane(ref, new THREE.Vector3(0, 0, 1));
+    else if (v === "top") focusPlane(ref, new THREE.Vector3(0, 1, 0));
+    else if (v === "right") focusPlane(ref, new THREE.Vector3(1, 0, 0));
+    else if (v === "iso") focusPlane(ref, new THREE.Vector3(1, 1, 1).normalize());
+    else if (v === "back") focusPlane(ref, new THREE.Vector3(0, 0, -1));
+    else if (v === "bottom") focusPlane(ref, new THREE.Vector3(0, -1, 0));
+    else if (v === "left") focusPlane(ref, new THREE.Vector3(-1, 0, 0));
+  };
+  window.addEventListener("arc-standard-view", standardViewEv);
+
   return () => {
     el.removeEventListener("pointerdown", down);
     el.removeEventListener("pointermove", move);
@@ -2278,6 +2396,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
     window.removeEventListener("arc-fit-view", fit);
     window.removeEventListener("arc-focus-entity", focus);
     window.removeEventListener("arc-focus-plane", focusPlaneEv);
+    window.removeEventListener("arc-standard-view", standardViewEv);
   };
 }
 
@@ -2382,35 +2501,125 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           )
         : null;
 
-      const showSnapMarker = (pt: THREE.Vector3 | null, kind?: string) => {
+      const showSnapMarker = (pt: THREE.Vector3 | null, kind?: SnapKind) => {
         if (!pt || !kind || kind === "grid") {
           ref.ctx.clearPreview("snap-marker");
           return;
         }
-        const radius = Math.max(0.6, ref.camera.position.distanceTo(pt) * 0.008);
+        const radius = Math.max(0.65, ref.camera.position.distanceTo(pt) * 0.009);
         const color =
           kind === "midpoint"
             ? 0x10b981
             : kind === "center" || kind === "origin"
               ? 0xf59e0b
-              : kind === "aligned"
-                ? 0xa855f7
-                : 0x22d3ee;
-        const ringGeo = new THREE.RingGeometry(radius * 0.55, radius, 20);
-        const ringMat = new THREE.MeshBasicMaterial({
-          color,
-          side: THREE.DoubleSide,
-          depthTest: false,
-          transparent: true,
-          opacity: 0.95,
-        });
-        const marker = new THREE.Mesh(ringGeo, ringMat);
+              : kind === "intersection"
+                ? 0xf43f5e
+                : kind === "quadrant"
+                  ? 0xeab308
+                  : kind === "perpendicular"
+                    ? 0x6366f1
+                    : kind === "tangent"
+                      ? 0x14b8a6
+                      : kind === "aligned" || kind === "polar"
+                        ? 0xa855f7
+                        : 0x22d3ee; // endpoint / default cyan
+
+        let markerGeo: THREE.BufferGeometry;
+        let isLineSegments = false;
+        const s = radius * 0.75;
+
+        if (kind === "midpoint") {
+          // Triangle
+          const pts = [
+            new THREE.Vector3(0, s * 1.15, 0),
+            new THREE.Vector3(-s, -s * 0.65, 0),
+            new THREE.Vector3(s, -s * 0.65, 0),
+            new THREE.Vector3(0, s * 1.15, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        } else if (kind === "tangent") {
+          // Circle with horizontal tangent bar on top
+          const pts: THREE.Vector3[] = [];
+          const segs = 16;
+          for (let i = 0; i <= segs; i++) {
+            const th = (i / segs) * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(th) * s * 0.7, Math.sin(th) * s * 0.7 - s * 0.2, 0));
+          }
+          pts.push(new THREE.Vector3(-s, s * 0.5, 0), new THREE.Vector3(s, s * 0.5, 0));
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        } else if (kind === "intersection") {
+          // Cross 'X'
+          const pts = [
+            new THREE.Vector3(-s, -s, 0),
+            new THREE.Vector3(s, s, 0),
+            new THREE.Vector3(-s, s, 0),
+            new THREE.Vector3(s, -s, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+          isLineSegments = true;
+        } else if (kind === "quadrant") {
+          // Diamond
+          const pts = [
+            new THREE.Vector3(0, s * 1.1, 0),
+            new THREE.Vector3(s * 1.1, 0, 0),
+            new THREE.Vector3(0, -s * 1.1, 0),
+            new THREE.Vector3(-s * 1.1, 0, 0),
+            new THREE.Vector3(0, s * 1.1, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        } else if (kind === "perpendicular") {
+          // Right-angle perpendicular symbol
+          const pts = [
+            new THREE.Vector3(-s, -s, 0),
+            new THREE.Vector3(s, -s, 0),
+            new THREE.Vector3(0, -s, 0),
+            new THREE.Vector3(0, s, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+          isLineSegments = true;
+        } else if (kind === "center" || kind === "origin") {
+          // Ring
+          markerGeo = new THREE.RingGeometry(radius * 0.55, radius * 0.85, 24);
+        } else {
+          // Endpoint: Square
+          const pts = [
+            new THREE.Vector3(-s, -s, 0),
+            new THREE.Vector3(s, -s, 0),
+            new THREE.Vector3(s, s, 0),
+            new THREE.Vector3(-s, s, 0),
+            new THREE.Vector3(-s, -s, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        }
+
+        let marker: THREE.Object3D;
+        if (markerGeo instanceof THREE.RingGeometry) {
+          const mat = new THREE.MeshBasicMaterial({
+            color,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            transparent: true,
+            opacity: 0.95,
+          });
+          marker = new THREE.Mesh(markerGeo, mat);
+        } else {
+          const mat = new THREE.LineBasicMaterial({
+            color,
+            depthTest: false,
+            transparent: true,
+            opacity: 0.95,
+          });
+          marker = isLineSegments
+            ? new THREE.LineSegments(markerGeo, mat)
+            : new THREE.Line(markerGeo, mat);
+        }
+
         if (basis) {
           marker.quaternion.copy(basis.quat);
-          marker.position.copy(pt).addScaledVector(basis.normal, 0.06);
+          marker.position.copy(pt).addScaledVector(basis.normal, 0.08);
         } else {
-          ringGeo.rotateX(-Math.PI / 2);
-          marker.position.set(pt.x, pt.y + 0.05, pt.z);
+          marker.rotation.x = -Math.PI / 2;
+          marker.position.set(pt.x, pt.y + 0.06, pt.z);
         }
         marker.renderOrder = 999;
         ref.ctx.setPreview(marker, "snap-marker");
@@ -2446,7 +2655,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       const tolerance = Math.max(gridSize * 0.3, camDistance * 0.004);
 
       if (basis) {
-        // --- PLANE-AWARE SKETCH SNAPPING (Shapr3D inference engine) ---
+        // --- ADVANCED CAD SNAPPING ENGINE (CADCraft / SolveSpace / Shapr3D) ---
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(basis.normal, basis.origin);
         const ptOnPlane = plane.projectPoint(world, new THREE.Vector3());
         const delta = ptOnPlane.clone().sub(basis.origin);
@@ -2460,13 +2669,21 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           return { point: basis.origin.clone(), kind: "origin" };
         }
 
-        // 2. Check Guidepoints on this plane (vertices, midpoints, circle centers)
+        // 2. Check Geometry features: endpoints, midpoints, circle centers, quadrants, intersections
         const endpointTolerance = tolerance * 2.2;
         let bestPt: THREE.Vector3 | null = null;
-        let bestKind: "endpoint" | "midpoint" | "center" = "endpoint";
+        let bestKind: SnapKind = "endpoint";
         let bestDist = endpointTolerance;
         const scene = useArcStore.getState().scene;
         const guidePoints: { u: number; v: number; pt: THREE.Vector3 }[] = [];
+
+        interface PlaneSeg {
+          a: [number, number];
+          b: [number, number];
+          pA: THREE.Vector3;
+          pB: THREE.Vector3;
+        }
+        const planeSegments: PlaneSeg[] = [];
 
         if (scene && snapEnabled) {
           const vA = new THREE.Vector3();
@@ -2487,7 +2704,36 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
               bestKind = "center";
             }
             const cRel = center3D.clone().sub(basis.origin);
-            guidePoints.push({ u: cRel.dot(basis.u), v: cRel.dot(basis.v), pt: center3D });
+            const cu = cRel.dot(basis.u);
+            const cv = cRel.dot(basis.v);
+            guidePoints.push({ u: cu, v: cv, pt: center3D });
+
+            // Check circle quadrants (top, bottom, left, right)
+            const geom = entity.geometry as Record<string, unknown>;
+            if (
+              (geom.type === "circle_curve" || geom.type === "circle") &&
+              typeof geom.radius === "number" &&
+              geom.radius > 1e-4
+            ) {
+              const r = geom.radius;
+              const quads: [number, number][] = [
+                [cu + r, cv],
+                [cu - r, cv],
+                [cu, cv + r],
+                [cu, cv - r],
+              ];
+              for (const q of quads) {
+                const dQ = Math.hypot(uCoord - q[0], vCoord - q[1]);
+                if (dQ <= bestDist) {
+                  bestDist = dQ;
+                  bestKind = "quadrant";
+                  bestPt = basis.origin
+                    .clone()
+                    .addScaledVector(basis.u, q[0])
+                    .addScaledVector(basis.v, q[1]);
+                }
+              }
+            }
 
             const pts = entity.lines;
             if (!pts || pts.length < 3) continue;
@@ -2516,9 +2762,103 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
               }
 
               const relA = vA.clone().sub(basis.origin);
-              guidePoints.push({ u: relA.dot(basis.u), v: relA.dot(basis.v), pt: vA.clone() });
+              const uA = relA.dot(basis.u);
+              const vA_ = relA.dot(basis.v);
+              guidePoints.push({ u: uA, v: vA_, pt: vA.clone() });
+
+              const relB = vB.clone().sub(basis.origin);
+              const uB = relB.dot(basis.u);
+              const vB_ = relB.dot(basis.v);
+
               const relMid = mid.clone().sub(basis.origin);
               guidePoints.push({ u: relMid.dot(basis.u), v: relMid.dot(basis.v), pt: mid.clone() });
+
+              planeSegments.push({
+                a: [uA, vA_],
+                b: [uB, vB_],
+                pA: vA.clone(),
+                pB: vB.clone(),
+              });
+            }
+          }
+
+          // 3. Check segment-segment intersections (CADCraft / SolveSpace)
+          if (planeSegments.length >= 2) {
+            const maxSegs = Math.min(planeSegments.length, 60);
+            for (let i = 0; i < maxSegs; i++) {
+              for (let j = i + 1; j < maxSegs; j++) {
+                const intUV = intersectSegments2D(
+                  planeSegments[i].a,
+                  planeSegments[i].b,
+                  planeSegments[j].a,
+                  planeSegments[j].b,
+                );
+                if (intUV) {
+                  const dInt = Math.hypot(uCoord - intUV[0], vCoord - intUV[1]);
+                  if (dInt <= bestDist * 1.05) {
+                    bestDist = dInt;
+                    bestKind = "intersection";
+                    bestPt = basis.origin
+                      .clone()
+                      .addScaledVector(basis.u, intUV[0])
+                      .addScaledVector(basis.v, intUV[1]);
+                  }
+                }
+              }
+            }
+          }
+
+          // 4. Perpendicular Foot Snap when drafting from an anchor (CADCraft)
+          if (opts?.anchor && !bestPt) {
+            const ancDelta = opts.anchor.clone().sub(basis.origin);
+            const ancU = ancDelta.dot(basis.u);
+            const ancV = ancDelta.dot(basis.v);
+            for (const seg of planeSegments) {
+              const proj = projectPointToSegment2D([ancU, ancV], seg.a, seg.b);
+              const dFoot = Math.hypot(uCoord - proj.point[0], vCoord - proj.point[1]);
+              if (dFoot <= endpointTolerance && proj.t > 0.05 && proj.t < 0.95) {
+                bestPt = basis.origin
+                  .clone()
+                  .addScaledVector(basis.u, proj.point[0])
+                  .addScaledVector(basis.v, proj.point[1]);
+                bestKind = "perpendicular";
+                break;
+              }
+            }
+          }
+
+          // 4b. Tangent Snap to Circles/Arcs when drafting from an anchor
+          if (opts?.anchor && !bestPt) {
+            const ancDelta = opts.anchor.clone().sub(basis.origin);
+            const ancU = ancDelta.dot(basis.u);
+            const ancV = ancDelta.dot(basis.v);
+            for (const entity of scene?.entities ?? []) {
+              if (!entity.visible || entity.locked) continue;
+              const g = entity.geometry as Record<string, unknown>;
+              if (g.type === "circle_curve" || g.type === "circle") {
+                const r = Number(g.radius ?? 0);
+                if (r > 0) {
+                  const cPos = new THREE.Vector3(...entity.transform.position).sub(basis.origin);
+                  const cu = cPos.dot(basis.u);
+                  const cv = cPos.dot(basis.v);
+                  const dToCenter = Math.hypot(ancU - cu, ancV - cv);
+                  if (dToCenter > r) {
+                    const th = Math.atan2(ancV - cv, ancU - cu);
+                    const alpha = Math.acos(r / dToCenter);
+                    const t1: [number, number] = [cu + r * Math.cos(th + alpha), cv + r * Math.sin(th + alpha)];
+                    const t2: [number, number] = [cu + r * Math.cos(th - alpha), cv + r * Math.sin(th - alpha)];
+                    for (const tp of [t1, t2]) {
+                      const dCursor = Math.hypot(uCoord - tp[0], vCoord - tp[1]);
+                      if (dCursor <= endpointTolerance * 1.5) {
+                        bestPt = basis.origin.clone().addScaledVector(basis.u, tp[0]).addScaledVector(basis.v, tp[1]);
+                        bestKind = "tangent";
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              if (bestPt) break;
             }
           }
         }
@@ -2529,7 +2869,37 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           return { point: bestPt, kind: bestKind };
         }
 
-        // 3. Shapr3D Inference Alignment Guidelines (horizontal & vertical extension lines)
+        // 5. Polar Tracking / Magnetic Angle Snapping (CADCraft & AutoCAD style)
+        if (opts?.anchor && opts.allowPolar !== false) {
+          const ancDelta = opts.anchor.clone().sub(basis.origin);
+          const ancU = ancDelta.dot(basis.u);
+          const ancV = ancDelta.dot(basis.v);
+          const du = uCoord - ancU;
+          const dv = vCoord - ancV;
+          const dist = Math.hypot(du, dv);
+          if (dist > tolerance * 1.5) {
+            const angleDeg = (Math.atan2(dv, du) * 180) / Math.PI;
+            const snappedAngle = snapPolarAngle(angleDeg, 3.5);
+            if (snappedAngle !== null) {
+              const rad = (snappedAngle * Math.PI) / 180;
+              const snappedU = ancU + dist * Math.cos(rad);
+              const snappedV = ancV + dist * Math.sin(rad);
+              const polarPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, snappedU)
+                .addScaledVector(basis.v, snappedV);
+              const farPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, ancU + Math.max(dist * 1.6, 250) * Math.cos(rad))
+                .addScaledVector(basis.v, ancV + Math.max(dist * 1.6, 250) * Math.sin(rad));
+              setGuideLine(opts.anchor, farPt);
+              showSnapMarker(polarPt, "polar");
+              return { point: polarPt, kind: "polar", polarAngle: snappedAngle };
+            }
+          }
+        }
+
+        // 6. Shapr3D Inference Alignment Guidelines (horizontal & vertical extension lines)
         let alignedRefPt: THREE.Vector3 | null = null;
         let alignedTargetPt: THREE.Vector3 | null = null;
         const alignTol = tolerance * 1.15;
@@ -2549,12 +2919,18 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
             if (Math.abs(uCoord - gp.u) <= alignTol) {
               uCoord = gp.u;
               alignedRefPt = gp.pt;
-              alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord).addScaledVector(basis.v, vCoord);
+              alignedTargetPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, uCoord)
+                .addScaledVector(basis.v, vCoord);
               break;
             } else if (Math.abs(vCoord - gp.v) <= alignTol) {
               vCoord = gp.v;
               alignedRefPt = gp.pt;
-              alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord).addScaledVector(basis.v, vCoord);
+              alignedTargetPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, uCoord)
+                .addScaledVector(basis.v, vCoord);
               break;
             }
           }
@@ -2567,7 +2943,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         }
         setGuideLine(null, null);
 
-        // 4. Snap coordinates to plane grid
+        // 7. Snap coordinates to plane grid
         const snappedU = snapCoord(uCoord, gridSize, snapEnabled);
         const snappedV = snapCoord(vCoord, gridSize, snapEnabled);
         const snappedPt = basis.origin
@@ -2590,7 +2966,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       // Check sketch & solid vertices, midpoints, and centers BEFORE axis lines!
       const endpointTolerance = tolerance * 2.2;
       let best: THREE.Vector3 | null = null;
-      let bestKind: "endpoint" | "midpoint" | "center" = "endpoint";
+      let bestKind: SnapKind = "endpoint";
       let bestDist = endpointTolerance;
       const scene = useArcStore.getState().scene;
       if (scene && snapEnabled) {

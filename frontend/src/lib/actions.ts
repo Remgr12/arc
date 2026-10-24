@@ -3,7 +3,7 @@ import { ipc } from "./ipc";
 import { useArcStore } from "./store";
 import { MATERIALS } from "./materials";
 import { DEFAULT_GEOMETRY } from "../data/tools";
-import { deriveFaces } from "../tools/topology";
+import { deriveFaces, facePlaneInfo } from "../tools/topology";
 import type { Geometry, ToolId, Transform } from "./types";
 
 function guard<A extends unknown[]>(
@@ -182,11 +182,119 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
   undo: guard(async () => {
     const id = requireDoc();
     await ipc.undo(id);
+    useArcStore.getState().setStatusMessage("Undo");
   }),
 
   redo: guard(async () => {
     const id = requireDoc();
     await ipc.redo(id);
+    useArcStore.getState().setStatusMessage("Redo");
+  }),
+
+  /** SolveSpace-style rapid workplane activation (W key). */
+  activateWorkplane: () => {
+    const st = useArcStore.getState();
+    const scene = st.scene;
+    const selFace = st.selFace;
+    if (selFace && scene) {
+      const entity = scene.entities.find((e) => e.id === selFace.entityId);
+      if (entity) {
+        const info = facePlaneInfo(entity, selFace.face);
+        st.enterSketchMode({
+          height: info.height,
+          origin: info.origin,
+          normal: info.normal,
+          label: info.label,
+          tool: "line",
+        });
+        window.dispatchEvent(
+          new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
+        );
+        st.setStatusMessage(`Workplane: ${info.label}`);
+        return;
+      }
+    }
+    const primaryId = scene?.primary || scene?.selection[scene.selection.length - 1];
+    if (primaryId && scene) {
+      const entity = scene.entities.find((e) => e.id === primaryId);
+      if (entity && (entity.kind === "plane" || (entity.geometry as Record<string, unknown>)?.type === "plane")) {
+        const pos = entity.transform.position;
+        const rot = entity.transform.rotation;
+        const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
+        const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+        st.enterSketchMode({
+          height: pos[1],
+          origin: pos,
+          normal: [normal.x, normal.y, normal.z],
+          label: entity.name || "Plane",
+          tool: "line",
+        });
+        window.dispatchEvent(
+          new CustomEvent("arc-focus-plane", { detail: { normal: [normal.x, normal.y, normal.z] } }),
+        );
+        st.setStatusMessage(`Workplane: ${entity.name || "Plane"}`);
+        return;
+      }
+    }
+    if (st.sketchMode) {
+      window.dispatchEvent(
+        new CustomEvent("arc-focus-plane", { detail: { normal: st.sketchPlaneNormal } }),
+      );
+      st.setStatusMessage("Aligned normal to workplane");
+      return;
+    }
+    st.enterSketchMode({ tool: "line" });
+    window.dispatchEvent(
+      new CustomEvent("arc-focus-plane", { detail: { normal: [0, 1, 0] } }),
+    );
+    st.setStatusMessage("Workplane: Ground (Y = 0)");
+  },
+
+  /** Toggle construction / reference geometry mode for selected sketch entities. */
+  toggleConstruction: guard(async () => {
+    const docId = requireDoc();
+    const scene = useArcStore.getState().scene;
+    if (!scene || scene.selection.length === 0) return;
+    for (const id of scene.selection) {
+      const entity = scene.entities.find((e) => e.id === id);
+      if (!entity) continue;
+      const isConst = entity.name?.startsWith("[C] ");
+      const newName = isConst ? entity.name.replace(/^\[C\]\s*/, "") : `[C] ${entity.name}`;
+      await ipc.setEntityProps(docId, entity.id, { name: newName });
+    }
+    const first = scene.entities.find((e) => e.id === scene.selection[0]);
+    const isNow = !first?.name?.startsWith("[C] ");
+    useArcStore.getState().setStatusMessage(isNow ? "Construction geometry ON" : "Construction geometry OFF");
+  }),
+
+  /** Orient viewport camera to standard orthogonal CAD views. */
+  setStandardView: (view: "front" | "top" | "right" | "iso" | "back" | "bottom" | "left") => {
+    window.dispatchEvent(new CustomEvent("arc-standard-view", { detail: { view } }));
+  },
+
+  /** Set cross-section clipping plane aligned to a face. */
+  sectionOnFace: guard(async (entityId?: string, faceIndex?: number) => {
+    const st = useArcStore.getState();
+    const scene = st.scene;
+    if (!scene) return;
+    const targetId = entityId ?? st.selFace?.entityId ?? scene.selection[0];
+    const targetFace = faceIndex ?? st.selFace?.face ?? 0;
+    const entity = scene.entities.find((e) => e.id === targetId);
+    if (!entity) return;
+    const info = facePlaneInfo(entity, targetFace);
+    st.setSectionView(true);
+    st.setSectionOffset(Math.round(info.height));
+    st.setStatusMessage(`Section view on Face ${targetFace}`);
+  }),
+
+  /** 1-click 3D print export (STL format). */
+  exportSelectedStl: guard(async () => {
+    const st = useArcStore.getState();
+    if (!st.scene || st.scene.selection.length === 0) {
+      st.setStatusMessage("Select a solid entity to export STL");
+      return;
+    }
+    await actions.exportActive("stl");
   }),
 
   duplicateSelection: guard(async () => {
