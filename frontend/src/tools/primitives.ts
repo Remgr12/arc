@@ -62,7 +62,7 @@ function decoratePreviewMesh(mesh: THREE.Mesh, ctx: ToolContext): THREE.Mesh {
   return mesh;
 }
 
-/** Cursor height above the base point using a camera-facing vertical plane. */
+/** Cursor height above the base point using a camera-facing vertical plane, snapped to dimSnapStep. */
 function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: THREE.Vector3): number {
   const forward = new THREE.Vector3();
   ctx.camera.getWorldDirection(forward);
@@ -72,15 +72,17 @@ function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: 
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, base);
   const out = new THREE.Vector3();
   const hit = ctx.rayAt(event).intersectPlane(plane, out);
-  return hit ? Math.max(0.5, out.y - base.y) : 20;
+  const raw = hit ? Math.max(0.5, out.y - base.y) : 20;
+  return Math.max(0.5, ctx.snapDim(raw, event.altKey));
 }
 
 function isDrag(state: PrimState, event: PointerEvent): boolean {
   return !!state.press && Math.hypot(event.clientX - state.press.x, event.clientY - state.press.y) > 5;
 }
 
-function footprintRadius(a: THREE.Vector3, b: THREE.Vector3): number {
-  return Math.max(0.5, Math.hypot(b.x - a.x, b.z - a.z));
+function footprintRadius(a: THREE.Vector3, b: THREE.Vector3, ctx: ToolContext): number {
+  const raw = Math.max(0.5, Math.hypot(b.x - a.x, b.z - a.z));
+  return Math.max(0.5, ctx.snapDim(raw));
 }
 
 function pointAtTypedSimple(
@@ -248,7 +250,8 @@ function makeSimpleTool(
 }
 
 export const sphereTool = makeSimpleTool("sphere", (a, b, ctx) => {
-  const r = footprintRadius(a, b);
+  const r = footprintRadius(a, b, ctx);
+  const u = ctx.settings.unitLabel;
   const mesh = decoratePreviewMesh(
     new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), previewMaterial(ctx)),
     ctx,
@@ -258,13 +261,14 @@ export const sphereTool = makeSimpleTool("sphere", (a, b, ctx) => {
     geometry: { type: "sphere", radius: r, segments: 32 },
     position: [a.x, a.y + r, a.z],
     preview: mesh,
-    label: `R ${Math.round(r * 100) / 100}`,
+    label: `R ${Math.round(r * 100) / 100} ${u}`,
   };
 });
 
 export const torusTool = makeSimpleTool("torus", (a, b, ctx) => {
-  const r = Math.max(2, Math.hypot(b.x - a.x, b.z - a.z));
-  const tube = Math.min(8, r / 3);
+  const r = Math.max(2, footprintRadius(a, b, ctx));
+  const tube = Math.round(Math.min(8, r / 3) * 10) / 10;
+  const u = ctx.settings.unitLabel;
   const mesh = decoratePreviewMesh(
     new THREE.Mesh(
       new THREE.TorusGeometry(r, tube, 14, 48).rotateX(Math.PI / 2),
@@ -277,13 +281,18 @@ export const torusTool = makeSimpleTool("torus", (a, b, ctx) => {
     geometry: { type: "torus", radius: r, tube, segments: 32, tubular_segments: 16 },
     position: [a.x, a.y + tube, a.z],
     preview: mesh,
-    label: `R ${Math.round(r * 100) / 100}`,
+    label: `R ${Math.round(r * 100) / 100} ${u}`,
   };
 });
 
 export const planeTool = makeSimpleTool("plane", (a, b, ctx) => {
-  const w = Math.max(1, Math.abs(b.x - a.x));
-  const d = Math.max(1, Math.abs(b.z - a.z));
+  const w = Math.max(1, ctx.snapDim(Math.abs(b.x - a.x)));
+  const d = Math.max(1, ctx.snapDim(Math.abs(b.z - a.z)));
+  const sx = b.x < a.x ? -1 : 1;
+  const sz = b.z < a.z ? -1 : 1;
+  const cx = a.x + (sx * w) / 2;
+  const cz = a.z + (sz * d) / 2;
+  const u = ctx.settings.unitLabel;
   const mesh = decoratePreviewMesh(
     new THREE.Mesh(
       new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
@@ -291,12 +300,12 @@ export const planeTool = makeSimpleTool("plane", (a, b, ctx) => {
     ),
     ctx,
   );
-  mesh.position.set((a.x + b.x) / 2, a.y + 0.02, (a.z + b.z) / 2);
+  mesh.position.set(cx, a.y + 0.02, cz);
   return {
     geometry: { type: "plane", width: w, depth: d },
-    position: [(a.x + b.x) / 2, a.y + 0.02, (a.z + b.z) / 2],
+    position: [cx, a.y + 0.02, cz],
     preview: mesh,
-    label: `${Math.round(w * 100) / 100} × ${Math.round(d * 100) / 100}`,
+    label: `${Math.round(w * 100) / 100} × ${Math.round(d * 100) / 100} ${u}`,
   };
 });
 
@@ -304,7 +313,7 @@ export const planeTool = makeSimpleTool("plane", (a, b, ctx) => {
 
 interface HeightTool {
   id: "box" | "cylinder" | "cone";
-  footprint: (a: THREE.Vector3, b: THREE.Vector3) => { w: number; d: number; r: number };
+  footprint: (a: THREE.Vector3, b: THREE.Vector3, ctx: ToolContext) => { w: number; d: number; r: number };
   mesh: (
     a: THREE.Vector3,
     b: THREE.Vector3,
@@ -319,7 +328,7 @@ interface HeightTool {
     h: number,
   ) => [number, number, number];
   geometry: (fp: { w: number; d: number; r: number }, h: number) => Record<string, unknown>;
-  label: (fp: { w: number; d: number; r: number }, h: number) => string;
+  label: (fp: { w: number; d: number; r: number }, h: number, ctx: ToolContext) => string;
 }
 
 function secondFromTypedFootprint(
@@ -356,7 +365,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
   let height = 20;
 
   const commitAt = (a: THREE.Vector3, b: THREE.Vector3, h: number, ctx: ToolContext): void => {
-    const fp = spec.footprint(a, b);
+    const fp = spec.footprint(a, b, ctx);
     void ctx.createEntity(
       spec.geometry(fp, h) as never,
       spec.position(a, b, fp, h),
@@ -381,10 +390,10 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
         : null;
       const b = typedFoot?.second ?? state.lastCursor ?? state.anchor;
       const previewH = typedFoot?.extraHeight ?? 2;
-      const fp = spec.footprint(state.anchor, b);
+      const fp = spec.footprint(state.anchor, b, ctx);
       const mesh = spec.mesh(state.anchor, b, fp, previewH, ctx);
       ctx.setPreview(mesh, "draft");
-      const baseLabel = spec.label(fp, previewH);
+      const baseLabel = spec.label(fp, previewH, ctx);
       ctx.showMeasure(
         state.typed ? `${baseLabel} [${state.typed}|]` : baseLabel,
         state.lastScreen,
@@ -397,10 +406,10 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
     } else if (event) {
       height = cursorHeight(ctx, event, state.second);
     }
-    const fp = spec.footprint(state.anchor, state.second);
+    const fp = spec.footprint(state.anchor, state.second, ctx);
     const mesh = spec.mesh(state.anchor, state.second, fp, height, ctx);
     ctx.setPreview(mesh, "draft");
-    const baseLabel = spec.label(fp, height);
+    const baseLabel = spec.label(fp, height, ctx);
     ctx.showMeasure(
       state.typed ? `${baseLabel} [${state.typed}|]` : baseLabel,
       state.lastScreen,
@@ -534,28 +543,34 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
 
 export const boxTool = makeHeightTool({
   id: "box",
-  footprint: (a, b) => ({
-    w: Math.max(0.5, Math.abs(b.x - a.x)),
-    d: Math.max(0.5, Math.abs(b.z - a.z)),
+  footprint: (a, b, ctx) => ({
+    w: Math.max(0.5, ctx.snapDim(Math.abs(b.x - a.x))),
+    d: Math.max(0.5, ctx.snapDim(Math.abs(b.z - a.z))),
     r: 0,
   }),
   mesh: (a, b, fp, h, ctx) => {
+    const sx = b.x < a.x ? -1 : 1;
+    const sz = b.z < a.z ? -1 : 1;
     const mesh = decoratePreviewMesh(
       new THREE.Mesh(new THREE.BoxGeometry(fp.w, h, fp.d), previewMaterial(ctx)),
       ctx,
     );
-    mesh.position.set((a.x + b.x) / 2, a.y + h / 2, (a.z + b.z) / 2);
+    mesh.position.set(a.x + (sx * fp.w) / 2, a.y + h / 2, a.z + (sz * fp.d) / 2);
     return mesh;
   },
-  position: (a, b, _fp, h) => [(a.x + b.x) / 2, a.y + h / 2, (a.z + b.z) / 2],
+  position: (a, b, fp, h) => {
+    const sx = b.x < a.x ? -1 : 1;
+    const sz = b.z < a.z ? -1 : 1;
+    return [a.x + (sx * fp.w) / 2, a.y + h / 2, a.z + (sz * fp.d) / 2];
+  },
   geometry: (fp, h) => ({ type: "box", width: fp.w, depth: fp.d, height: h, corner_radius: 0 }),
-  label: (fp, h) =>
-    `${Math.round(fp.w * 10) / 10} × ${Math.round(fp.d * 10) / 10} × ${Math.round(h * 10) / 10}`,
+  label: (fp, h, ctx) =>
+    `${Math.round(fp.w * 10) / 10} × ${Math.round(fp.d * 10) / 10} × ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });
 
 export const cylinderTool = makeHeightTool({
   id: "cylinder",
-  footprint: (a, b) => ({ w: 0, d: 0, r: footprintRadius(a, b) }),
+  footprint: (a, b, ctx) => ({ w: 0, d: 0, r: footprintRadius(a, b, ctx) }),
   mesh: (a, _b, fp, h, ctx) => {
     const mesh = decoratePreviewMesh(
       new THREE.Mesh(new THREE.CylinderGeometry(fp.r, fp.r, h, 32), previewMaterial(ctx)),
@@ -566,12 +581,12 @@ export const cylinderTool = makeHeightTool({
   },
   position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cylinder", radius: fp.r, height: h, segments: 32 }),
-  label: (fp, h) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10}`,
+  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });
 
 export const coneTool = makeHeightTool({
   id: "cone",
-  footprint: (a, b) => ({ w: 0, d: 0, r: footprintRadius(a, b) }),
+  footprint: (a, b, ctx) => ({ w: 0, d: 0, r: footprintRadius(a, b, ctx) }),
   mesh: (a, _b, fp, h, ctx) => {
     const mesh = decoratePreviewMesh(
       new THREE.Mesh(new THREE.ConeGeometry(fp.r, h, 32), previewMaterial(ctx)),
@@ -582,5 +597,5 @@ export const coneTool = makeHeightTool({
   },
   position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cone", radius: fp.r, height: h, segments: 32 }),
-  label: (fp, h) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10}`,
+  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });

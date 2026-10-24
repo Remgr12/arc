@@ -30,26 +30,78 @@ function freshState(): ClickState {
   };
 }
 
-function activePlaneY(): number {
-  return useArcStore.getState().sketchPlaneHeight ?? 0;
+interface PlaneBasis {
+  origin: THREE.Vector3;
+  normal: THREE.Vector3;
+  u: THREE.Vector3;
+  v: THREE.Vector3;
+  quat: THREE.Quaternion;
+  isHorizontal: boolean;
+}
+
+function activePlaneBasis(overrideOrigin?: THREE.Vector3): PlaneBasis {
+  const st = useArcStore.getState();
+  const nArr = st.sketchMode ? st.sketchPlaneNormal : ([0, 1, 0] as [number, number, number]);
+  const oArr = st.sketchMode
+    ? st.sketchPlaneOrigin
+    : ([0, st.sketchPlaneHeight ?? 0, 0] as [number, number, number]);
+  const normal = new THREE.Vector3(nArr[0], nArr[1], nArr[2]).normalize();
+  const origin = overrideOrigin ? overrideOrigin.clone() : new THREE.Vector3(oArr[0], oArr[1], oArr[2]);
+  const isHorizontal = Math.abs(normal.x) < 1e-4 && Math.abs(normal.z) < 1e-4 && normal.y > 0;
+  const quat = isHorizontal
+    ? new THREE.Quaternion()
+    : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  const u = new THREE.Vector3(1, 0, 0).applyQuaternion(quat).normalize();
+  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize();
+  return { origin, normal, u, v, quat, isHorizontal };
 }
 
 function sketchPlanePoint(
   ctx: ToolContext,
   event: PointerEvent | MouseEvent,
-  overrideY?: number,
+  anchor?: THREE.Vector3 | null,
 ): THREE.Vector3 | null {
-  const y = overrideY ?? activePlaneY();
-  return ctx.planePoint(event, y);
+  const basis = activePlaneBasis(anchor ?? undefined);
+  if (basis.isHorizontal) {
+    return ctx.planePoint(event, basis.origin.y);
+  }
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(basis.normal, basis.origin);
+  const out = new THREE.Vector3();
+  return ctx.rayAt(event).intersectPlane(plane, out) ? out : null;
 }
 
-/** Constrain `p` to the dominant axis of `from` when shift is held. */
+async function createSketchEntity(
+  ctx: ToolContext,
+  geometry: Parameters<ToolContext["createEntity"]>[0],
+  position: [number, number, number],
+  basis: PlaneBasis,
+): Promise<string | null> {
+  const id = await ctx.createEntity(geometry, position);
+  if (id && !basis.isHorizontal) {
+    await ctx.setTransform(
+      id,
+      {
+        position,
+        rotation: [basis.quat.x, basis.quat.y, basis.quat.z, basis.quat.w],
+        scale: [1, 1, 1],
+      },
+      false,
+    );
+  }
+  return id;
+}
+
+/** Constrain `p` to the dominant axis (`u` or `v`) of `from` when shift is held. */
 function ortho(from: THREE.Vector3, p: THREE.Vector3, shift: boolean): THREE.Vector3 {
   if (!shift) return p;
-  const dx = Math.abs(p.x - from.x);
-  const dz = Math.abs(p.z - from.z);
-  if (dx >= dz) return new THREE.Vector3(p.x, from.y, from.z);
-  return new THREE.Vector3(from.x, from.y, p.z);
+  const basis = activePlaneBasis(from);
+  const delta = p.clone().sub(from);
+  const du = delta.dot(basis.u);
+  const dv = delta.dot(basis.v);
+  if (Math.abs(du) >= Math.abs(dv)) {
+    return from.clone().addScaledVector(basis.u, du);
+  }
+  return from.clone().addScaledVector(basis.v, dv);
 }
 
 function pointAlongDirection(
@@ -57,16 +109,12 @@ function pointAlongDirection(
   cursor: THREE.Vector3 | null,
   length: number,
 ): THREE.Vector3 {
-  if (!cursor) return new THREE.Vector3(from.x + length, from.y, from.z);
-  const dx = cursor.x - from.x;
-  const dz = cursor.z - from.z;
-  const dist = Math.hypot(dx, dz);
-  if (dist < 1e-6) return new THREE.Vector3(from.x + length, from.y, from.z);
-  return new THREE.Vector3(
-    from.x + (dx / dist) * length,
-    from.y,
-    from.z + (dz / dist) * length,
-  );
+  const basis = activePlaneBasis(from);
+  if (!cursor) return from.clone().addScaledVector(basis.u, length);
+  const dir = cursor.clone().sub(from);
+  const dist = dir.length();
+  if (dist < 1e-6) return from.clone().addScaledVector(basis.u, length);
+  return from.clone().addScaledVector(dir.normalize(), length);
 }
 
 function formatNum(n: number): string {
@@ -74,7 +122,7 @@ function formatNum(n: number): string {
 }
 
 function distXZ(a: THREE.Vector3, b: THREE.Vector3): number {
-  return Math.hypot(b.x - a.x, b.z - a.z);
+  return a.distanceTo(b);
 }
 
 function lenLabel(a: THREE.Vector3, b: THREE.Vector3): string {
@@ -82,7 +130,9 @@ function lenLabel(a: THREE.Vector3, b: THREE.Vector3): string {
 }
 
 function angleLabel(a: THREE.Vector3, b: THREE.Vector3): string {
-  const deg = (Math.atan2(b.z - a.z, b.x - a.x) * 180) / Math.PI;
+  const basis = activePlaneBasis(a);
+  const delta = b.clone().sub(a);
+  const deg = (Math.atan2(delta.dot(basis.v), delta.dot(basis.u)) * 180) / Math.PI;
   return `${Math.round(deg * 10) / 10}°`;
 }
 
@@ -111,10 +161,16 @@ export function previewRing(
   ctx: ToolContext,
   segments = 64,
 ): THREE.LineLoop {
+  const basis = activePlaneBasis(center);
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i < segments; i++) {
     const a = (Math.PI * 2 * i) / segments;
-    pts.push(new THREE.Vector3(center.x + radius * Math.cos(a), center.y, center.z + radius * Math.sin(a)));
+    pts.push(
+      center
+        .clone()
+        .addScaledVector(basis.u, radius * Math.cos(a))
+        .addScaledVector(basis.v, radius * Math.sin(a)),
+    );
   }
   const geometry = new THREE.BufferGeometry().setFromPoints(pts);
   const loop = new THREE.LineLoop(geometry, previewLineMaterial(ctx));
@@ -149,9 +205,10 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       target = pointAlongDirection(from, state.lastCursor, parsed);
     }
     draftPreview(target, ctx);
+    const u = ctx.settings.unitLabel;
     const label = state.typed
-      ? `L ${state.typed}| · ${angleLabel(from, target)}`
-      : `${lenLabel(from, target)} · ${angleLabel(from, target)}`;
+      ? `L ${state.typed}| ${u} · ${angleLabel(from, target)}`
+      : `${lenLabel(from, target)} ${u} · ${angleLabel(from, target)}`;
     ctx.showMeasure(label, state.lastScreen);
   };
 
@@ -206,7 +263,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     },
     hasActivity: () => points.length > 0,
     onPointerDown(event, ctx) {
-      const raw = sketchPlanePoint(ctx, event, points[0]?.y);
+      const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) return true;
       const snapped = ctx.snap(raw).point;
       if (points.length === 0) {
@@ -230,7 +287,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       return true;
     },
     onPointerMove(event, ctx) {
-      const raw = sketchPlanePoint(ctx, event, points[0]?.y);
+      const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) return;
       const cursor = ctx.snap(raw).point;
       state.lastScreen = ctx.screenPoint(event);
@@ -253,7 +310,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
         ctx.releasePointer(event);
         return;
       }
-      const raw = sketchPlanePoint(ctx, event, points[0]?.y);
+      const raw = sketchPlanePoint(ctx, event, points[0]);
       if (!raw) {
         state.press = null;
         state.dragged = false;
@@ -338,23 +395,35 @@ export const polylineTool = makeLineTool("polyline");
 
 let rect = freshState();
 
-function rectCorners(a: THREE.Vector3, e: THREE.Vector3): THREE.Vector3[] {
+function rectCorners(a: THREE.Vector3, e: THREE.Vector3, basis: PlaneBasis): THREE.Vector3[] {
+  const delta = e.clone().sub(a);
+  const du = delta.dot(basis.u);
+  const dv = delta.dot(basis.v);
   return [
-    new THREE.Vector3(Math.min(a.x, e.x), a.y, Math.min(a.z, e.z)),
-    new THREE.Vector3(Math.max(a.x, e.x), a.y, Math.min(a.z, e.z)),
-    new THREE.Vector3(Math.max(a.x, e.x), a.y, Math.max(a.z, e.z)),
-    new THREE.Vector3(Math.min(a.x, e.x), a.y, Math.max(a.z, e.z)),
+    a.clone(),
+    a.clone().addScaledVector(basis.u, du),
+    a.clone().addScaledVector(basis.u, du).addScaledVector(basis.v, dv),
+    a.clone().addScaledVector(basis.v, dv),
   ];
 }
 
-function squareEnd(a: THREE.Vector3, cursor: THREE.Vector3): THREE.Vector3 {
-  const dx = cursor.x - a.x;
-  const dz = cursor.z - a.z;
-  const s = Math.max(Math.abs(dx), Math.abs(dz));
-  return new THREE.Vector3(a.x + Math.sign(dx || 1) * s, a.y, a.z + Math.sign(dz || 1) * s);
+function squareEnd(a: THREE.Vector3, cursor: THREE.Vector3, basis: PlaneBasis): THREE.Vector3 {
+  const delta = cursor.clone().sub(a);
+  const du = delta.dot(basis.u);
+  const dv = delta.dot(basis.v);
+  const s = Math.max(Math.abs(du), Math.abs(dv));
+  return a
+    .clone()
+    .addScaledVector(basis.u, Math.sign(du || 1) * s)
+    .addScaledVector(basis.v, Math.sign(dv || 1) * s);
 }
 
-function rectTypedEnd(a: THREE.Vector3, cursor: THREE.Vector3 | null, typed: string): THREE.Vector3 | null {
+function rectTypedEnd(
+  a: THREE.Vector3,
+  cursor: THREE.Vector3 | null,
+  typed: string,
+  basis: PlaneBasis,
+): THREE.Vector3 | null {
   const parts = typed
     .trim()
     .split(/[\s,x×]+/i)
@@ -363,9 +432,13 @@ function rectTypedEnd(a: THREE.Vector3, cursor: THREE.Vector3 | null, typed: str
   if (parts.length === 0) return null;
   const w = parts[0];
   const d = parts[1] ?? parts[0];
-  const sx = cursor && cursor.x < a.x ? -1 : 1;
-  const sz = cursor && cursor.z < a.z ? -1 : 1;
-  return new THREE.Vector3(a.x + sx * w, a.y, a.z + sz * d);
+  const delta = cursor ? cursor.clone().sub(a) : new THREE.Vector3();
+  const su = delta.dot(basis.u) < 0 ? -1 : 1;
+  const sv = delta.dot(basis.v) < 0 ? -1 : 1;
+  return a
+    .clone()
+    .addScaledVector(basis.u, su * w)
+    .addScaledVector(basis.v, sv * d);
 }
 
 function resetRect(ctx: ToolContext): void {
@@ -374,29 +447,63 @@ function resetRect(ctx: ToolContext): void {
   ctx.showMeasure(null);
 }
 
+function snappedRectEnd(
+  a: THREE.Vector3,
+  cursor: THREE.Vector3,
+  square: boolean,
+  ctx: ToolContext,
+  basis: PlaneBasis,
+): THREE.Vector3 {
+  const raw = square ? squareEnd(a, cursor, basis) : cursor;
+  const delta = raw.clone().sub(a);
+  const du = delta.dot(basis.u);
+  const dv = delta.dot(basis.v);
+  const w = Math.max(0.5, ctx.snapDim(Math.abs(du)));
+  const d = square ? w : Math.max(0.5, ctx.snapDim(Math.abs(dv)));
+  const su = du < 0 ? -1 : 1;
+  const sv = dv < 0 ? -1 : 1;
+  return a
+    .clone()
+    .addScaledVector(basis.u, su * w)
+    .addScaledVector(basis.v, sv * d);
+}
+
 function updateRectPreview(ctx: ToolContext, shift = false): void {
   if (!rect.anchor) return;
+  const basis = activePlaneBasis(rect.anchor);
   const cursor = rect.lastCursor ?? rect.anchor;
   const e =
-    (rect.typed ? rectTypedEnd(rect.anchor, cursor, rect.typed) : null) ??
-    (shift ? squareEnd(rect.anchor, cursor) : cursor);
-  ctx.setPreview(previewLine(rectCorners(rect.anchor, e), ctx, true), "draft");
-  const w = formatNum(Math.abs(e.x - rect.anchor.x));
-  const d = formatNum(Math.abs(e.z - rect.anchor.z));
-  ctx.showMeasure(rect.typed ? `${w} × ${d} [${rect.typed}|]` : `${w} × ${d}`, rect.lastScreen);
+    (rect.typed ? rectTypedEnd(rect.anchor, cursor, rect.typed, basis) : null) ??
+    snappedRectEnd(rect.anchor, cursor, shift, ctx, basis);
+  ctx.setPreview(previewLine(rectCorners(rect.anchor, e, basis), ctx, true), "draft");
+  const delta = e.clone().sub(rect.anchor);
+  const w = formatNum(Math.abs(delta.dot(basis.u)));
+  const d = formatNum(Math.abs(delta.dot(basis.v)));
+  const u = ctx.settings.unitLabel;
+  ctx.showMeasure(rect.typed ? `${w} × ${d} ${u} [${rect.typed}|]` : `${w} × ${d} ${u}`, rect.lastScreen);
 }
 
 function commitRect(ctx: ToolContext, endRaw: THREE.Vector3, square: boolean): void {
   const a = rect.anchor!;
+  const basis = activePlaneBasis(a);
   const e =
-    (rect.typed ? rectTypedEnd(a, endRaw, rect.typed) : null) ??
-    (square ? squareEnd(a, endRaw) : endRaw);
-  const w = Math.abs(e.x - a.x);
-  const d = Math.abs(e.z - a.z);
+    (rect.typed ? rectTypedEnd(a, endRaw, rect.typed, basis) : null) ??
+    snappedRectEnd(a, endRaw, square, ctx, basis);
+  const delta = e.clone().sub(a);
+  const du = delta.dot(basis.u);
+  const dv = delta.dot(basis.v);
+  const w = Math.abs(du);
+  const d = Math.abs(dv);
   if (w > 1e-3 && d > 1e-3) {
-    void ctx.createEntity(
+    const center = a
+      .clone()
+      .addScaledVector(basis.u, du / 2)
+      .addScaledVector(basis.v, dv / 2);
+    void createSketchEntity(
+      ctx,
       { type: "rectangle_curve", width: w, depth: d },
-      [(a.x + e.x) / 2, a.y, (a.z + e.z) / 2],
+      [center.x, center.y, center.z],
+      basis,
     );
     ctx.setStatus("Rectangle created");
   }
@@ -413,7 +520,7 @@ export const rectangleTool: ToolHandler = {
   onDeactivate: resetRect,
   hasActivity: () => rect.anchor !== null,
   onPointerDown(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, rect.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, rect.anchor);
     if (!raw) return true;
     const snapped = ctx.snap(raw).point;
     if (!rect.anchor) {
@@ -428,7 +535,7 @@ export const rectangleTool: ToolHandler = {
     return true;
   },
   onPointerMove(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, rect.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, rect.anchor);
     if (!raw) return;
     if (rect.press && Math.hypot(event.clientX - rect.press.x, event.clientY - rect.press.y) > 5) {
       rect.dragged = true;
@@ -448,7 +555,7 @@ export const rectangleTool: ToolHandler = {
       ctx.releasePointer(event);
       return;
     }
-    const raw = sketchPlanePoint(ctx, event, rect.anchor.y);
+    const raw = sketchPlanePoint(ctx, event, rect.anchor);
     if (raw) commitRect(ctx, ctx.snap(raw).point, event.shiftKey);
     ctx.releasePointer(event);
   },
@@ -493,27 +600,35 @@ function resetCircle(ctx: ToolContext): void {
   ctx.showMeasure(null);
 }
 
-function circleRadius(c: THREE.Vector3, edge: THREE.Vector3 | null, typed: string): number {
+function circleRadius(c: THREE.Vector3, edge: THREE.Vector3 | null, typed: string, ctx: ToolContext): number {
   const parsed = typed ? Number.parseFloat(typed) : Number.NaN;
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  return edge ? distXZ(c, edge) : 0;
+  if (!edge) return 0;
+  return Math.max(0.5, ctx.snapDim(distXZ(c, edge)));
 }
 
 function updateCirclePreview(ctx: ToolContext): void {
   if (!circ.anchor) return;
-  const r = circleRadius(circ.anchor, circ.lastCursor, circ.typed);
+  const r = circleRadius(circ.anchor, circ.lastCursor, circ.typed, ctx);
   ctx.setPreview(previewRing(circ.anchor, r, ctx), "draft");
+  const u = ctx.settings.unitLabel;
   ctx.showMeasure(
-    circ.typed ? `R ${circ.typed}|` : `R ${formatNum(r)}`,
+    circ.typed ? `R ${circ.typed}| ${u}` : `R ${formatNum(r)} ${u}`,
     circ.lastScreen,
   );
 }
 
 function commitCircle(ctx: ToolContext, edge: THREE.Vector3 | null): void {
   const c = circ.anchor!;
-  const r = circleRadius(c, edge, circ.typed);
+  const basis = activePlaneBasis(c);
+  const r = circleRadius(c, edge, circ.typed, ctx);
   if (r > 1e-3) {
-    void ctx.createEntity({ type: "circle_curve", radius: r, segments: 64 }, [c.x, c.y, c.z]);
+    void createSketchEntity(
+      ctx,
+      { type: "circle_curve", radius: r, segments: 64 },
+      [c.x, c.y, c.z],
+      basis,
+    );
     ctx.setStatus("Circle created");
   }
   resetCircle(ctx);
@@ -529,7 +644,7 @@ export const circleTool: ToolHandler = {
   onDeactivate: resetCircle,
   hasActivity: () => circ.anchor !== null,
   onPointerDown(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, circ.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, circ.anchor);
     if (!raw) return true;
     const snapped = ctx.snap(raw).point;
     if (!circ.anchor) {
@@ -544,7 +659,7 @@ export const circleTool: ToolHandler = {
     return true;
   },
   onPointerMove(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, circ.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, circ.anchor);
     if (!raw) return;
     if (circ.press && Math.hypot(event.clientX - circ.press.x, event.clientY - circ.press.y) > 5) {
       circ.dragged = true;
@@ -564,7 +679,7 @@ export const circleTool: ToolHandler = {
       ctx.releasePointer(event);
       return;
     }
-    const raw = sketchPlanePoint(ctx, event, circ.anchor.y);
+    const raw = sketchPlanePoint(ctx, event, circ.anchor);
     if (raw) commitCircle(ctx, ctx.snap(raw).point);
     ctx.releasePointer(event);
   },
@@ -602,6 +717,11 @@ function resetArc(ctx: ToolContext): void {
   ctx.showMeasure(null);
 }
 
+function projectToBasis2D(pt: THREE.Vector3, ref: THREE.Vector3, basis: PlaneBasis): THREE.Vector3 {
+  const d = pt.clone().sub(ref);
+  return new THREE.Vector3(d.dot(basis.u), 0, d.dot(basis.v));
+}
+
 export const arcTool: ToolHandler = {
   id: "arc",
   cursor: "crosshair",
@@ -612,7 +732,7 @@ export const arcTool: ToolHandler = {
   onDeactivate: resetArc,
   hasActivity: () => arc.points.length > 0,
   onPointerDown(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, arc.points[0]?.y);
+    const raw = sketchPlanePoint(ctx, event, arc.points[0]);
     if (!raw) return true;
     const snapped = ctx.snap(raw).point;
     arc.points.push(snapped);
@@ -621,9 +741,18 @@ export const arcTool: ToolHandler = {
       return true;
     }
     const [start, end, mid] = arc.points;
-    const fit = arcThrough3(start, mid, end);
+    const basis = activePlaneBasis(start);
+    const s2 = projectToBasis2D(start, start, basis);
+    const m2 = projectToBasis2D(mid, start, basis);
+    const e2 = projectToBasis2D(end, start, basis);
+    const fit = arcThrough3(s2, m2, e2);
     if (fit) {
-      void ctx.createEntity(
+      const center3D = start
+        .clone()
+        .addScaledVector(basis.u, fit.center.x)
+        .addScaledVector(basis.v, fit.center.z);
+      void createSketchEntity(
+        ctx,
         {
           type: "arc_curve",
           radius: fit.radius,
@@ -631,7 +760,8 @@ export const arcTool: ToolHandler = {
           end_angle_deg: fit.endAngle,
           segments: 64,
         },
-        [fit.center.x, start.y, fit.center.z],
+        [center3D.x, center3D.y, center3D.z],
+        basis,
       );
       ctx.setStatus("Arc created");
     } else {
@@ -641,7 +771,7 @@ export const arcTool: ToolHandler = {
     return true;
   },
   onPointerMove(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, arc.points[0]?.y);
+    const raw = sketchPlanePoint(ctx, event, arc.points[0]);
     if (!raw || arc.points.length === 0) return;
     const cursor = ctx.snap(raw).point;
     if (arc.points.length === 1) {
@@ -650,17 +780,28 @@ export const arcTool: ToolHandler = {
       return;
     }
     const [start, end] = arc.points;
-    const fit = arcThrough3(start, cursor, end);
+    const basis = activePlaneBasis(start);
+    const s2 = projectToBasis2D(start, start, basis);
+    const c2 = projectToBasis2D(cursor, start, basis);
+    const e2 = projectToBasis2D(end, start, basis);
+    const fit = arcThrough3(s2, c2, e2);
     if (!fit) {
       ctx.setPreview(previewLine([start, end], ctx), "draft");
       return;
     }
+    const center3D = start
+      .clone()
+      .addScaledVector(basis.u, fit.center.x)
+      .addScaledVector(basis.v, fit.center.z);
     const pts: THREE.Vector3[] = [];
     const segs = Math.max(8, Math.min(96, Math.abs(Math.round(fit.endAngle - fit.startAngle))));
     for (let i = 0; i <= segs; i++) {
       const a = ((fit.startAngle + ((fit.endAngle - fit.startAngle) * i) / segs) * Math.PI) / 180;
       pts.push(
-        new THREE.Vector3(fit.center.x + fit.radius * Math.cos(a), start.y, fit.center.z + fit.radius * Math.sin(a)),
+        center3D
+          .clone()
+          .addScaledVector(basis.u, fit.radius * Math.cos(a))
+          .addScaledVector(basis.v, fit.radius * Math.sin(a)),
       );
     }
     ctx.setPreview(previewLine(pts, ctx), "draft");
@@ -695,30 +836,38 @@ function resetPoly(ctx: ToolContext): void {
 
 function updatePolyPreview(ctx: ToolContext): void {
   if (!poly.anchor) return;
+  const basis = activePlaneBasis(poly.anchor);
   const sides = getPolygonSides();
-  const r = circleRadius(poly.anchor, poly.lastCursor, poly.typed);
+  const r = circleRadius(poly.anchor, poly.lastCursor, poly.typed, ctx);
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i < sides; i++) {
     const a = (Math.PI * 2 * i) / sides;
     pts.push(
-      new THREE.Vector3(poly.anchor.x + r * Math.cos(a), poly.anchor.y, poly.anchor.z + r * Math.sin(a)),
+      poly.anchor
+        .clone()
+        .addScaledVector(basis.u, r * Math.cos(a))
+        .addScaledVector(basis.v, r * Math.sin(a)),
     );
   }
   ctx.setPreview(previewLine(pts, ctx, true), "draft");
+  const u = ctx.settings.unitLabel;
   ctx.showMeasure(
-    poly.typed ? `R ${poly.typed}| · ${sides} sides` : `R ${formatNum(r)} · ${sides} sides`,
+    poly.typed ? `R ${poly.typed}| ${u} · ${sides} sides` : `R ${formatNum(r)} ${u} · ${sides} sides`,
     poly.lastScreen,
   );
 }
 
 function commitPolygon(ctx: ToolContext, vertex: THREE.Vector3 | null): void {
   const c = poly.anchor!;
+  const basis = activePlaneBasis(c);
   const sides = getPolygonSides();
-  const r = circleRadius(c, vertex, poly.typed);
+  const r = circleRadius(c, vertex, poly.typed, ctx);
   if (r > 1e-3) {
-    void ctx.createEntity(
+    void createSketchEntity(
+      ctx,
       { type: "polygon_curve", radius: r, sides },
       [c.x, c.y, c.z],
+      basis,
     );
     ctx.setStatus(`Polygon (${sides}-gon) created`);
   }
@@ -735,7 +884,7 @@ export const polygonTool: ToolHandler = {
   onDeactivate: resetPoly,
   hasActivity: () => poly.anchor !== null,
   onPointerDown(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, poly.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, poly.anchor);
     if (!raw) return true;
     const snapped = ctx.snap(raw).point;
     if (!poly.anchor) {
@@ -750,7 +899,7 @@ export const polygonTool: ToolHandler = {
     return true;
   },
   onPointerMove(event, ctx) {
-    const raw = sketchPlanePoint(ctx, event, poly.anchor?.y);
+    const raw = sketchPlanePoint(ctx, event, poly.anchor);
     if (!raw) return;
     if (poly.press && Math.hypot(event.clientX - poly.press.x, event.clientY - poly.press.y) > 5) {
       poly.dragged = true;
@@ -770,7 +919,7 @@ export const polygonTool: ToolHandler = {
       ctx.releasePointer(event);
       return;
     }
-    const raw = sketchPlanePoint(ctx, event, poly.anchor.y);
+    const raw = sketchPlanePoint(ctx, event, poly.anchor);
     if (raw) commitPolygon(ctx, ctx.snap(raw).point);
     ctx.releasePointer(event);
   },

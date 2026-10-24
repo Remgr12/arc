@@ -35,8 +35,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            units: "mm".into(),
-            grid_size: 10.0,
+            units: "metric".into(),
+            grid_size: 2.0,
             snap_enabled: true,
             show_grid: true,
             show_axes: true,
@@ -210,10 +210,14 @@ pub fn parse_ids(ids: &[String]) -> Result<Vec<EntityId>, String> {
 }
 
 pub fn load_settings(path: &Path) -> Settings {
-    match std::fs::read_to_string(path) {
+    let mut s: Settings = match std::fs::read_to_string(path) {
         Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
         Err(_) => Settings::default(),
+    };
+    if s.units == "mm" || s.units == "cm" {
+        s.units = "metric".into();
     }
+    s
 }
 
 pub fn save_settings(path: &Path, settings: &Settings) {

@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { EntityData, ToolId } from "../lib/types";
 import type { ToolContext, ToolHandler } from "./types";
 import { chainFromEntity, resampleLoop, type Chain } from "./geometry2d";
+import { useArcStore } from "../lib/store";
+import { ipc } from "../lib/ipc";
 
 // ---------------------------------------------------------------------------
 // Solid modeling tools in the Shapr3D style: pick a sketch profile, then
@@ -43,17 +45,28 @@ function pickChain(event: PointerEvent | MouseEvent, ctx: ToolContext): PickedCh
   return { chain, entity };
 }
 
-/** Cursor height above `base` using a camera-facing vertical plane. */
-function cursorHeight(ctx: ToolContext, event: PointerEvent | MouseEvent, base: THREE.Vector3): number {
+/** Signed cursor height along `normal` from `base`, snapped to dimSnapStep. */
+function cursorHeight(
+  ctx: ToolContext,
+  event: PointerEvent | MouseEvent,
+  base: THREE.Vector3,
+  normal: THREE.Vector3,
+): number {
   const forward = new THREE.Vector3();
   ctx.camera.getWorldDirection(forward);
-  forward.y = 0;
-  if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
+  forward.addScaledVector(normal, -forward.dot(normal));
+  if (forward.lengthSq() < 1e-6) {
+    forward.crossVectors(normal, new THREE.Vector3(1, 0, 0));
+    if (forward.lengthSq() < 1e-6) forward.crossVectors(normal, new THREE.Vector3(0, 0, 1));
+  }
   forward.normalize();
   const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(forward, base);
   const out = new THREE.Vector3();
   const hit = ctx.rayAt(event).intersectPlane(plane, out);
-  return hit ? Math.max(0.5, out.y - base.y) : 20;
+  const raw = hit ? out.sub(base).dot(normal) : 20;
+  const sign = raw < 0 ? -1 : 1;
+  const mag = Math.max(0.5, ctx.snapDim(Math.abs(raw), event.altKey));
+  return sign * mag;
 }
 
 /** Camera ray ∩ plane; null when the ray is parallel or misses. */
@@ -145,34 +158,79 @@ function previewMaterial(ctx: ToolContext): THREE.MeshStandardMaterial {
 interface ExtrudeDraft {
   points: THREE.Vector3[];
   centroid: THREE.Vector3;
+  normal: THREE.Vector3;
+  u: THREE.Vector3;
+  v: THREE.Vector3;
+  quat: THREE.Quaternion;
+  isHorizontal: boolean;
   height: number;
+  forceCut: boolean;
+  cutTargetId: string | null;
   typed: string;
   lastScreen: { x: number; y: number } | undefined;
+  mesh: THREE.Mesh;
+  wire: THREE.LineSegments;
 }
 
 let ext: ExtrudeDraft | null = null;
+const CUT_COLOR = new THREE.Color(0xef4444);
+
+function findCutTarget(d: ExtrudeDraft, h: number, ctx: ToolContext): string | null {
+  // Auto-subtract when extruding inward (h < 0) or when Shift (forceCut) is held.
+  if (h >= 0 && !d.forceCut) return null;
+  const scene = ctx.scene();
+  if (!scene) return null;
+  const probe = d.centroid.clone().addScaledVector(d.normal, h * 0.5);
+  const endPt = d.centroid.clone().addScaledVector(d.normal, h);
+  const box = new THREE.Box3();
+  let bestId: string | null = null;
+  let bestDist = Infinity;
+
+  for (const entity of scene.entities) {
+    if (!entity.visible || entity.locked || entity.category === "sketch") continue;
+    if (!entity.triPositions || entity.triPositions.length === 0) continue;
+    const obj = ctx.objectFor(entity.id);
+    if (!obj || !obj.visible) continue;
+    box.setFromObject(obj);
+    if (box.isEmpty()) continue;
+    box.expandByScalar(0.2);
+    if (box.containsPoint(probe) || box.containsPoint(endPt) || box.containsPoint(d.centroid)) {
+      const dist = box.getCenter(new THREE.Vector3()).distanceTo(probe);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = entity.id;
+      }
+    }
+  }
+  return bestId;
+}
 
 function updateExtrudePreview(d: ExtrudeDraft, ctx: ToolContext): void {
-  const h = d.height;
-  const shape = new THREE.Shape(
-    d.points.map((p) => new THREE.Vector2(p.x - d.centroid.x, -(p.z - d.centroid.z))),
-  );
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false });
-  geo.rotateX(-Math.PI / 2); // +Z (extrusion) → +Y; shape XY → world XZ
-  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
-  const edges = new THREE.EdgesGeometry(geo, 25);
-  const wire = new THREE.LineSegments(
-    edges,
-    new THREE.LineBasicMaterial({ color: ctx.palette.hover, transparent: true, opacity: 0.9, depthTest: false }),
-  );
-  wire.renderOrder = 998;
-  mesh.add(wire);
-  mesh.position.set(d.centroid.x, d.centroid.y, d.centroid.z);
-  mesh.renderOrder = 997;
-  mesh.frustumCulled = false;
-  showDraft(mesh, ctx);
+  const rawH = Math.abs(d.height) < 0.05 ? (d.height < 0 ? -0.05 : 0.05) : d.height;
+  const absH = Math.abs(rawH);
+  d.cutTargetId = findCutTarget(d, rawH, ctx);
+  const isCutting = d.cutTargetId !== null;
+
+  if (rawH >= 0) {
+    d.mesh.position.copy(d.centroid);
+  } else {
+    d.mesh.position.copy(d.centroid).addScaledVector(d.normal, rawH);
+  }
+  d.mesh.scale.set(1, absH, 1);
+  d.mesh.updateMatrix();
+
+  const mat = d.mesh.material as THREE.MeshStandardMaterial;
+  const wireMat = d.wire.material as THREE.LineBasicMaterial;
+  mat.color.copy(isCutting ? CUT_COLOR : ctx.palette.hover);
+  wireMat.color.copy(isCutting ? CUT_COLOR : ctx.palette.hover);
+
+  ctx.requestRender();
+  const u = ctx.settings.unitLabel;
+  const prefix = isCutting ? "CUT" : "H";
   ctx.showMeasure(
-    d.typed ? `H ${d.typed}|` : `H ${formatNum(h)}`,
+    d.typed
+      ? `${prefix} ${d.typed}| ${u}`
+      : `${prefix} ${formatNum(absH)} ${u}${isCutting ? " (Subtract)" : ""}`,
     d.lastScreen,
   );
 }
@@ -190,40 +248,159 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
   cx /= points.length;
   cy /= points.length;
   cz /= points.length;
+  const centroid = new THREE.Vector3(cx, cy, cz);
+
+  // Determine the sketch profile plane normal
+  const fitPlane = planeThroughPoints(points);
+  const normal = fitPlane ? fitPlane.normal.clone().normalize() : new THREE.Vector3(0, 1, 0);
+
+  // Orient normal outward from any adjacent solid face (or toward +Y / camera)
+  const scene = ctx.scene();
+  let alignedToHost = false;
+  if (scene) {
+    const box = new THREE.Box3();
+    for (const entity of scene.entities) {
+      if (!entity.visible || entity.category === "sketch" || !entity.triPositions?.length) continue;
+      const obj = ctx.objectFor(entity.id);
+      if (!obj) continue;
+      box.setFromObject(obj);
+      if (!box.isEmpty() && box.distanceToPoint(centroid) <= 1.2) {
+        const hostCenter = box.getCenter(new THREE.Vector3());
+        if (centroid.clone().sub(hostCenter).dot(normal) < -0.05) {
+          normal.negate();
+        }
+        alignedToHost = true;
+        break;
+      }
+    }
+  }
+  if (!alignedToHost) {
+    if (Math.abs(normal.y) > 0.98) {
+      if (normal.y < 0) normal.negate();
+    } else if (ctx.camera.position.clone().sub(centroid).dot(normal) < 0) {
+      normal.negate();
+    }
+  }
+
+  const isHorizontal = Math.abs(normal.x) < 1e-4 && Math.abs(normal.z) < 1e-4 && normal.y > 0;
+  const quat = isHorizontal
+    ? new THREE.Quaternion()
+    : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  const u = new THREE.Vector3(1, 0, 0).applyQuaternion(quat).normalize();
+  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize();
+
+  const shape = new THREE.Shape(
+    points.map((p) => {
+      const rel = p.clone().sub(centroid);
+      return new THREE.Vector2(rel.dot(u), -rel.dot(v));
+    }),
+  );
+  // Build unit-depth ExtrudeGeometry once; mouse move scales Y in O(1)!
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // +Z (extrusion) → +Y; shape XY → local XZ
+  const mesh = new THREE.Mesh(geo, previewMaterial(ctx));
+  const edges = new THREE.EdgesGeometry(geo, 25);
+  const wire = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: ctx.palette.hover, transparent: true, opacity: 0.9, depthTest: false }),
+  );
+  wire.renderOrder = 998;
+  mesh.add(wire);
+  mesh.position.copy(centroid);
+  mesh.quaternion.copy(quat);
+  mesh.renderOrder = 997;
+  mesh.frustumCulled = false;
+  showDraft(mesh, ctx);
+
   ext = {
     points,
-    centroid: new THREE.Vector3(cx, cy, cz),
+    centroid,
+    normal,
+    u,
+    v,
+    quat,
+    isHorizontal,
     height: 20,
+    forceCut: false,
+    cutTargetId: null,
     typed: "",
     lastScreen: undefined,
+    mesh,
+    wire,
   };
   updateExtrudePreview(ext, ctx);
-  ctx.setStatus("Move up · click to set height (or type H + Enter)");
+  ctx.setStatus("Drag outward to add or inward into a solid to Cut · click or type H + Enter");
 }
 
-function commitExtrudeHeight(h: number, ctx: ToolContext): void {
+function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
   const d = ext;
   if (!d) return;
-  const polygon = d.points.map(
-    (p) => [p.x - d.centroid.x, p.z - d.centroid.z] as [number, number],
-  );
-  const baseY = d.centroid.y;
-  void ctx.createEntity(
-    { type: "extrude", polygon, height: h },
-    [d.centroid.x, baseY + h / 2, d.centroid.z],
-  );
+  const rawH = Math.abs(signedH) < 0.05 ? 20 : signedH;
+  const absH = Math.abs(rawH);
+  const targetId = findCutTarget(d, rawH, ctx);
+  const isCutting = targetId !== null;
+
+  const polygon = d.points.map((p) => {
+    const rel = p.clone().sub(d.centroid);
+    return [rel.dot(d.u), rel.dot(d.v)] as [number, number];
+  });
+
+  // Add slight overshoot on entry face when boolean-cutting to prevent coplanar skin artifacts
+  const overshoot = isCutting ? 0.1 : 0;
+  const finalH = absH + overshoot;
+  const offsetAlongNormal =
+    rawH >= 0 ? (absH - overshoot * 0.5) / 2 : -(absH - overshoot * 0.5) / 2;
+  const center = d.centroid.clone().addScaledVector(d.normal, offsetAlongNormal);
+  const pos: [number, number, number] = [center.x, center.y, center.z];
+  const rot: [number, number, number, number] = [d.quat.x, d.quat.y, d.quat.z, d.quat.w];
+  const docId = ctx.docId();
+
+  void (async () => {
+    const createdId = await ctx.createEntity(
+      { type: "extrude", polygon, height: finalH },
+      pos,
+    );
+    if (!createdId) return;
+    if (!d.isHorizontal) {
+      await ctx.setTransform(createdId, { position: pos, rotation: rot, scale: [1, 1, 1] }, false);
+    }
+    if (isCutting && targetId && docId) {
+      try {
+        const res = await ipc.csgApply(docId, "difference", targetId, createdId);
+        const overview = await ipc.getState();
+        useArcStore.getState().setOverview(overview);
+        useArcStore.getState().setScene(await ipc.getScene(docId));
+        await ipc.setSelection(docId, [res.id], res.id);
+        ctx.setStatus(`Extrude-Cut ${formatNum(absH)} ${ctx.settings.unitLabel}`);
+        return;
+      } catch {
+        // Fallback: keep extruded body if boolean fails
+      }
+    }
+    ctx.setStatus(`Extruded H ${formatNum(absH)} ${ctx.settings.unitLabel} · pick another closed profile`);
+  })();
+
   ext = null;
   clearDraft(ctx);
   ctx.showMeasure(null);
-  ctx.setStatus(`Extruded H ${formatNum(h)} · pick another closed profile`);
 }
 
 function commitExtrude(event: PointerEvent, ctx: ToolContext): void {
   const d = ext;
   if (!d) return;
+  d.forceCut = event.shiftKey;
   const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
-  const h = Number.isFinite(parsed) && parsed > 0 ? parsed : cursorHeight(ctx, event, d.centroid);
+  const h =
+    Number.isFinite(parsed) && Math.abs(parsed) > 0
+      ? parsed
+      : cursorHeight(ctx, event, d.centroid, d.normal);
   commitExtrudeHeight(h, ctx);
+}
+
+let armSelectedSketchOnce = false;
+
+export function armExtrudeSelectedSketch(): void {
+  armSelectedSketchOnce = true;
 }
 
 export const extrudeTool: ToolHandler = {
@@ -233,19 +410,23 @@ export const extrudeTool: ToolHandler = {
     ext = null;
     clearDraft(ctx);
     ctx.showMeasure(null);
-    // If a closed sketch profile is already selected, immediately start extruding it!
-    for (const id of ctx.selection()) {
-      const entity = ctx.entityById(id);
-      if (!entity || entity.category !== "sketch") continue;
-      const chain = chainFromEntity(entity, ctx.objectFor(id));
-      if (chain && chain.closed && chain.points.length >= 3) {
-        startExtrude(chain, ctx);
-        return;
+    // Only auto-start extruding a selected sketch when explicitly triggered from a sketch's action menu.
+    if (armSelectedSketchOnce) {
+      armSelectedSketchOnce = false;
+      for (const id of ctx.selection()) {
+        const entity = ctx.entityById(id);
+        if (!entity || entity.category !== "sketch") continue;
+        const chain = chainFromEntity(entity, ctx.objectFor(id));
+        if (chain && chain.closed && chain.points.length >= 3) {
+          startExtrude(chain, ctx);
+          return;
+        }
       }
     }
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate(ctx) {
+    armSelectedSketchOnce = false;
     ext = null;
     clearDraft(ctx);
     ctx.showMeasure(null);
@@ -254,15 +435,30 @@ export const extrudeTool: ToolHandler = {
   onPointerDown(event, ctx) {
     if (!ext) {
       const picked = pickChain(event, ctx);
-      if (!picked) {
-        ctx.setStatus("No sketch under cursor · click a closed profile");
+      if (picked && picked.chain.closed) {
+        startExtrude(picked.chain, ctx);
         return true;
       }
-      if (!picked.chain.closed) {
-        ctx.setStatus("Profile must be closed");
+      // Also allow clicking any 3D solid face to push/pull that face!
+      const face = ctx.pickFace(event);
+      if (face) {
+        ctx.setSelectionRef({
+          entityId: face.entityId,
+          kind: "face",
+          face: face.faceIndex,
+          edge: null,
+          point: face.point,
+          normal: face.normal,
+        });
+        void ctx.setSelection([face.entityId], face.entityId);
+        useArcStore.getState().setTool("extrude-face");
         return true;
       }
-      startExtrude(picked.chain, ctx);
+      if (picked && !picked.chain.closed) {
+        ctx.setStatus("Profile must be closed · click a closed sketch profile or a 3D face");
+        return true;
+      }
+      ctx.setStatus("Click a closed sketch profile or a 3D solid face to extrude");
       return true;
     }
     commitExtrude(event, ctx);
@@ -275,17 +471,25 @@ export const extrudeTool: ToolHandler = {
       return;
     }
     d.lastScreen = ctx.screenPoint(event);
+    d.forceCut = event.shiftKey;
     const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
-    d.height = Number.isFinite(parsed) && parsed > 0 ? parsed : cursorHeight(ctx, event, d.centroid);
+    d.height =
+      Number.isFinite(parsed) && Math.abs(parsed) > 0
+        ? parsed
+        : cursorHeight(ctx, event, d.centroid, d.normal);
     updateExtrudePreview(d, ctx);
   },
   onKey(event, ctx) {
     const d = ext;
     if (!d) return false;
-    if (/^[0-9.]$/.test(event.key)) {
-      d.typed += event.key;
+    if (/^[0-9.-]$/.test(event.key)) {
+      if (event.key === "-" && d.typed.length > 0) {
+        d.typed = d.typed.startsWith("-") ? d.typed.slice(1) : `-${d.typed}`;
+      } else {
+        d.typed += event.key;
+      }
       const parsed = Number.parseFloat(d.typed);
-      if (Number.isFinite(parsed) && parsed > 0) d.height = parsed;
+      if (Number.isFinite(parsed) && Math.abs(parsed) > 0) d.height = parsed;
       updateExtrudePreview(d, ctx);
       return true;
     }
@@ -296,7 +500,7 @@ export const extrudeTool: ToolHandler = {
     if (d && d.typed.length > 0) {
       d.typed = d.typed.slice(0, -1);
       const parsed = Number.parseFloat(d.typed);
-      if (Number.isFinite(parsed) && parsed > 0) d.height = parsed;
+      if (Number.isFinite(parsed) && Math.abs(parsed) > 0) d.height = parsed;
       updateExtrudePreview(d, ctx);
     }
   },
@@ -304,7 +508,7 @@ export const extrudeTool: ToolHandler = {
     const d = ext;
     if (!d) return false;
     const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
-    const h = Number.isFinite(parsed) && parsed > 0 ? parsed : d.height;
+    const h = Number.isFinite(parsed) && Math.abs(parsed) > 0 ? parsed : d.height;
     commitExtrudeHeight(h, ctx);
     return true;
   },
@@ -316,7 +520,7 @@ export const extrudeTool: ToolHandler = {
       ctx.setStatus("Extrude cancelled · pick a closed profile");
     }
   },
-  hint: () => "Extrude · click a closed sketch profile, then click or type height + Enter",
+  hint: () => "Extrude / Cut · click closed profile, drag outward to add or inward into a solid to Cut",
 };
 
 // ----------------------------------------------------------------- revolve
@@ -655,7 +859,8 @@ export const sweepTool: ToolHandler = {
       const cursor = ctx.planePoint(event, path[0].y);
       if (!cursor) return;
       const maxRadius = Math.max(1, sweepLength(path) / 3);
-      sweepRadius = Math.max(0.5, Math.min(maxRadius, cursor.distanceTo(path[0])));
+      const rawR = Math.max(0.5, Math.min(maxRadius, cursor.distanceTo(path[0])));
+      sweepRadius = Math.max(0.5, ctx.snapDim(rawR, event.altKey));
     }
     updateSweepPreview(ctx);
   },

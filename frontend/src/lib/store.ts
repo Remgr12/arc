@@ -32,8 +32,14 @@ interface ArcState {
   sectionOffset: number;
   sketchMode: boolean;
   sketchPlaneHeight: number;
+  sketchPlaneNormal: [number, number, number];
+  sketchPlaneOrigin: [number, number, number];
   sketchPlaneLabel: string;
   polygonSides: number;
+  /** Dimension & drag snap increment in world units (cm). 0 = free. */
+  dimSnapStep: number;
+  /** Laptop performance mode: disables shadows, IBL, and caps DPR at 1.0. */
+  lowSpecMode: boolean;
   contextMenu: {
     open: boolean;
     x: number;
@@ -76,9 +82,17 @@ interface ArcState {
   setSectionView: (enabled: boolean) => void;
   setSectionOffset: (offset: number) => void;
   setSketchPlane: (height: number, label?: string) => void;
-  enterSketchMode: (opts?: { height?: number; label?: string; tool?: ToolId }) => void;
+  enterSketchMode: (opts?: {
+    height?: number;
+    origin?: [number, number, number];
+    normal?: [number, number, number];
+    label?: string;
+    tool?: ToolId;
+  }) => void;
   exitSketchMode: () => void;
   setPolygonSides: (sides: number) => void;
+  setDimSnapStep: (step: number) => void;
+  setLowSpecMode: (enabled: boolean) => void;
   openContextMenu: (x: number, y: number, items: Array<{ label: string; run: () => void; disabled?: boolean }>) => void;
   closeContextMenu: () => void;
 }
@@ -128,8 +142,12 @@ export const useArcStore = create<ArcState>((set) => ({
   sectionOffset: 0,
   sketchMode: false,
   sketchPlaneHeight: 0,
+  sketchPlaneNormal: [0, 1, 0],
+  sketchPlaneOrigin: [0, 0, 0],
   sketchPlaneLabel: "Ground (Y = 0)",
   polygonSides: 6,
+  dimSnapStep: 1,
+  lowSpecMode: false,
   contextMenu: { open: false, x: 0, y: 0, items: [] },
   view: "dashboard",
 
@@ -142,10 +160,19 @@ export const useArcStore = create<ArcState>((set) => ({
   setScene: (scene: SceneData | null) => set(({ scene, sceneVersion: scene?.version ?? 0 })),
   setPlugins: (pluginsList: any[]) => set({ pluginsList }),
   setTool: (tool: ToolId) =>
-    set((st) => ({
-      tool,
-      sketchMode: SKETCH_TOOL_SET.has(tool) ? true : st.sketchMode,
-    })),
+    set((st) => {
+      let resolved = tool;
+      if (st.selKind === "face" && st.selFace !== null) {
+        if (tool === "extrude") resolved = "extrude-face";
+        else if (tool === "offset") resolved = "offset-face";
+      } else if (st.selKind === "edge" && st.selEdge !== null) {
+        if (tool === "fillet") resolved = "fillet-edge";
+      }
+      return {
+        tool: resolved,
+        sketchMode: SKETCH_TOOL_SET.has(resolved) ? true : st.sketchMode,
+      };
+    }),
   setDrafting: (drafting: boolean) => set({ drafting }),
   updateSettings: (settings: any) => set((_st) => ({ settings, overview: _st.overview ? { ..._st.overview, settings } : _st.overview })),
   setPaletteOpen: (open: boolean) => set({ paletteOpen: open }),
@@ -175,25 +202,62 @@ export const useArcStore = create<ArcState>((set) => ({
   setSectionView: (sectionView) => set({ sectionView }),
   setSectionOffset: (sectionOffset) => set({ sectionOffset }),
   setSketchPlane: (height, label) =>
-    set({
-      sketchPlaneHeight: Math.round(height * 100) / 100,
-      sketchPlaneLabel: label ?? (Math.abs(height) < 1e-4 ? "Ground (Y = 0)" : `Plane (Y = ${Math.round(height * 100) / 100})`),
+    set((st) => {
+      const rounded = Math.round(height * 100) / 100;
+      const n = st.sketchPlaneNormal;
+      const origin: [number, number, number] = [
+        n[0] * rounded,
+        n[1] * rounded,
+        n[2] * rounded,
+      ];
+      return {
+        sketchPlaneHeight: rounded,
+        sketchPlaneOrigin: origin,
+        sketchPlaneLabel:
+          label ??
+          (Math.abs(n[1]) >= 0.9
+            ? Math.abs(rounded) < 1e-4
+              ? "Top XZ (Y = 0)"
+              : `Top XZ (Y = ${rounded})`
+            : Math.abs(n[2]) >= 0.9
+              ? `Front XY (Z = ${rounded})`
+              : `Right YZ (X = ${rounded})`),
+      };
     }),
   enterSketchMode: (opts) =>
     set((st) => {
-      const h = opts?.height ?? st.sketchPlaneHeight;
-      const rounded = Math.round(h * 100) / 100;
-      const label =
-        opts?.label ??
-        (opts?.height !== undefined
-          ? Math.abs(rounded) < 1e-4
-            ? "Ground (Y = 0)"
-            : `Face Plane (Y = ${rounded})`
-          : st.sketchPlaneLabel);
+      const rawN = opts?.normal ?? (opts?.height !== undefined ? [0, 1, 0] : st.sketchPlaneNormal);
+      const len = Math.hypot(rawN[0], rawN[1], rawN[2]) || 1;
+      const normal: [number, number, number] = [rawN[0] / len, rawN[1] / len, rawN[2] / len];
+      const origin: [number, number, number] = opts?.origin
+        ? [
+            Math.round(opts.origin[0] * 100) / 100,
+            Math.round(opts.origin[1] * 100) / 100,
+            Math.round(opts.origin[2] * 100) / 100,
+          ]
+        : opts?.height !== undefined
+          ? [0, Math.round(opts.height * 100) / 100, 0]
+          : st.sketchPlaneOrigin;
+      const offset =
+        Math.round((origin[0] * normal[0] + origin[1] * normal[1] + origin[2] * normal[2]) * 100) /
+        100;
+      const autoLabel =
+        Math.abs(normal[1]) >= 0.9
+          ? Math.abs(offset) < 1e-4
+            ? "Top XZ (Y = 0)"
+            : `Face XZ (Y = ${offset})`
+          : Math.abs(normal[2]) >= 0.9
+            ? `Front XY (Z = ${offset})`
+            : Math.abs(normal[0]) >= 0.9
+              ? `Side YZ (X = ${offset})`
+              : `Face Plane (${offset})`;
+      const label = opts?.label ?? autoLabel;
       const nextTool = opts?.tool ?? (SKETCH_TOOL_SET.has(st.tool) ? st.tool : "line");
       return {
         sketchMode: true,
-        sketchPlaneHeight: rounded,
+        sketchPlaneHeight: offset,
+        sketchPlaneNormal: normal,
+        sketchPlaneOrigin: origin,
         sketchPlaneLabel: label,
         tool: nextTool,
       };
@@ -206,6 +270,8 @@ export const useArcStore = create<ArcState>((set) => ({
       statusMessage: "Exited sketch mode",
     })),
   setPolygonSides: (sides) => set({ polygonSides: Math.max(3, Math.min(32, Math.round(sides))) }),
+  setDimSnapStep: (step) => set({ dimSnapStep: Math.max(0, step) }),
+  setLowSpecMode: (lowSpecMode) => set({ lowSpecMode }),
   setView: (view) => set({ view }),
   openContextMenu: (x, y, items) => set({ contextMenu: { open: true, x, y, items } }),
   closeContextMenu: () => set((st) => (st.contextMenu.open ? { contextMenu: { ...st.contextMenu, open: false } } : st)),

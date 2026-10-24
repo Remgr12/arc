@@ -1,10 +1,12 @@
-import { Combine, Copy, Layers, Paintbrush, PencilRuler, Scissors, Trash2 } from "lucide-react";
+import { Box, Combine, Copy, Grid3X3, Layers, Orbit, Paintbrush, PencilRuler, Scissors, Slice, Trash2 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { deriveSelectionContext, SKETCH_ENTITY_KINDS, type SelectionContext } from "../lib/selectionContext";
 import { actions } from "../lib/actions";
 import { TOOL_BY_ID } from "../data/tools";
 import { bindingHint } from "../lib/keybinds";
-import type { ToolId } from "../lib/types";
+import { armExtrudeSelectedSketch } from "../tools/solid";
+import { facePlaneInfo } from "../tools/topology";
+import type { EntityData, ToolId } from "../lib/types";
 import { cn, Tip } from "./ui";
 import type { ReactNode } from "react";
 
@@ -40,7 +42,10 @@ function toolItem(id: ToolId, overrideKeys?: string, needsRef?: boolean): DockIt
     icon: <Icon size={15} strokeWidth={1.75} />,
     keys: overrideKeys ?? (bindingHint(`tool:${id}`) || undefined),
     tip: def.tip,
-    run: () => useArcStore.getState().setTool(id),
+    run: () => {
+      if (id === "extrude") armExtrudeSelectedSketch();
+      useArcStore.getState().setTool(id);
+    },
     needsRef,
   };
 }
@@ -76,22 +81,56 @@ function duplicateItem(): DockItem {
   );
 }
 
-function sketchOnFaceItem(faceHeight: number): DockItem {
+function sketchOnFaceItem(entity: EntityData | null, faceIndex: number | null): DockItem {
   return actionItem(
     "sketch-on-face",
     "Sketch on Face",
     <PencilRuler size={15} strokeWidth={1.6} />,
     () => {
+      if (!entity) return;
+      const info = facePlaneInfo(entity, faceIndex);
       useArcStore.getState().enterSketchMode({
-        height: faceHeight,
-        label: `Face Plane (Y = ${Math.round(faceHeight * 100) / 100})`,
+        height: info.height,
+        origin: info.origin,
+        normal: info.normal,
+        label: info.label,
         tool: "rectangle",
       });
       window.dispatchEvent(
-        new CustomEvent("arc-focus-plane", { detail: { normal: [0, 1, 0] } }),
+        new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
       );
     },
-    "Start 2D sketch on this face's elevation plane",
+    "Start 2D sketch on this face's plane (horizontal, vertical, or angled)",
+  );
+}
+
+function shellItem(): DockItem {
+  return actionItem(
+    "shell",
+    "Shell / Hollow",
+    <Box size={15} strokeWidth={1.6} />,
+    () => void actions.shellSelection(2),
+    "Hollow out solid to 2 cm wall thickness",
+  );
+}
+
+function linearPatternItem(): DockItem {
+  return actionItem(
+    "linear-pattern",
+    "Linear Pattern",
+    <Grid3X3 size={15} strokeWidth={1.6} />,
+    () => void actions.linearPattern({ count: 3, spacing: 30, axis: "x" }),
+    "Create 3× linear array along X",
+  );
+}
+
+function circularPatternItem(): DockItem {
+  return actionItem(
+    "circular-pattern",
+    "Circular Pattern",
+    <Orbit size={15} strokeWidth={1.6} />,
+    () => void actions.circularPattern({ count: 6, angleDeg: 360, axis: "y" }),
+    "Create 6× circular array around Y",
   );
 }
 
@@ -99,7 +138,8 @@ function dockGroups(
   context: SelectionContext,
   selectionCount: number,
   hasSketchSelected: boolean,
-  faceElevation: number,
+  primaryEntity: EntityData | null,
+  faceIndex: number | null,
 ): DockGroup[] {
   const groups: DockGroup[] = [];
 
@@ -107,9 +147,10 @@ function dockGroups(
     groups.push({
       title: "Face Actions",
       items: [
-        sketchOnFaceItem(faceElevation),
+        sketchOnFaceItem(primaryEntity, faceIndex),
         toolItem("extrude-face", "E", true),
         toolItem("offset-face", undefined, true),
+        shellItem(),
         toolItem("move", "M"),
         toolItem("rotate"),
         toolItem("scale"),
@@ -121,6 +162,13 @@ function dockGroups(
       title: "Edge Actions",
       items: [
         toolItem("fillet-edge", "F", true),
+        actionItem(
+          "chamfer-edge",
+          "Chamfer Edge (45°)",
+          <Slice size={15} strokeWidth={1.6} />,
+          () => void actions.chamferSelectedEdge(2),
+          "Bevel selected edge at 45° (2 cm)",
+        ),
         toolItem("move", "M"),
         deleteItem(),
       ].filter((item): item is DockItem => item !== null),
@@ -150,6 +198,8 @@ function dockGroups(
           () => void actions.booleanApply("intersection"),
           "Keep shared volume of solids",
         ),
+        linearPatternItem(),
+        circularPatternItem(),
         duplicateItem(),
         deleteItem(),
       ],
@@ -161,6 +211,9 @@ function dockGroups(
         toolItem("move", "M"),
         toolItem("rotate"),
         toolItem("scale"),
+        shellItem(),
+        linearPatternItem(),
+        circularPatternItem(),
         actionItem(
           "materials",
           "Material…",
@@ -187,6 +240,8 @@ function dockGroups(
         toolItem("trim", "T"),
         toolItem("fillet", "F"),
         toolItem("mirror", "I"),
+        linearPatternItem(),
+        circularPatternItem(),
         duplicateItem(),
         deleteItem(),
       ].filter((item): item is DockItem => item !== null),
@@ -225,20 +280,12 @@ export function ContextDock() {
     primaryKind && (SKETCH_ENTITY_KINDS.has(primaryKind) || primaryEntity?.category === "sketch"),
   );
 
-  // Estimate the top elevation of the selected entity for "Sketch on Face"
-  let faceElevation = 0;
-  if (primaryEntity) {
-    const py = primaryEntity.transform.position[1] ?? 0;
-    const geom = primaryEntity.geometry as Record<string, unknown>;
-    const h = typeof geom.height === "number" ? geom.height : 0;
-    if (primaryEntity.kind === "box" || primaryEntity.kind === "extrude") {
-      faceElevation = py + h / 2;
-    } else {
-      faceElevation = py + h;
-    }
-  }
+  const faceIndex =
+    selKind === "face" && selFace && selFace.entityId === primaryEntity?.id
+      ? selFace.face
+      : null;
 
-  const groups = dockGroups(context, selection.length, hasSketchSelected, faceElevation);
+  const groups = dockGroups(context, selection.length, hasSketchSelected, primaryEntity, faceIndex);
   const hasRef = selFace !== null || selEdge !== null;
 
   if (!scene || groups.length === 0) return null;

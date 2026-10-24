@@ -21,6 +21,7 @@ import { CommandLine } from "./components/CommandLine";
 
 import { ContextDock } from "./components/ContextDock";
 import { ModeBanner } from "./components/ModeBanner";
+import { SelectionHud } from "./components/SelectionHud";
 import { UtilityRail } from "./components/UtilityRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { Dashboard } from "./components/Dashboard";
@@ -78,6 +79,7 @@ export default function App() {
             <Viewport />
             <ContextDock />
             <ModeBanner />
+            <SelectionHud />
             {/* Positioned below the top-right 3D ViewCube (112px + 14px margin) */}
             <div className="pointer-events-none absolute right-3 top-[140px] z-30">
               <div className="pointer-events-auto rounded-2xl border border-base-200 bg-base-50/95 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md">

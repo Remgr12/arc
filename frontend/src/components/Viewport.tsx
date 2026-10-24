@@ -17,6 +17,7 @@ import type { EdgeHit, FaceHit } from "../tools/topology";
 import {
   edgeOverlayGeometry,
   faceOverlayGeometry,
+  facePlaneInfo,
   pickEdgeScreen,
 } from "../tools/topology";
 import { uiCapture } from "../lib/uiCapture";
@@ -64,13 +65,21 @@ interface ViewportRefs {
   columnMaterial: THREE.MeshStandardMaterial;
   lineMaterial: THREE.LineBasicMaterial;
   objects: Map<string, THREE.Object3D>;
+  meshObjects: THREE.Object3D[];
+  needsRender: boolean;
   lastTool: ToolId | null;
   lastCommitAt: number;
   lastScene: SceneData | null;
   lastHover: string | null;
+  lastHoverObjKey: string;
+  lastHoverAt: number;
   lastDisplayMode: "shaded" | "wireframe";
   lastSectionView: boolean;
   lastSectionOffset: number;
+  lastSketchMode: boolean;
+  lastSketchHeight: number;
+  lastSketchPlaneKey: string;
+  lastLowSpecMode: boolean;
   lastCursorAt: number;
   disposed: boolean;
   gizmo: ViewCube;
@@ -151,13 +160,18 @@ function makeGrid(p: ViewportPalette): THREE.GridHelper {
 }
 
 function createViewport(host: HTMLDivElement): ViewportRefs {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(host.clientWidth || 800, host.clientHeight || 600);
   renderer.autoClear = false;
   renderer.localClippingEnabled = true;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.display = "block";
@@ -197,7 +211,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   shadow.camera.bottom = -600;
   shadow.camera.near = 1;
   shadow.camera.far = 3000;
-  shadow.mapSize.set(2048, 2048);
+  shadow.mapSize.set(1024, 1024);
   shadow.bias = -0.0005;
   shadow.normalBias = 2;
   sceneRoot.add(dirLight);
@@ -264,13 +278,21 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     }),
     lineMaterial: new THREE.LineBasicMaterial(),
     objects: new Map(),
+    meshObjects: [],
+    needsRender: true,
     lastTool: null,
     lastCommitAt: 0,
     lastScene: null,
     lastHover: null,
+    lastHoverObjKey: "",
+    lastHoverAt: 0,
     lastDisplayMode: "shaded",
     lastSectionView: false,
     lastSectionOffset: 0,
+    lastSketchMode: false,
+    lastSketchHeight: 0,
+    lastSketchPlaneKey: "",
+    lastLowSpecMode: false,
     lastCursorAt: 0,
     disposed: false,
     gizmo: null as unknown as ViewCube,
@@ -296,10 +318,19 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   );
   ref.ctx = makeToolContext(ref);
 
+  controls.addEventListener("change", () => {
+    ref.needsRender = true;
+  });
+  tc.addEventListener("change", () => {
+    ref.needsRender = true;
+    if (ref.gizmoDragging) ref.renderer.shadowMap.needsUpdate = true;
+  });
   tc.addEventListener("dragging-changed", (event) => {
     const dragging = Boolean((event as unknown as { value: boolean }).value);
     ref.gizmoDragging = dragging;
     ref.controls.enabled = !dragging;
+    ref.needsRender = true;
+    ref.renderer.shadowMap.needsUpdate = true;
     if (!dragging) writeBackGizmo(ref);
   });
 
@@ -314,6 +345,7 @@ function startLoop(ref: ViewportRefs): () => void {
     ref.renderer.setSize(w, h);
     ref.camera.aspect = w / h;
     ref.camera.updateProjectionMatrix();
+    ref.needsRender = true;
   });
   ro.observe(ref.host);
 
@@ -322,20 +354,25 @@ function startLoop(ref: ViewportRefs): () => void {
   let pendingThumbResolve: ((url: string | null) => void) | null = null;
   const captureListener = () => {
     pendingCapture = true;
+    ref.needsRender = true;
   };
   window.addEventListener("arc-capture", captureListener);
   const thumbListener = (event: Event) => {
     const resolve = (event as CustomEvent).detail;
-    if (typeof resolve === "function") pendingThumbResolve = resolve;
+    if (typeof resolve === "function") {
+      pendingThumbResolve = resolve;
+      ref.needsRender = true;
+    }
   };
   window.addEventListener("arc-capture-thumb", thumbListener);
   const tick = () => {
     if (ref.disposed) return;
 
+    const now = performance.now();
     // Camera flight (gizmo plane focus or fit-view).
     if (ref.viewAnim) {
       const anim = ref.viewAnim;
-      const t = Math.min(1, (performance.now() - anim.start) / anim.duration);
+      const t = Math.min(1, (now - anim.start) / anim.duration);
       const k = t * t * (3 - 2 * t);
       if (anim.dirFrom && anim.dirTo && anim.radius !== undefined) {
         const dir = slerpDir(anim.dirFrom, anim.dirTo, k);
@@ -345,14 +382,27 @@ function startLoop(ref: ViewportRefs): () => void {
         ref.controls.target.lerpVectors(anim.targetFrom, anim.targetTo, k);
       }
       if (t >= 1) ref.viewAnim = null;
+      ref.needsRender = true;
     }
 
-    ref.controls.update();
-    ref.renderer.clear();
-    ref.renderer.render(ref.sceneRoot, ref.camera);
-    const w = ref.host.clientWidth;
-    const h = ref.host.clientHeight;
-    if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
+    // Animate any newly-spawned entities.
+    for (const obj of ref.objects.values()) {
+      if (obj.userData.spawnAt !== undefined) {
+        applySpawnScale(obj, now);
+        ref.needsRender = true;
+      }
+    }
+
+    const controlsMoved = ref.controls.update();
+    if (controlsMoved || ref.needsRender || pendingCapture || pendingThumbResolve) {
+      ref.needsRender = false;
+      ref.renderer.clear();
+      ref.renderer.render(ref.sceneRoot, ref.camera);
+      const w = ref.host.clientWidth;
+      const h = ref.host.clientHeight;
+      if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
+    }
+
     if (pendingCapture) {
       pendingCapture = false;
       try {
@@ -447,25 +497,60 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   else ref.sceneRoot.add(next);
   ref.gridNode = next;
   ref.gizmo.applyTheme(palette);
+  ref.needsRender = true;
 }
 
 // -------------------------------------------------------------- scene sync
+
+function hoverObjKey(hoverObj: { entityId?: string; kind?: string; face?: number | null; edge?: string | null } | null): string {
+  if (!hoverObj) return "";
+  return `${hoverObj.entityId ?? ""}:${hoverObj.kind ?? ""}:${hoverObj.face ?? ""}:${hoverObj.edge ?? ""}`;
+}
 
 function syncSceneToThree(ref: ViewportRefs): void {
   const state = useArcStore.getState();
   const scene = state.scene;
   const hoverChanged = state.hoverEntity !== ref.lastHover;
+  const currentHoverObjKey = hoverObjKey(state.hoverObj);
+  const hoverObjChanged = currentHoverObjKey !== ref.lastHoverObjKey;
   const sceneChanged = scene !== ref.lastScene;
   const displayModeChanged = state.displayMode !== ref.lastDisplayMode;
   const sectionChanged =
     state.sectionView !== ref.lastSectionView ||
     state.sectionOffset !== ref.lastSectionOffset;
+  const sketchPlaneKey = state.sketchMode
+    ? `${state.sketchPlaneNormal.join(",")}|${state.sketchPlaneOrigin.join(",")}`
+    : "";
+  const sketchChanged =
+    state.sketchMode !== ref.lastSketchMode ||
+    state.sketchPlaneHeight !== ref.lastSketchHeight ||
+    sketchPlaneKey !== ref.lastSketchPlaneKey;
+  const lowSpecChanged = state.lowSpecMode !== ref.lastLowSpecMode;
+  const toolChanged = state.tool !== ref.lastTool;
+
+  if (lowSpecChanged) {
+    ref.lastLowSpecMode = state.lowSpecMode;
+    ref.renderer.setPixelRatio(
+      state.lowSpecMode ? 1 : Math.min(window.devicePixelRatio || 1, 1.5),
+    );
+    ref.renderer.setSize(ref.host.clientWidth || 800, ref.host.clientHeight || 600);
+    ref.renderer.shadowMap.enabled = !state.lowSpecMode;
+    ref.renderer.shadowMap.needsUpdate = !state.lowSpecMode;
+    ref.groundNode.visible = !state.lowSpecMode;
+    ref.sceneRoot.environmentIntensity = state.lowSpecMode ? 0 : 0.35;
+    for (const obj of ref.meshObjects) {
+      const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if (mat) mat.needsUpdate = true;
+    }
+    ref.needsRender = true;
+  }
 
   if (sectionChanged) {
     ref.lastSectionView = state.sectionView;
     ref.lastSectionOffset = state.sectionOffset;
     ref.sectionPlane.constant = state.sectionOffset + 15;
     ref.renderer.clippingPlanes = state.sectionView ? [ref.sectionPlane] : [];
+    ref.needsRender = true;
   }
 
   if (sceneChanged || displayModeChanged) {
@@ -473,6 +558,8 @@ function syncSceneToThree(ref: ViewportRefs): void {
     ref.lastDisplayMode = state.displayMode;
     if (scene) rebuildEntities(ref, scene);
     ref.overlayKey = "";
+    ref.renderer.shadowMap.needsUpdate = true;
+    ref.needsRender = true;
     // A face/edge ref on an entity that is no longer selected is stale.
     const st = useArcStore.getState();
     const faceKept = st.selFace && scene?.selection.includes(st.selFace.entityId);
@@ -496,25 +583,56 @@ function syncSceneToThree(ref: ViewportRefs): void {
       const entity = scene.entities.find((e) => e.id === id);
       if (obj && entity) present(ref, obj, entity, layers, scene);
     }
+    ref.needsRender = true;
   }
   ref.lastHover = state.hoverEntity;
+  if (hoverObjChanged) {
+    ref.lastHoverObjKey = currentHoverObjKey;
+    ref.needsRender = true;
+  }
   updateOverlays(ref);
 
   const settings = state.settings;
-  ref.gridNode.visible = settings?.show_grid ?? true;
-  ref.gridNode.position.y = state.sketchMode ? state.sketchPlaneHeight : 0;
-  ref.axes.visible = settings?.show_axes ?? true;
-  const tool = state.tool;
-  if (tool !== ref.lastTool) switchTool(ref, tool);
+  const gridVis = settings?.show_grid ?? true;
+  const axesVis = settings?.show_axes ?? true;
+  if (ref.gridNode.visible !== gridVis || sketchChanged) {
+    ref.gridNode.visible = gridVis;
+    if (state.sketchMode) {
+      const n = new THREE.Vector3(...state.sketchPlaneNormal).normalize();
+      const quat =
+        Math.abs(n.x) < 1e-4 && Math.abs(n.z) < 1e-4 && n.y > 0
+          ? new THREE.Quaternion()
+          : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      ref.gridNode.quaternion.copy(quat);
+      const dist = new THREE.Vector3(...state.sketchPlaneOrigin).dot(n);
+      ref.gridNode.position.copy(n.clone().multiplyScalar(dist));
+    } else {
+      ref.gridNode.quaternion.identity();
+      ref.gridNode.position.set(0, 0, 0);
+    }
+    ref.lastSketchMode = state.sketchMode;
+    ref.lastSketchHeight = state.sketchPlaneHeight;
+    ref.lastSketchPlaneKey = sketchPlaneKey;
+    ref.needsRender = true;
+  }
+  if (ref.axes.visible !== axesVis) {
+    ref.axes.visible = axesVis;
+    ref.needsRender = true;
+  }
+  if (toolChanged) {
+    switchTool(ref, state.tool);
+    ref.needsRender = true;
+  }
 }
 
 /** Replace the hovered/selected face & edge highlight overlays. */
 function updateOverlays(ref: ViewportRefs): void {
   const state = useArcStore.getState();
   const scene = state.scene;
-  const key = `${scene?.version ?? -1}|${scene?.selection.join(",") ?? ""}|${JSON.stringify(state.hoverObj)}|${state.selKind}|${state.selFace?.entityId ?? ""}/${state.selFace?.face ?? ""}|${state.selEdge?.key ?? ""}`;
+  const key = `${scene?.version ?? -1}|${scene?.selection.join(",") ?? ""}|${hoverObjKey(state.hoverObj)}|${state.selKind}|${state.selFace?.entityId ?? ""}/${state.selFace?.face ?? ""}|${state.selEdge?.key ?? ""}`;
   if (key === ref.overlayKey) return;
   ref.overlayKey = key;
+  ref.needsRender = true;
 
   const clear = <T extends THREE.Object3D>(obj: T | null): null => {
     if (obj) {
@@ -701,6 +819,9 @@ function rebuildEntities(ref: ViewportRefs, scene: SceneData): void {
     }
     present(ref, obj, entity, layers, scene);
   }
+  ref.meshObjects = Array.from(ref.objects.values()).filter(
+    (o) => (o as THREE.Mesh).isMesh === true,
+  );
 }
 
 function makeDimensionBadge(text: string): THREE.Sprite {
@@ -1026,18 +1147,101 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
     closeContextMenu();
     return;
   }
-  const hitId = pickEntityAt(ref, ndcPoint(event));
+  const pt = ndcPoint(event);
+  const faceHit = pickFaceAt(ref, pt, scene);
+  const edgeHit = pickEdgeAt(ref, pt, scene, 8, faceHit);
+  const hitId = edgeHit?.entityId ?? faceHit?.entityId ?? pickEntityAt(ref, pt);
   const hostRect = ref.host.getBoundingClientRect();
   const x = event.clientX - hostRect.left;
   const y = event.clientY - hostRect.top;
   if (hitId) {
-    // Right-clicking an unselected entity selects it so menu actions act on it.
+    const entity = scene.entities.find((e) => e.id === hitId) ?? null;
     if (!scene.selection.includes(hitId)) void ipc.setSelection(docId, [hitId], hitId);
-    // Booleans act on the active selection; account for the implicit single pick.
     const selectedCount = scene.selection.includes(hitId) ? scene.selection.length : 1;
+
+    const topItems: MenuItem[] = [];
+    if (edgeHit) {
+      useArcStore.getState().setSelectionRef({
+        entityId: edgeHit.entityId,
+        kind: "edge",
+        face: null,
+        edge: edgeHit.key,
+        point: edgeHit.point,
+        normal: [0, 0, 0],
+      });
+      topItems.push(
+        {
+          label: "Fillet Edge (F)",
+          run: () => useArcStore.getState().setTool("fillet-edge"),
+        },
+        {
+          label: "Chamfer Edge (45° · 2 cm)",
+          run: () => void actions.chamferSelectedEdge(2),
+        },
+      );
+    } else if (faceHit) {
+      useArcStore.getState().setSelectionRef({
+        entityId: faceHit.entityId,
+        kind: "face",
+        face: faceHit.faceIndex,
+        edge: null,
+        point: faceHit.point,
+        normal: faceHit.normal,
+      });
+      topItems.push(
+        {
+          label: "Extrude / Push-Pull Face (E)",
+          run: () => useArcStore.getState().setTool("extrude-face"),
+        },
+        {
+          label: "Offset Face",
+          run: () => useArcStore.getState().setTool("offset-face"),
+        },
+        {
+          label: "Shell / Hollow Solid (2 cm)",
+          run: () => void actions.shellSelection(2),
+        },
+        {
+          label: "Sketch on this Face",
+          run: () => {
+            if (!entity) return;
+            const info = facePlaneInfo(entity, faceHit.faceIndex);
+            useArcStore.getState().enterSketchMode({
+              height: info.height,
+              origin: info.origin,
+              normal: info.normal,
+              label: info.label,
+              tool: "rectangle",
+            });
+            window.dispatchEvent(
+              new CustomEvent("arc-focus-plane", { detail: { normal: info.normal } }),
+            );
+          },
+        },
+      );
+    } else if (entity?.category === "sketch") {
+      topItems.push(
+        {
+          label: "Extrude Profile (E)",
+          run: () => useArcStore.getState().setTool("extrude"),
+        },
+        {
+          label: "Revolve Profile (V)",
+          run: () => useArcStore.getState().setTool("revolve"),
+        },
+        {
+          label: "Offset Sketch (O)",
+          run: () => useArcStore.getState().setTool("offset"),
+        },
+      );
+    }
+
     openContextMenu(ref, x, y, [
+      ...topItems,
       { label: "Delete", run: () => void actions.deleteSelection() },
       { label: "Duplicate", run: () => void actions.duplicateSelection() },
+      { label: "Linear Pattern (3× X)", run: () => void actions.linearPattern({ count: 3, spacing: 30, axis: "x" }) },
+      { label: "Circular Pattern (6× Y)", run: () => void actions.circularPattern({ count: 6, angleDeg: 360, axis: "y" }) },
       { label: "Fit view", run: () => actions.fitView() },
       { label: "Boolean union", disabled: selectedCount < 2, run: () => void actions.booleanApply("union") },
       {
@@ -1091,12 +1295,9 @@ function pickFaceAt(
   point: { x: number; y: number },
   scene: SceneData | null,
 ): FaceHit | null {
-  if (!scene) return null;
+  if (!scene || ref.meshObjects.length === 0) return null;
   ref.raycaster.setFromCamera(new THREE.Vector2(point.x, point.y), ref.camera);
-  const hits = ref.raycaster.intersectObjects(
-    Array.from(ref.objects.values()).filter((o) => (o as THREE.Mesh).isMesh === true),
-    false,
-  );
+  const hits = ref.raycaster.intersectObjects(ref.meshObjects, false);
   for (const hit of hits) {
     if (!hit.object.visible || !hit.face) continue;
     const entity = scene.entities.find((e) => e.id === hit.object.userData.entityId);
@@ -1123,6 +1324,7 @@ function pickEdgeAt(
   point: { x: number; y: number },
   scene: SceneData | null,
   thresholdPx = 8,
+  precomputedFaceHit?: FaceHit | null,
 ): EdgeHit | null {
   if (!scene) return null;
   const hostRect = ref.host.getBoundingClientRect();
@@ -1130,7 +1332,8 @@ function pickEdgeAt(
     x: (point.x * 0.5 + 0.5) * hostRect.width,
     y: (-point.y * 0.5 + 0.5) * hostRect.height,
   };
-  const faceHit = pickFaceAt(ref, point, scene);
+  const faceHit =
+    precomputedFaceHit !== undefined ? precomputedFaceHit : pickFaceAt(ref, point, scene);
   let bestHit: EdgeHit | null = null;
   let bestScreenDist = thresholdPx;
 
@@ -1328,6 +1531,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
     const w = ref.host.clientWidth;
     const h = ref.host.clientHeight;
     if (ref.gizmo.onPointerMove(event, w, h, ref.controls.target, ref.camera)) {
+      ref.needsRender = true;
       if (store.hoverEntity || store.hoverObj) store.setHoverEntity(null);
       return;
     }
@@ -1340,16 +1544,23 @@ function attachHandlers(ref: ViewportRefs): () => void {
       return;
     }
     if (store.scene) {
+      const now = performance.now();
       const handler = handlerFor(store.tool);
+      // Throttle hover picking on laptops (~40Hz max) and skip while orbiting/panning.
       if (
+        event.buttons === 0 &&
+        now - ref.lastHoverAt >= 24 &&
         handler &&
         (store.tool === "select" ||
           store.tool === "move" ||
           store.tool === "rotate" ||
           store.tool === "scale")
       ) {
+        ref.lastHoverAt = now;
         const point = ndcPoint(event);
-        const edge = pickEdgeAt(ref, point, store.scene, 7);
+        // Single-pass face hit shared with edge occlusion test.
+        const face = pickFaceAt(ref, point, store.scene);
+        const edge = pickEdgeAt(ref, point, store.scene, 7, face);
         if (edge) {
           store.setHoverObj({
             entityId: edge.entityId,
@@ -1359,30 +1570,35 @@ function attachHandlers(ref: ViewportRefs): () => void {
             point: edge.point,
             normal: [0, 0, 0],
           });
+        } else if (face) {
+          store.setHoverObj({
+            entityId: face.entityId,
+            kind: "face",
+            face: face.faceIndex,
+            edge: null,
+            point: face.point,
+            normal: face.normal,
+          });
         } else {
-          const face = pickFaceAt(ref, point, store.scene);
-          if (face) {
-            store.setHoverObj({
-              entityId: face.entityId,
-              kind: "face",
-              face: face.faceIndex,
-              edge: null,
-              point: face.point,
-              normal: face.normal,
-            });
-          } else {
-            const id = pickEntityAt(ref, point);
-            if (id !== store.hoverEntity || store.hoverObj !== null) {
-              store.setHoverEntity(id);
-            }
+          const id = pickEntityAt(ref, point);
+          if (id !== store.hoverEntity || store.hoverObj !== null) {
+            store.setHoverEntity(id);
           }
         }
       }
-      const now = performance.now();
       if (now - ref.lastCursorAt > 80) {
         ref.lastCursorAt = now;
-        const planeY = store.sketchMode ? store.sketchPlaneHeight : 0;
-        const world = pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), planeY);
+        const ray = rayAt(ref, ndcPoint(event));
+        let world: THREE.Vector3 | null = null;
+        if (store.sketchMode) {
+          const n = new THREE.Vector3(...store.sketchPlaneNormal).normalize();
+          const o = new THREE.Vector3(...store.sketchPlaneOrigin);
+          const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, o);
+          const out = new THREE.Vector3();
+          world = ray.intersectPlane(plane, out);
+        } else {
+          world = pointOnHorizontalPlane(ray, 0);
+        }
         if (world) store.setCursorWorld([world.x, world.y, world.z]);
       }
     }
@@ -1547,10 +1763,14 @@ function activeDoc(): string {
 function makeToolContext(ref: ViewportRefs): ToolContext {
   const paletteInView = (): ViewPalette => ref.palette;
   const settingsInView = () => {
-    const settings = useArcStore.getState().settings;
+    const st = useArcStore.getState();
+    const settings = st.settings;
+    const isImperial = settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
     return {
-      gridSize: settings?.grid_size ?? 10,
+      gridSize: settings?.grid_size ?? 2,
       snapEnabled: settings?.snap_enabled ?? true,
+      dimSnapStep: st.dimSnapStep ?? 1,
+      unitLabel: isImperial ? "in" : "cm",
     };
   };
 
@@ -1576,7 +1796,15 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     docId: activeDoc,
 
     planePoint(event, height) {
-      const h = height ?? (useArcStore.getState().sketchMode ? useArcStore.getState().sketchPlaneHeight : 0);
+      const st = useArcStore.getState();
+      if (height === undefined && st.sketchMode) {
+        const n = new THREE.Vector3(...st.sketchPlaneNormal).normalize();
+        const o = new THREE.Vector3(...st.sketchPlaneOrigin);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, o);
+        const out = new THREE.Vector3();
+        return rayAt(ref, ndcPoint(event)).intersectPlane(plane, out);
+      }
+      const h = height ?? (st.sketchMode ? st.sketchPlaneHeight : 0);
       return pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), h);
     },
     rayAt(event) {
@@ -1610,7 +1838,35 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
 
     snap(world, opts) {
       const { gridSize, snapEnabled } = settingsInView();
+      const showSnapMarker = (pt: THREE.Vector3 | null, kind?: string) => {
+        if (!pt || !kind || kind === "grid") {
+          ref.ctx.clearPreview("snap-marker");
+          return;
+        }
+        const radius = Math.max(0.6, ref.camera.position.distanceTo(pt) * 0.008);
+        const color =
+          kind === "midpoint"
+            ? 0x10b981
+            : kind === "center" || kind === "origin"
+              ? 0xf59e0b
+              : 0x22d3ee;
+        const ringGeo = new THREE.RingGeometry(radius * 0.55, radius, 20);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color,
+          side: THREE.DoubleSide,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const marker = new THREE.Mesh(ringGeo, ringMat);
+        marker.position.set(pt.x, pt.y + 0.05, pt.z);
+        marker.renderOrder = 999;
+        ref.ctx.setPreview(marker, "snap-marker");
+      };
+
       if (opts?.grid === false) {
+        showSnapMarker(null);
         return { point: world.clone(), kind: "grid" };
       }
       const camDistance = ref.camera.position.distanceTo(world);
@@ -1618,47 +1874,86 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
 
       const origin = new THREE.Vector3(0, world.y, 0);
       if (world.distanceTo(origin) <= tolerance) {
+        showSnapMarker(origin, "origin");
         return { point: origin.clone(), kind: "origin" };
       }
 
-      // Check sketch & solid vertices BEFORE axis lines so endpoints near axes are never skipped!
+      // Check sketch & solid vertices, midpoints, and centers BEFORE axis lines!
       const endpointTolerance = tolerance * 2.2;
       let best: THREE.Vector3 | null = null;
+      let bestKind: "endpoint" | "midpoint" | "center" = "endpoint";
       let bestDist = endpointTolerance;
       const scene = useArcStore.getState().scene;
       if (scene && snapEnabled) {
+        const vA = new THREE.Vector3();
+        const vB = new THREE.Vector3();
+        const mid = new THREE.Vector3();
         for (const entity of scene.entities) {
-          if (!entity.visible || !entity.lines || entity.lines.length < 3) continue;
+          if (!entity.visible) continue;
           const obj = ref.objects.get(entity.id);
           if (!obj || !obj.visible) continue;
           obj.updateMatrixWorld();
+
+          // Check entity center projected to active plane
+          const centerPt = new THREE.Vector3(
+            entity.transform.position[0],
+            world.y,
+            entity.transform.position[2],
+          );
+          const centerDist = centerPt.distanceTo(world);
+          if (centerDist <= bestDist * 0.85) {
+            bestDist = centerDist;
+            best = centerPt;
+            bestKind = "center";
+          }
+
           const pts = entity.lines;
-          for (let i = 0; i + 2 < pts.length; i += 3) {
-            const local = new THREE.Vector3(pts[i], pts[i + 1], pts[i + 2]);
-            const dist = local.applyMatrix4(obj.matrixWorld).distanceTo(world);
-            if (dist <= bestDist) {
-              bestDist = dist;
-              best = local.clone();
+          if (!pts || pts.length < 3) continue;
+          // Segment endpoints & midpoints (pts are pairs of 3D vertices: 6 floats per segment)
+          for (let i = 0; i + 5 < pts.length; i += 6) {
+            vA.set(pts[i], pts[i + 1], pts[i + 2]).applyMatrix4(obj.matrixWorld);
+            vB.set(pts[i + 3], pts[i + 4], pts[i + 5]).applyMatrix4(obj.matrixWorld);
+            const dA = vA.distanceTo(world);
+            if (dA <= bestDist) {
+              bestDist = dA;
+              best = vA.clone();
+              bestKind = "endpoint";
+            }
+            const dB = vB.distanceTo(world);
+            if (dB <= bestDist) {
+              bestDist = dB;
+              best = vB.clone();
+              bestKind = "endpoint";
+            }
+            // Midpoint of segment
+            mid.copy(vA).add(vB).multiplyScalar(0.5);
+            const dMid = mid.distanceTo(world);
+            if (dMid <= bestDist * 0.9) {
+              bestDist = dMid;
+              best = mid.clone();
+              bestKind = "midpoint";
             }
           }
-          if (bestDist < tolerance * 0.5) break;
+          if (bestDist < tolerance * 0.4) break;
         }
       }
-      if (best) return { point: best, kind: "endpoint" };
+      if (best) {
+        showSnapMarker(best, bestKind);
+        return { point: best, kind: bestKind };
+      }
 
       if (Math.abs(world.z) <= tolerance) {
-        return {
-          point: new THREE.Vector3(snapCoord(world.x, gridSize, snapEnabled), world.y, 0),
-          kind: "axis",
-        };
+        const pt = new THREE.Vector3(snapCoord(world.x, gridSize, snapEnabled), world.y, 0);
+        showSnapMarker(pt, "axis");
+        return { point: pt, kind: "axis" };
       }
       if (Math.abs(world.x) <= tolerance) {
-        return {
-          point: new THREE.Vector3(0, world.y, snapCoord(world.z, gridSize, snapEnabled)),
-          kind: "axis",
-        };
+        const pt = new THREE.Vector3(0, world.y, snapCoord(world.z, gridSize, snapEnabled));
+        showSnapMarker(pt, "axis");
+        return { point: pt, kind: "axis" };
       }
 
+      showSnapMarker(null);
       return {
         point: new THREE.Vector3(
           snapCoord(world.x, gridSize, snapEnabled),
@@ -1675,6 +1970,14 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         snapCoord(v.y, gridSize, snapEnabled),
         snapCoord(v.z, gridSize, snapEnabled),
       );
+    },
+    snapDim(value, fine = false) {
+      const { snapEnabled, dimSnapStep } = settingsInView();
+      const step = fine ? 0.1 : snapEnabled ? dimSnapStep : 0;
+      if (step <= 0) return Math.round(value * 100) / 100;
+      const snapped = Math.round(value / step) * step;
+      if (value > 0 && snapped <= 0) return step;
+      return Math.round(snapped * 100) / 100;
     },
 
     createEntity(geometry, position, name) {
@@ -1742,6 +2045,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       }
       ref.previews.set(tag, obj);
       ref.sceneRoot.add(obj);
+      ref.needsRender = true;
     },
     clearPreview(tag = "main") {
       const existing = ref.previews.get(tag);
@@ -1749,6 +2053,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       ref.sceneRoot.remove(existing);
       disposeObject(existing);
       ref.previews.delete(tag);
+      ref.needsRender = true;
     },
 
     startMarquee(event) {
@@ -1769,10 +2074,12 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       if (!mode) {
         if (ref.tc.object) ref.tc.detach();
         ref.tc.getHelper().visible = false;
+        ref.needsRender = true;
         return;
       }
       ref.tc.setMode(mode);
       updateGizmoAttachment(ref);
+      ref.needsRender = true;
     },
     gizmoActive: () => ref.gizmoDragging || ref.tc.axis !== null,
     gizmoBusy: () => ref.gizmoDragging,
@@ -1795,7 +2102,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       ref.renderer.domElement.style.cursor = style;
     },
     requestRender() {
-      // The render loop runs every frame; nothing to request.
+      ref.needsRender = true;
     },
     capturePointer(event) {
       try {

@@ -1,6 +1,8 @@
 import type { ToolContext, ToolHandler } from "./types";
 import { useArcStore } from "../lib/store";
 import type { RefObject } from "../lib/types";
+import { faceEditable } from "./faceTools";
+import { armExtrudeSelectedSketch } from "./solid";
 
 // ---------------------------------------------------------------------------
 // Selection tool. Click picks (face/edge first, whole entity as fallback),
@@ -113,5 +115,47 @@ export const selectTool: ToolHandler = {
   onPointerUp(event, ctx) {
     if (ctx.isMarqueeActive()) ctx.finishMarquee(event);
   },
-  hint: () => "Select · click to pick · Shift toggles · drag rubber band",
+  onDoubleClick(event, ctx) {
+    const edge = ctx.pickEdge(event, 8);
+    if (edge) {
+      ctx.setSelectionRef({
+        entityId: edge.entityId,
+        kind: "edge",
+        face: null,
+        edge: edge.key,
+        point: edge.point,
+        normal: [0, 0, 0],
+      });
+      void ctx.setSelection([edge.entityId], edge.entityId);
+      useArcStore.getState().setTool("fillet-edge");
+      return true;
+    }
+    const face = ctx.pickFace(event);
+    if (face) {
+      const entity = ctx.entityById(face.entityId);
+      if (entity && faceEditable(entity.kind)) {
+        ctx.setSelectionRef({
+          entityId: face.entityId,
+          kind: "face",
+          face: face.faceIndex,
+          edge: null,
+          point: face.point,
+          normal: face.normal,
+        });
+        void ctx.setSelection([face.entityId], face.entityId);
+        useArcStore.getState().setTool("extrude-face");
+        return true;
+      }
+    }
+    const id = ctx.pickEntity(event);
+    const entity = id ? ctx.entityById(id) : null;
+    if (id && entity && entity.category === "sketch") {
+      void ctx.setSelection([id], id);
+      armExtrudeSelectedSketch();
+      useArcStore.getState().setTool("extrude");
+      return true;
+    }
+    return false;
+  },
+  hint: () => "Select · click to pick (double-click face/sketch to extrude) · Shift toggles · drag rubber band",
 };

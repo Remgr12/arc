@@ -30,6 +30,11 @@
     <binary>arc</binary>
   </provides>
   <releases>
+    <release version="0.15.0" date="2026-10-24">
+      <description>
+        <p>Performance and direct-modeling upgrade: on-demand viewport rendering, Fast laptop mode, face-first Selection &amp; Dimension HUD with 1 cm / 2 cm snapping, bidirectional Extrude-Cut, vertical/side face sketching (XZ/XY/YZ), Shell/Hollow, 45° Edge Chamfer, and Linear/Circular Patterns.</p>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-10-24">
       <description>
         <p>CAD UI and tool overhaul: 3D ViewCube with face/edge/corner hit zones, dedicated Sketch Mode, tool preview parity with B-rep solids, transform-aware CSG, and unified layout.</p>

@@ -14,8 +14,10 @@ export function ModeBanner() {
   const drafting = useArcStore((s) => s.drafting);
   const sketchMode = useArcStore((s) => s.sketchMode);
   const sketchPlaneHeight = useArcStore((s) => s.sketchPlaneHeight);
+  const sketchPlaneNormal = useArcStore((s) => s.sketchPlaneNormal);
   const sketchPlaneLabel = useArcStore((s) => s.sketchPlaneLabel);
   const setSketchPlane = useArcStore((s) => s.setSketchPlane);
+  const enterSketchMode = useArcStore((s) => s.enterSketchMode);
   const exitSketchMode = useArcStore((s) => s.exitSketchMode);
   const polygonSides = useArcStore((s) => s.polygonSides);
   const setPolygonSides = useArcStore((s) => s.setPolygonSides);
@@ -30,10 +32,15 @@ export function ModeBanner() {
   const def = TOOL_BY_ID.get(tool);
   const label = def?.label ?? (drafting ? "Drafting" : tool);
 
-  const alignTopView = () => {
+  const alignNormalView = (normal: [number, number, number] = sketchPlaneNormal) => {
     window.dispatchEvent(
-      new CustomEvent("arc-focus-plane", { detail: { normal: [0, 1, 0] } }),
+      new CustomEvent("arc-focus-plane", { detail: { normal } }),
     );
+  };
+
+  const switchPlane = (normal: [number, number, number], name: string) => {
+    enterSketchMode({ origin: [0, 0, 0], normal, label: name, tool });
+    alignNormalView(normal);
   };
 
   return (
@@ -51,24 +58,65 @@ export function ModeBanner() {
           {sketchMode && (
             <>
               <span className="h-3.5 w-px bg-base-200" />
+              <div className="flex items-center gap-0.5 rounded bg-base-150 p-0.5 text-[10.5px]">
+                <button
+                  type="button"
+                  onClick={() => switchPlane([0, 1, 0], "Top XZ (Y = 0)")}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 font-mono transition-colors",
+                    Math.abs(sketchPlaneNormal[1]) >= 0.9
+                      ? "bg-accent-500 font-semibold text-white"
+                      : "text-base-600 hover:bg-base-200",
+                  )}
+                  title="Sketch on Horizontal Top Plane (XZ)"
+                >
+                  XZ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchPlane([0, 0, 1], "Front XY (Z = 0)")}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 font-mono transition-colors",
+                    Math.abs(sketchPlaneNormal[2]) >= 0.9
+                      ? "bg-accent-500 font-semibold text-white"
+                      : "text-base-600 hover:bg-base-200",
+                  )}
+                  title="Sketch on Vertical Front Plane (XY)"
+                >
+                  XY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchPlane([1, 0, 0], "Side YZ (X = 0)")}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 font-mono transition-colors",
+                    Math.abs(sketchPlaneNormal[0]) >= 0.9
+                      ? "bg-accent-500 font-semibold text-white"
+                      : "text-base-600 hover:bg-base-200",
+                  )}
+                  title="Sketch on Vertical Side Plane (YZ)"
+                >
+                  YZ
+                </button>
+              </div>
               <span className="rounded bg-accent-500/15 px-1.5 py-0.5 font-mono text-[11px] text-accent-500">
                 {sketchPlaneLabel}
               </span>
               {Math.abs(sketchPlaneHeight) > 1e-4 && (
                 <button
                   type="button"
-                  title="Reset sketch plane to ground (Y = 0)"
-                  onClick={() => setSketchPlane(0, "Ground (Y = 0)")}
+                  title="Reset sketch plane offset to 0"
+                  onClick={() => setSketchPlane(0)}
                   className="flex h-5 items-center gap-1 rounded px-1.5 text-[11px] text-base-600 hover:bg-base-200 hover:text-base-800"
                 >
                   <RotateCcw size={11} />
-                  Y=0
+                  0
                 </button>
               )}
               <button
                 type="button"
-                title="Align camera normal to sketch plane (Top View)"
-                onClick={alignTopView}
+                title="Align camera normal to active sketch plane"
+                onClick={() => alignNormalView()}
                 className="flex h-5 items-center gap-1 rounded bg-base-200 px-2 text-[11px] font-medium text-base-700 transition-colors hover:bg-base-300 hover:text-base-900"
               >
                 <Compass size={11} />

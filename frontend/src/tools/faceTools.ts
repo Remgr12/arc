@@ -40,6 +40,8 @@ interface DragState {
   screenUnit: { x: number; y: number };
   /** World units per screen px along the axis. */
   pxToWorld: number;
+  origPos?: [number, number, number];
+  origScale?: [number, number, number];
 }
 
 interface ToolState {
@@ -47,9 +49,10 @@ interface ToolState {
   attached: string | null;
   drag: DragState | null;
   input: HTMLDivElement | null;
+  typed: string;
 }
 
-const tool: ToolState = { gizmo: null, attached: null, drag: null, input: null };
+const tool: ToolState = { gizmo: null, attached: null, drag: null, input: null, typed: "" };
 
 const BOX_KINDS = new Set(["box", "beam", "slab"]);
 const EXTRUDE_KINDS = new Set(["extrude"]);
@@ -65,12 +68,12 @@ const FILLET_KINDS = new Set([
   "csg",
 ]);
 
-function faceEditable(kind: string): boolean {
+export function faceEditable(kind: string): boolean {
   return BOX_KINDS.has(kind) || EXTRUDE_KINDS.has(kind) || CYL_KINDS.has(kind);
 }
 
 /** Map the entity + face into the geometry param it controls. */
-function faceParam(entity: EntityData, faceIndex: number): Param | null {
+export function faceParam(entity: EntityData, faceIndex: number): Param | null {
   const group = deriveFaces(entity).find((f) => f.index === faceIndex);
   if (!group) return null;
   const [nx, ny, nz] = group.normal;
@@ -351,12 +354,47 @@ function screenAxisGeometry(
   };
 }
 
-function paramValue(entity: EntityData, param: Param): number {
+export function paramValue(entity: EntityData, param: Param): number {
   if (param.kind === "radius") return geomNumber(entity, "radius");
   return geomNumber(entity, param.kind);
 }
 
-function commitValue(
+function applyLiveDragPreview(ctx: ToolContext, drag: DragState): void {
+  const obj = ctx.objectFor(drag.entityId);
+  if (!obj || !drag.origPos || !drag.origScale || drag.startValue <= 1e-6) return;
+  const targetVal = Math.max(MIN_PARAM, drag.startValue + drag.delta);
+  const ratio = targetVal / drag.startValue;
+  const sx = drag.param.kind === "width" || drag.param.kind === "radius" ? drag.origScale[0] * ratio : drag.origScale[0];
+  const sy = drag.param.kind === "height" ? drag.origScale[1] * ratio : drag.origScale[1];
+  const sz = drag.param.kind === "depth" || drag.param.kind === "radius" ? drag.origScale[2] * ratio : drag.origScale[2];
+  obj.scale.set(sx, sy, sz);
+
+  if (drag.param.recenters) {
+    const worldAxis = drag.param.axis.clone().transformDirection(obj.matrixWorld).normalize();
+    const factor = drag.param.shiftFactor ?? 0.5;
+    const actualDelta = targetVal - drag.startValue;
+    obj.position.set(
+      drag.origPos[0] + worldAxis.x * actualDelta * factor,
+      drag.origPos[1] + worldAxis.y * actualDelta * factor,
+      drag.origPos[2] + worldAxis.z * actualDelta * factor,
+    );
+  }
+  obj.updateMatrix();
+  obj.updateMatrixWorld();
+  ctx.requestRender();
+}
+
+function restoreLiveDragPreview(ctx: ToolContext, drag: DragState): void {
+  const obj = ctx.objectFor(drag.entityId);
+  if (!obj || !drag.origPos || !drag.origScale) return;
+  obj.position.set(drag.origPos[0], drag.origPos[1], drag.origPos[2]);
+  obj.scale.set(drag.origScale[0], drag.origScale[1], drag.origScale[2]);
+  obj.updateMatrix();
+  obj.updateMatrixWorld();
+  ctx.requestRender();
+}
+
+export function commitValue(
   ctx: ToolContext,
   entityId: string,
   param: Param,
@@ -468,6 +506,7 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
     onActivate(ctx) {
       detachGizmo();
       closeNumberInput();
+      tool.typed = "";
       const store = useArcStore.getState();
       const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
       if (!entity || !store.selFace) {
@@ -479,87 +518,100 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
         return;
       }
       updateGizmo(ctx, entity.id);
-      ctx.setStatus(`${label} · drag the arrow, type the exact number next to it`);
+      const param = faceParam(entity, store.selFace.face);
+      const cur = param ? paramValue(entity, param) : Number.NaN;
+      const curStr = Number.isFinite(cur) ? ` (${param!.label}: ${fmt(cur)} ${ctx.settings.unitLabel})` : "";
+      ctx.setStatus(`${label}${curStr} · drag the face/arrow or type exact dimension + Enter`);
     },
-    onDeactivate() {
+    onDeactivate(ctx) {
+      if (tool.drag) restoreLiveDragPreview(ctx, tool.drag);
       detachGizmo();
       closeNumberInput();
+      tool.typed = "";
+      ctx.clearPreview("face-gizmo");
     },
-    onCancel() {
+    onCancel(ctx) {
+      if (tool.drag) restoreLiveDragPreview(ctx, tool.drag);
       detachGizmo();
       closeNumberInput();
+      tool.typed = "";
+      ctx.showMeasure(null);
     },
     onPointerDown(event, ctx) {
       if (event.button !== 0) return false;
+      tool.typed = "";
       const store = useArcStore.getState();
-      if (!store.selFace) {
-        // No face yet: click picks one.
-        if (armFromPick(event, ctx)) {
-          const fresh = useArcStore.getState();
-          const entity = fresh.selFace ? ctx.entityById(fresh.selFace.entityId) : null;
-          if (!entity) return true;
-          ensureEntitySelected(ctx, entity.id);
-          if (!faceEditable(entity.kind)) {
-            ctx.setStatus(`${label} · "${entity.kind}" cannot be face-edited (prisms first)`);
-            return true;
-          }
-          updateGizmo(ctx, entity.id);
-          ctx.setStatus(`${label} · drag the arrow, click the number to type`);
-        }
+      const clickedFace = ctx.pickFace(event);
+
+      // If no face is selected yet, or the user clicked a different face, select it!
+      if (
+        !store.selFace ||
+        (clickedFace &&
+          (clickedFace.entityId !== store.selFace.entityId ||
+            clickedFace.faceIndex !== store.selFace.face))
+      ) {
+        if (!armFromPick(event, ctx)) return false;
+      }
+
+      const fresh = useArcStore.getState();
+      const entity = fresh.selFace ? ctx.entityById(fresh.selFace.entityId) : null;
+      if (!entity || !fresh.selFace) return true;
+      ensureEntitySelected(ctx, entity.id);
+      if (!faceEditable(entity.kind)) {
+        ctx.setStatus(`${label} · "${entity.kind}" cannot be face-edited (prisms first)`);
         return true;
       }
-      const entity = ctx.entityById(store.selFace.entityId);
-      if (!entity || !faceEditable(entity.kind)) return false;
+      updateGizmo(ctx, entity.id);
       const gizmo = tool.gizmo;
-      if (!gizmo) return false;
-      // Near the arrow? start the drag along its axis.
+      if (!gizmo) return true;
       const mouseScreen = ctx.screenPoint(event);
-      const param = faceParam(entity, store.selFace.face);
+      const param = faceParam(entity, fresh.selFace.face);
       if (!param || param.kind === "none") {
         ctx.setStatus(`${label} · this face has no size parameter to drag`);
         return true;
       }
       const startValue = paramValue(entity, param);
-      const geometry = screenAxisGeometry(ctx, gizmo.position.clone(), param.axis.clone().transformDirection(
-        (() => {
-          const obj = ctx.objectFor(entity.id);
-          obj?.updateMatrixWorld();
-          return obj?.matrixWorld ?? new THREE.Matrix4();
-        })(),
-      ));
-      if (!geometry) return false;
-      const axisDistancePx = Math.hypot(
-        (mouseScreen.x - geometry.screenAnchor.x) * geometry.screenUnit.y -
-          (mouseScreen.y - geometry.screenAnchor.y) * geometry.screenUnit.x,
+      const obj = ctx.objectFor(entity.id);
+      obj?.updateMatrixWorld();
+      const geometry = screenAxisGeometry(
+        ctx,
+        gizmo.position.clone(),
+        param.axis.clone().transformDirection(obj?.matrixWorld ?? new THREE.Matrix4()),
       );
-      if (axisDistancePx > 14) {
-        // Click elsewhere on the face: re-arm the reference to that face.
-        armFromPick(event, ctx);
-        return true;
-      }
+      if (!geometry) return false;
       ctx.capturePointer(event);
       tool.drag = {
         param,
         entityId: entity.id,
         startValue,
         delta: 0,
-        screenAnchor: geometry.screenAnchor,
+        screenAnchor: mouseScreen,
         screenUnit: geometry.screenUnit,
         pxToWorld: geometry.pxToWorld,
+        origPos: obj ? [obj.position.x, obj.position.y, obj.position.z] : undefined,
+        origScale: obj ? [obj.scale.x, obj.scale.y, obj.scale.z] : undefined,
       };
       return true;
     },
     onPointerMove(event, ctx) {
       const store = useArcStore.getState();
-      if (store.selFace) updateGizmo(ctx, store.selFace.entityId);
       const drag = tool.drag;
-      if (!drag) return;
+      if (!drag) {
+        if (store.selFace) updateGizmo(ctx, store.selFace.entityId);
+        return;
+      }
       const mouseScreen = ctx.screenPoint(event);
       const rel = { x: mouseScreen.x - drag.screenAnchor.x, y: mouseScreen.y - drag.screenAnchor.y };
       const along = rel.x * drag.screenUnit.x + rel.y * drag.screenUnit.y;
-      drag.delta = along * drag.pxToWorld;
+      const rawDelta = along * drag.pxToWorld;
+      const rawValue = Math.max(MIN_PARAM, drag.startValue + rawDelta);
+      const snappedValue = Math.max(MIN_PARAM, ctx.snapDim(rawValue, event.altKey));
+      drag.delta = snappedValue - drag.startValue;
+      applyLiveDragPreview(ctx, drag);
+      if (store.selFace) updateGizmo(ctx, store.selFace.entityId);
+      const sign = drag.delta >= 0 ? "+" : "";
       ctx.showMeasure(
-        `${drag.param.label}: ${fmt(Math.max(MIN_PARAM, drag.startValue + drag.delta))}`,
+        `${drag.param.label}: ${fmt(snappedValue)} ${ctx.settings.unitLabel} (${sign}${fmt(drag.delta)})`,
         { x: mouseScreen.x, y: mouseScreen.y - 24 },
       );
     },
@@ -568,8 +620,49 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       if (!drag) return;
       ctx.releasePointer(event);
       ctx.showMeasure(null);
-      commitValue(ctx, drag.entityId, drag.param, drag.startValue + drag.delta, drag.delta);
+      restoreLiveDragPreview(ctx, drag);
+      if (Math.abs(drag.delta) > 1e-4) {
+        commitValue(ctx, drag.entityId, drag.param, drag.startValue + drag.delta, drag.delta);
+      }
       tool.drag = null;
+    },
+    onKey(event, ctx) {
+      const store = useArcStore.getState();
+      const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
+      if (!entity || !store.selFace) return false;
+      const param = faceParam(entity, store.selFace.face);
+      if (!param || param.kind === "none") return false;
+      if (/^[0-9.]$/.test(event.key)) {
+        tool.typed += event.key;
+        ctx.showMeasure(`${param.label}: ${tool.typed}| ${ctx.settings.unitLabel}`);
+        return true;
+      }
+      return false;
+    },
+    onBackspace(ctx) {
+      if (tool.typed.length > 0) {
+        tool.typed = tool.typed.slice(0, -1);
+        const store = useArcStore.getState();
+        const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
+        const param = entity && store.selFace ? faceParam(entity, store.selFace.face) : null;
+        ctx.showMeasure(
+          tool.typed && param ? `${param.label}: ${tool.typed}| ${ctx.settings.unitLabel}` : null,
+        );
+      }
+    },
+    onEnter(ctx) {
+      if (!tool.typed) return false;
+      const parsed = Number.parseFloat(tool.typed);
+      tool.typed = "";
+      ctx.showMeasure(null);
+      const store = useArcStore.getState();
+      const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
+      if (!entity || !store.selFace || !Number.isFinite(parsed) || parsed < MIN_PARAM) return false;
+      const param = faceParam(entity, store.selFace.face);
+      if (!param || param.kind === "none") return false;
+      const current = paramValue(entity, param);
+      commitValue(ctx, entity.id, param, parsed, parsed - current);
+      return true;
     },
     /** Clicking the displayed number opens the inline input for exact values. */
     onDoubleClick(event, ctx) {
@@ -591,7 +684,7 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       const store = useArcStore.getState();
       return store.selFace !== null && ctx.entityById(store.selFace.entityId) !== null;
     },
-    hint: () => `${label} · click a face, drag its arrow`,
+    hint: () => `${label} · click a face, drag to push/pull (snaps to cm), or type value + Enter`,
   };
 }
 
@@ -702,10 +795,11 @@ export const filletEdgeTool: ToolHandler = {
       mouseScreen.x - drag.screenAnchor.x,
       mouseScreen.y - drag.screenAnchor.y,
     );
-    drag.delta = distPx * drag.pxToWorld;
+    const rawR = distPx * drag.pxToWorld;
+    drag.delta = event.altKey ? Math.round(rawR * 10) / 10 : Math.max(0.5, ctx.snapDim(rawR, false));
     if (distPx > 3) {
       ctx.showMeasure(
-        `R ${fmt(Math.max(0.05, drag.delta))}`,
+        `R ${fmt(Math.max(0.05, drag.delta))} ${ctx.settings.unitLabel}`,
         { x: mouseScreen.x, y: mouseScreen.y - 24 },
       );
     }
@@ -719,6 +813,32 @@ export const filletEdgeTool: ToolHandler = {
     if (drag.delta >= 0.05) {
       commitFillet(ctx, drag.entityId, drag.delta);
     }
+  },
+  onKey(event, ctx) {
+    const store = useArcStore.getState();
+    if (!store.selEdge) return false;
+    if (/^[0-9.]$/.test(event.key)) {
+      tool.typed += event.key;
+      ctx.showMeasure(`R ${tool.typed}| ${ctx.settings.unitLabel}`);
+      return true;
+    }
+    return false;
+  },
+  onBackspace(ctx) {
+    if (tool.typed.length > 0) {
+      tool.typed = tool.typed.slice(0, -1);
+      ctx.showMeasure(tool.typed ? `R ${tool.typed}| ${ctx.settings.unitLabel}` : null);
+    }
+  },
+  onEnter(ctx) {
+    if (!tool.typed) return false;
+    const parsed = Number.parseFloat(tool.typed);
+    tool.typed = "";
+    ctx.showMeasure(null);
+    const store = useArcStore.getState();
+    if (!store.selEdge || !Number.isFinite(parsed) || parsed < 0.05) return false;
+    commitFillet(ctx, store.selEdge.entityId, parsed);
+    return true;
   },
   onDoubleClick(event, ctx) {
     const store = useArcStore.getState();

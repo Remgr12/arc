@@ -11,7 +11,7 @@ export interface ViewPalette {
   line: THREE.Color;
 }
 
-export type SnapKind = "grid" | "endpoint" | "origin" | "axis";
+export type SnapKind = "grid" | "endpoint" | "midpoint" | "center" | "origin" | "axis";
 
 export interface SnapResult {
   point: THREE.Vector3;
@@ -31,7 +31,7 @@ export interface ToolContext {
   readonly camera: THREE.PerspectiveCamera;
   readonly host: HTMLDivElement;
   readonly palette: ViewPalette;
-  readonly settings: { gridSize: number; snapEnabled: boolean };
+  readonly settings: { gridSize: number; snapEnabled: boolean; dimSnapStep: number; unitLabel: string };
 
   scene(): SceneData | null;
   entityById(id: string): EntityData | null;
@@ -59,6 +59,8 @@ export interface ToolContext {
   /** Snap to grid, sketch endpoints, origin and axes. */
   snap(world: THREE.Vector3, opts?: { grid?: boolean }): SnapResult;
   snapGrid(v: THREE.Vector3): THREE.Vector3;
+  /** Snap a scalar dimension (length, width, height, radius) to the active dimension increment (e.g. 1 cm or 2 cm). */
+  snapDim(value: number, fine?: boolean): number;
 
   createEntity(
     geometry: Geometry,
