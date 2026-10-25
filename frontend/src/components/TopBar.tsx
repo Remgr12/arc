@@ -301,13 +301,13 @@ export function TopBar({ children }: { children?: ReactNode }) {
         className="flex-1 h-full min-w-4 cursor-default"
       />
 
-      {/* Document title (or Arc Projects in dashboard) */}
+      {/* Document title (or Projects in dashboard) */}
       <div
         data-tauri-drag-region
         onDoubleClick={handleToggleMaximize}
         className="flex h-full items-center justify-center max-w-[320px] truncate px-2 text-center text-[12px] font-medium text-base-600 select-none cursor-default"
       >
-        {view === "dashboard" ? "Arc — Projects" : docTitle}
+        {view === "dashboard" ? "Projects" : docTitle}
       </div>
 
       {/* Draggable spacer right of title */}

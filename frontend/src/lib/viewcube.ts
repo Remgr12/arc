@@ -67,11 +67,11 @@ const FACES: FaceDef[] = [
   },
 ];
 
-const GIZMO_SIZE = 104; // css px
-const GIZMO_RIGHT_MARGIN = 66;
-const GIZMO_TOP_MARGIN = 10;
-const TEX_SIZE = 256;
-const BEVEL_FRAC = 0.2; // 20% border zone for edges & corners
+const GIZMO_SIZE = 120; // css px (comfortably sized for HiDPI displays)
+const GIZMO_RIGHT_MARGIN = 72; // clearance from top-right utility dock
+const GIZMO_TOP_MARGIN = 12;
+const TEX_SIZE = 512; // 512x512 high-res textures for pin-sharp HiDPI text
+const BEVEL_FRAC = 0.15; // 15% border zone for edges & corners, leaving 70% for center face
 
 interface HoverZone {
   face: number; // 0..5, or -1
@@ -88,8 +88,8 @@ function sameZone(a: HoverZone, b: HoverZone): boolean {
 function cubeThemeFrom(palette: ViewportPalette): CubeTheme {
   return palette.lightViewport
     ? {
-        faceBgTop: "#f8fafc",
-        faceBgBottom: "#e2e8f0",
+        faceBgTop: "#ffffff",
+        faceBgBottom: "#eef2f6",
         bevelBg: "#cbd5e1",
         border: "#94a3b8",
         innerBorder: "#cbd5e1",
@@ -99,14 +99,14 @@ function cubeThemeFrom(palette: ViewportPalette): CubeTheme {
         ring: "#94a3b8",
       }
     : {
-        faceBgTop: "#475569",
-        faceBgBottom: "#334155",
-        bevelBg: "#1e293b",
+        faceBgTop: "#334155",
+        faceBgBottom: "#1e293b",
+        bevelBg: "#0f172a",
         border: "#64748b",
         innerBorder: "#475569",
         hoverFill: palette.accent500 || "#28b5f5",
         hoverText: "#ffffff",
-        text: "#f8fafc",
+        text: "#ffffff",
         ring: "#64748b",
       };
 }
@@ -124,6 +124,7 @@ export class ViewCube {
   private edges: THREE.LineSegments;
   private ringMesh: THREE.Mesh;
   private triadGroup: THREE.Group;
+  private isLight = false;
   private theme: CubeTheme = cubeThemeFrom({
     bg: "#0c0c0e",
     grid: "",
@@ -150,14 +151,15 @@ export class ViewCube {
     this.domElement = domElement;
     this.onFocusFace = onFocusFace;
 
-    const geo = new THREE.BoxGeometry(1.76, 1.76, 1.76);
+    const geo = new THREE.BoxGeometry(1.92, 1.92, 1.92);
     for (let i = 0; i < 6; i++) {
       const canvas = document.createElement("canvas");
       canvas.width = TEX_SIZE;
       canvas.height = TEX_SIZE;
       const tex = new THREE.CanvasTexture(canvas);
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 4;
+      tex.anisotropy = 16;
+      tex.generateMipmaps = true;
       tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.magFilter = THREE.LinearFilter;
       this.canvases.push(canvas);
@@ -179,8 +181,8 @@ export class ViewCube {
     );
     this.cube.add(this.edges);
 
-    // Base compass ring beneath the cube (in XZ plane at y = -1.02)
-    const ringGeo = new THREE.RingGeometry(1.18, 1.38, 48);
+    // Base compass ring beneath the cube (in XZ plane at y = -1.14)
+    const ringGeo = new THREE.RingGeometry(1.24, 1.44, 64);
     ringGeo.rotateX(-Math.PI / 2);
     this.ringMesh = new THREE.Mesh(
       ringGeo,
@@ -191,10 +193,10 @@ export class ViewCube {
         opacity: 0.45,
       }),
     );
-    this.ringMesh.position.y = -1.02;
+    this.ringMesh.position.y = -1.14;
     this.pivot.add(this.ringMesh);
 
-    // Coordinate axis triad anchored at (-0.96, -0.96, -0.96)
+    // Coordinate axis triad anchored at (-0.98, -0.98, -0.98)
     this.triadGroup = this.buildAxisTriad();
     this.pivot.add(this.triadGroup);
 
@@ -210,7 +212,7 @@ export class ViewCube {
     dir.position.set(1.2, 1.8, 2.2);
     this.scene.add(dir);
 
-    this.navCam = new THREE.OrthographicCamera(-1.95, 1.95, 1.95, -1.95, 0.1, 12);
+    this.navCam = new THREE.OrthographicCamera(-1.85, 1.85, 1.85, -1.85, 0.1, 12);
     this.navCam.position.set(0, 0, 5);
     this.navCam.updateProjectionMatrix();
 
@@ -219,8 +221,8 @@ export class ViewCube {
 
   private buildAxisTriad(): THREE.Group {
     const group = new THREE.Group();
-    const origin = new THREE.Vector3(-0.92, -0.92, -0.92);
-    const len = 1.95;
+    const origin = new THREE.Vector3(-0.98, -0.98, -0.98);
+    const len = 2.0;
     const axes: { dir: THREE.Vector3; color: number; label: string }[] = [
       { dir: new THREE.Vector3(1, 0, 0), color: 0xef4444, label: "X" },
       { dir: new THREE.Vector3(0, 1, 0), color: 0x22c55e, label: "Y" },
@@ -229,7 +231,7 @@ export class ViewCube {
 
     for (const ax of axes) {
       const mat = new THREE.MeshBasicMaterial({ color: ax.color });
-      const cylGeo = new THREE.CylinderGeometry(0.038, 0.038, len, 10);
+      const cylGeo = new THREE.CylinderGeometry(0.04, 0.04, len, 12);
       cylGeo.translate(0, len / 2, 0);
       const shaft = new THREE.Mesh(cylGeo, mat);
       shaft.position.copy(origin);
@@ -245,7 +247,7 @@ export class ViewCube {
 
     // Small corner origin sphere
     const cornerSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.065, 12, 12),
+      new THREE.SphereGeometry(0.07, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0x94a3b8 }),
     );
     cornerSphere.position.copy(origin);
@@ -256,26 +258,30 @@ export class ViewCube {
 
   private makeAxisBadge(letter: string, hexColor: number): THREE.Sprite {
     const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       const hex = `#${hexColor.toString(16).padStart(6, "0")}`;
       ctx.beginPath();
-      ctx.arc(32, 32, 26, 0, Math.PI * 2);
+      ctx.arc(64, 64, 52, 0, Math.PI * 2);
       ctx.fillStyle = hex;
       ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.stroke();
       ctx.fillStyle = "#ffffff";
-      ctx.font = "700 32px Inter, system-ui, -apple-system, sans-serif";
+      ctx.font = "800 64px Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(letter, 32, 34);
+      ctx.fillText(letter, 64, 66);
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
     const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
     const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(0.32, 0.32, 0.32);
+    sprite.scale.set(0.38, 0.38, 0.38);
     sprite.renderOrder = 2;
     return sprite;
   }
@@ -311,7 +317,7 @@ export class ViewCube {
 
     // 3. Subtle bevel grid lines separating corners & edges
     ctx.strokeStyle = this.theme.innerBorder;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     // Corner ticks on bevel ring
     ctx.moveTo(B, 0);
@@ -339,22 +345,47 @@ export class ViewCube {
 
     // Inner plate border
     ctx.strokeStyle = centerHovered ? this.theme.hoverFill : this.theme.innerBorder;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.strokeRect(pad, pad, innerW, innerW);
 
     // Outer face border
     ctx.strokeStyle = this.theme.border;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, S - 4, S - 4);
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, S - 6, S - 6);
 
-    // 5. Crisp face label painted directly on the cube face
+    // 5. Crisp, high-contrast face label painted directly on the cube face
     const label = FACES[index].label;
-    ctx.fillStyle = centerHovered ? this.theme.hoverText : this.theme.text;
-    const fontSize = label.length >= 6 ? 32 : 36;
-    ctx.font = `700 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
+    let fontSize = 104;
+    if (label.length >= 6) fontSize = 84;
+    else if (label.length === 5) fontSize = 92;
+    else if (label.length === 4) fontSize = 98;
+
+    ctx.save();
+    if (centerHovered) {
+      ctx.fillStyle = this.theme.hoverText;
+      ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+    } else {
+      ctx.fillStyle = this.theme.text;
+      if (this.isLight) {
+        ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 1;
+      } else {
+        ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 2;
+      }
+    }
+    ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    if ("letterSpacing" in ctx) {
+      (ctx as unknown as { letterSpacing: string }).letterSpacing = "2px";
+    }
     ctx.fillText(label, S / 2, S / 2 + 1);
+    ctx.restore();
 
     tex.needsUpdate = true;
   }
@@ -366,6 +397,7 @@ export class ViewCube {
   }
 
   applyTheme(palette: ViewportPalette): void {
+    this.isLight = !!palette.lightViewport;
     this.theme = cubeThemeFrom(palette);
     (this.edges.material as THREE.LineBasicMaterial).color.set(this.theme.border);
     (this.ringMesh.material as THREE.MeshBasicMaterial).color.set(this.theme.ring);

@@ -1,28 +1,80 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Box,
   Clock,
   Folder,
   FolderOpen,
+  Layers,
   LayoutGrid,
   List,
+  Pencil,
   Plus,
   Search,
   Settings,
   Sliders,
+  Tag,
   Upload,
   X,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
-import { Logo } from "./Logo";
 import { Button, Modal, TextField, cn } from "./ui";
 import type { ProjectSummary } from "../lib/types";
 
 type ViewMode = "grid" | "list";
 type FilterTab = "all" | "recent";
+type SortField = "category" | "tags" | "modified" | "name" | "size";
+type SortDir = "asc" | "desc";
+
+interface ProjectMeta {
+  category?: string;
+  tags?: string[];
+}
+
+const META_STORAGE_KEY = "arc_project_meta_v1";
+
+const DEFAULT_CATEGORIES = [
+  "Mechanical",
+  "Architecture",
+  "3D Printing",
+  "Electronics",
+  "Drafts",
+  "General",
+];
+
+const CATEGORY_STYLES: Record<string, string> = {
+  Mechanical: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  Architecture: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  "3D Printing": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  Electronics: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  Drafts: "bg-base-200 text-base-600 border-base-300",
+  General: "bg-accent-500/10 text-accent-600 border-accent-500/20",
+};
+
+function getCategoryStyle(cat: string): string {
+  return CATEGORY_STYLES[cat] ?? "bg-accent-500/10 text-accent-600 border-accent-500/20";
+}
+
+function loadMetaMap(): Record<string, ProjectMeta> {
+  try {
+    const raw = localStorage.getItem(META_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveMetaMap(map: Record<string, ProjectMeta>): void {
+  try {
+    localStorage.setItem(META_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
 
 export function Dashboard() {
   const folder = useArcStore((s) => s.workspaceFolder);
@@ -33,41 +85,42 @@ export function Dashboard() {
   );
 
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [metaMap, setMetaMap] = useState<Record<string, ProjectMeta>>(() => loadMetaMap());
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>("modified");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [naming, setNaming] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Editing category and tags for a project
+  const [editingMeta, setEditingMeta] = useState<{
+    path: string;
+    name: string;
+    category: string;
+    tags: string[];
+  } | null>(null);
+  const [newTagInput, setNewTagInput] = useState("");
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
+
   const refresh = useCallback(() => {
     if (!folder) {
       setProjects([]);
-      setThumbs({});
       return;
     }
     let cancelled = false;
     setLoading(true);
     ipc
       .listProjects(folder)
-      .then(async (list) => {
+      .then((list) => {
         if (cancelled) return;
         const sorted = [...list].sort((a, b) => b.modified - a.modified);
         setProjects(sorted);
-        for (const project of sorted.slice(0, 24)) {
-          const b64 = await ipc
-            .readProjectThumbnail(project.path)
-            .catch(() => null);
-          if (cancelled) return;
-          if (b64) {
-            setThumbs((current) => ({
-              ...current,
-              [project.path]: `data:image/png;base64,${b64}`,
-            }));
-          }
-        }
       })
       .catch(() => {
         if (!cancelled) setProjects([]);
@@ -82,18 +135,98 @@ export function Dashboard() {
 
   useEffect(() => refresh(), [refresh]);
 
-  const filtered = useMemo(() => {
-    let result = projects;
+  // Compute category counts for sidebar
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of projects) {
+      const cat = metaMap[p.path]?.category?.trim() || "General";
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    return counts;
+  }, [projects, metaMap]);
+
+  // Compute popular tags for sidebar
+  const allTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of projects) {
+      const tags = metaMap[p.path]?.tags ?? [];
+      for (const t of tags) {
+        counts.set(t, (counts.get(t) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [projects, metaMap]);
+
+  // Filter and sort projects
+  const filteredAndSorted = useMemo(() => {
+    let result = projects.map((p) => {
+      const meta = metaMap[p.path] ?? {};
+      const category = meta.category?.trim() || "General";
+      const tags = meta.tags ?? [];
+      return { ...p, category, tags };
+    });
+
     if (tab === "recent") {
       const sevenDaysAgo = Date.now() / 1000 - 7 * 86400;
       result = result.filter((p) => p.modified >= sevenDaysAgo);
     }
+
+    if (selectedCategory) {
+      result = result.filter(
+        (p) => p.category.toLowerCase() === selectedCategory.toLowerCase(),
+      );
+    }
+
+    if (selectedTag) {
+      result = result.filter((p) =>
+        p.tags.some((t) => t.toLowerCase() === selectedTag.toLowerCase()),
+      );
+    }
+
     const q = query.trim().toLowerCase();
     if (q) {
-      result = result.filter((p) => p.name.toLowerCase().includes(q));
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q)),
+      );
     }
+
+    const factor = sortDir === "asc" ? 1 : -1;
+    result.sort((a, b) => {
+      if (sortField === "category") {
+        const c = a.category.localeCompare(b.category);
+        if (c !== 0) return c * factor;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortField === "tags") {
+        const tA = a.tags.join(",");
+        const tB = b.tags.join(",");
+        const c = tA.localeCompare(tB);
+        if (c !== 0) return c * factor;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortField === "name") {
+        return a.name.localeCompare(b.name) * factor;
+      }
+      if (sortField === "size") {
+        return (a.size - b.size) * factor;
+      }
+      return (a.modified - b.modified) * factor;
+    });
+
     return result;
-  }, [projects, query, tab]);
+  }, [
+    projects,
+    metaMap,
+    tab,
+    selectedCategory,
+    selectedTag,
+    query,
+    sortField,
+    sortDir,
+  ]);
 
   const openProject = async (project: ProjectSummary) => {
     if (opening) return;
@@ -127,19 +260,31 @@ export function Dashboard() {
     }
   };
 
+  const saveEditedMeta = () => {
+    if (!editingMeta) return;
+    const finalCat = customCategoryInput.trim() || editingMeta.category || "General";
+    const updated = {
+      ...metaMap,
+      [editingMeta.path]: {
+        category: finalCat,
+        tags: editingMeta.tags,
+      },
+    };
+    setMetaMap(updated);
+    saveMetaMap(updated);
+    setEditingMeta(null);
+  };
+
   const folderName = folder ? folder.split(/[\\/]/).pop() || folder : null;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-base-50 text-base-800 select-none">
       {/* Sleek Workspace Sidebar */}
       <aside className="flex w-[260px] shrink-0 flex-col border-r border-base-200 bg-base-50">
-        {/* Workspace Brand / Header */}
+        {/* Workspace Header - Clean with no logo */}
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-base-200 px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent-500/10 text-accent-500">
-              <Logo size={14} />
-            </div>
-            <span className="text-[12.5px] font-semibold tracking-tight text-base-900">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold tracking-tight text-base-900">
               Workspace
             </span>
           </div>
@@ -197,8 +342,12 @@ export function Dashboard() {
           <section className="flex flex-col gap-0.5">
             <SectionLabel>Filter</SectionLabel>
             <SidebarNavButton
-              active={tab === "all"}
-              onClick={() => setTab("all")}
+              active={tab === "all" && !selectedCategory && !selectedTag}
+              onClick={() => {
+                setTab("all");
+                setSelectedCategory(null);
+                setSelectedTag(null);
+              }}
               badge={projects.length}
             >
               All projects
@@ -210,6 +359,72 @@ export function Dashboard() {
               Recent (7 days)
             </SidebarNavButton>
           </section>
+
+          {/* Categories Navigation */}
+          <section className="flex flex-col gap-0.5">
+            <div className="flex items-center justify-between px-2 pb-1">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
+                Categories
+              </span>
+              {selectedCategory && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="text-[10px] text-accent-500 hover:underline cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            {[...categoryCounts.entries()].map(([cat, count]) => (
+              <SidebarNavButton
+                key={cat}
+                active={selectedCategory === cat}
+                onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                badge={count}
+              >
+                {cat}
+              </SidebarNavButton>
+            ))}
+          </section>
+
+          {/* Tags Navigation (if any tags exist) */}
+          {allTags.length > 0 && (
+            <section className="flex flex-col gap-1">
+              <div className="flex items-center justify-between px-2 pb-0.5">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
+                  Tags
+                </span>
+                {selectedTag && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTag(null)}
+                    className="text-[10px] text-accent-500 hover:underline cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1 px-1">
+                {allTags.slice(0, 16).map(([tag, count]) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] transition-colors cursor-pointer",
+                      selectedTag === tag
+                        ? "bg-accent-500 text-white font-medium shadow-xs"
+                        : "bg-base-200/80 text-base-600 hover:bg-base-200 hover:text-base-900",
+                    )}
+                  >
+                    <span>#{tag}</span>
+                    <span className="opacity-60 text-[9px]">{count}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Open Documents in Editor */}
           {openDocuments.length > 0 && (
@@ -236,7 +451,9 @@ export function Dashboard() {
                       <span
                         className={cn(
                           "h-1.5 w-1.5 shrink-0 rounded-full",
-                          isActive ? "bg-accent-500 shadow-xs shadow-accent-500" : "bg-base-400",
+                          isActive
+                            ? "bg-accent-500 shadow-xs shadow-accent-500"
+                            : "bg-base-400",
                         )}
                       />
                       <span className="truncate">{doc.name}</span>
@@ -287,23 +504,53 @@ export function Dashboard() {
           data-tauri-drag-region
           className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-base-200 bg-base-50/80 px-6 backdrop-blur-md"
         >
-          {/* Title & Count */}
-          <div data-tauri-drag-region className="flex items-center gap-3">
+          {/* Title, Count & Active Filter Badges */}
+          <div data-tauri-drag-region className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-[15px] font-semibold text-base-900">Projects</h1>
             <span className="rounded-md bg-base-200 px-2 py-0.5 font-mono text-[11px] font-medium text-base-600">
-              {filtered.length}
+              {filteredAndSorted.length}
             </span>
+
+            {/* Active category chip */}
+            {selectedCategory && (
+              <span className="flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-600">
+                <span>{selectedCategory}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="hover:text-accent-800 cursor-pointer"
+                  title="Clear category filter"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+
+            {/* Active tag chip */}
+            {selectedTag && (
+              <span className="flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-600 font-mono">
+                <span>#{selectedTag}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTag(null)}
+                  className="hover:text-accent-800 cursor-pointer"
+                  title="Clear tag filter"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
           </div>
 
           {/* Right Toolbar Controls */}
           <div className="flex items-center gap-2.5">
             {/* Search Input */}
-            <label className="relative flex h-8 w-60 items-center gap-2 rounded-lg border border-base-300 bg-base-100/90 px-2.5 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
+            <label className="relative flex h-8 w-56 items-center gap-2 rounded-lg border border-base-300 bg-base-100/90 px-2.5 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
               <Search size={13} className="shrink-0 text-base-500" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search projects"
+                placeholder="Search name, category, tags"
                 className="w-full min-w-0 bg-transparent text-[12px] text-base-800 outline-none placeholder:text-base-500"
               />
               {query && (
@@ -316,6 +563,37 @@ export function Dashboard() {
                 </button>
               )}
             </label>
+
+            {/* Sort Dropdown & Direction */}
+            <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
+              <span className="pl-2 text-base-400">
+                <Tag size={12} />
+              </span>
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value as SortField)}
+                className="h-7 bg-transparent px-2 text-[11.5px] font-medium text-base-700 outline-none cursor-pointer"
+                title="Sort projects by"
+              >
+                <option value="category">Category</option>
+                <option value="tags">Tags</option>
+                <option value="modified">Last Modified</option>
+                <option value="name">Name</option>
+                <option value="size">Size</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+                title={
+                  sortDir === "asc"
+                    ? "Sort Ascending (click for Descending)"
+                    : "Sort Descending (click for Ascending)"
+                }
+                className="flex h-7 w-7 items-center justify-center rounded-md text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors cursor-pointer"
+              >
+                {sortDir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+              </button>
+            </div>
 
             {/* View Mode Toggle */}
             <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
@@ -406,44 +684,137 @@ export function Dashboard() {
               })()}
             />
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-              {filtered.map((project) => (
-                <button
+            /* Clean Compact Cards (Preview Screen removed) */
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
+              {filteredAndSorted.map((project) => (
+                <div
                   key={project.path}
-                  type="button"
-                  onClick={() => void openProject(project)}
                   className={cn(
-                    "group flex flex-col overflow-hidden rounded-xl border border-base-200 bg-base-100/70 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-500/50 hover:bg-base-100 hover:shadow-lg hover:shadow-black/25 active:scale-[0.99] cursor-pointer",
+                    "group flex flex-col justify-between rounded-xl border border-base-200 bg-base-100/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-500/50 hover:bg-base-100 hover:shadow-lg hover:shadow-black/20",
                     opening === project.path && "opacity-50 pointer-events-none",
                   )}
                 >
-                  {/* Thumbnail / CAD Blueprint preview */}
-                  <div className="relative aspect-[16/10] w-full overflow-hidden border-b border-base-200 bg-base-150">
-                    <ThumbImage
-                      project={project}
-                      src={thumbs[project.path] ?? null}
-                    />
-                  </div>
-                  {/* Info footer */}
-                  <div className="flex w-full flex-col gap-1.5 p-3">
-                    <div className="truncate text-[13px] font-medium text-base-900 transition-colors group-hover:text-accent-500">
-                      {project.name}
+                  <div>
+                    {/* Top: Category Pill + Edit Tags/Category button */}
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCategory(
+                            selectedCategory === project.category ? null : project.category,
+                          );
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold transition-colors cursor-pointer",
+                          getCategoryStyle(project.category),
+                        )}
+                        title={`Filter by category ${project.category}`}
+                      >
+                        <Layers size={10} strokeWidth={2.2} />
+                        <span>{project.category}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingMeta({
+                            path: project.path,
+                            name: project.name,
+                            category: project.category,
+                            tags: [...project.tags],
+                          });
+                          setCustomCategoryInput("");
+                          setNewTagInput("");
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-base-400 opacity-0 group-hover:opacity-100 hover:bg-base-200 hover:text-base-800 transition-all cursor-pointer"
+                        title="Edit category and tags"
+                      >
+                        <Pencil size={11} />
+                      </button>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-base-500">
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} className="text-base-400" />
-                        {formatDate(project.modified)}
-                      </span>
+
+                    {/* Project Name */}
+                    <button
+                      type="button"
+                      onClick={() => void openProject(project)}
+                      className="mt-2.5 mb-2 block w-full text-left cursor-pointer"
+                    >
+                      <div className="truncate text-[14px] font-semibold text-base-900 group-hover:text-accent-500 transition-colors">
+                        {project.name}
+                      </div>
+                    </button>
+
+                    {/* Tags Row */}
+                    <div className="flex flex-wrap items-center gap-1 mb-3 min-h-[22px]">
+                      {project.tags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTag(selectedTag === tag ? null : tag);
+                          }}
+                          className={cn(
+                            "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono transition-colors cursor-pointer",
+                            selectedTag === tag
+                              ? "bg-accent-500 text-white font-semibold"
+                              : "bg-base-200/80 text-base-600 hover:bg-base-200 hover:text-base-900",
+                          )}
+                          title={`Filter by tag #${tag}`}
+                        >
+                          <span>#{tag}</span>
+                        </button>
+                      ))}
+                      {project.tags.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingMeta({
+                              path: project.path,
+                              name: project.name,
+                              category: project.category,
+                              tags: [],
+                            });
+                            setCustomCategoryInput("");
+                            setNewTagInput("");
+                          }}
+                          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono text-base-400 opacity-0 group-hover:opacity-100 hover:text-base-700 hover:bg-base-200 transition-all cursor-pointer"
+                        >
+                          <Plus size={9} />
+                          <span>tag</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom Info: Modified date, size, and Open action */}
+                  <div className="flex items-center justify-between border-t border-base-200/80 pt-2.5 text-[11px] text-base-500">
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} className="text-base-400" />
+                      {formatDate(project.modified)}
+                    </span>
+                    <div className="flex items-center gap-2">
                       <span className="font-mono text-[10.5px]">
                         {formatSize(project.size)}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => void openProject(project)}
+                        className="flex items-center gap-1 text-accent-500 font-medium hover:underline cursor-pointer"
+                      >
+                        <span>Open</span>
+                        <ArrowRight size={11} />
+                      </button>
                     </div>
                   </div>
-                </button>
+                </div>
               ))}
-              {filtered.length === 0 && (
+              {filteredAndSorted.length === 0 && (
                 <div className="col-span-full py-16 text-center text-[12.5px] text-base-500">
-                  No projects match “{query.trim()}”.
+                  No projects match your current filters.
                 </div>
               )}
             </div>
@@ -452,37 +823,94 @@ export function Dashboard() {
             <div className="flex flex-col overflow-hidden rounded-xl border border-base-200 bg-base-100/60">
               <div className="flex h-9 items-center border-b border-base-200 bg-base-150/60 px-4 text-[11px] font-semibold uppercase tracking-wider text-base-500">
                 <span className="flex-1">Name</span>
-                <span className="w-40 text-left">Last Modified</span>
-                <span className="w-24 text-right">Size</span>
+                <span className="w-32 text-left">Category</span>
+                <span className="w-48 text-left">Tags</span>
+                <span className="w-36 text-left">Last Modified</span>
+                <span className="w-20 text-right">Size</span>
+                <span className="w-10 text-right"></span>
               </div>
               <div className="divide-y divide-base-200">
-                {filtered.map((project) => (
-                  <button
+                {filteredAndSorted.map((project) => (
+                  <div
                     key={project.path}
-                    type="button"
                     onClick={() => void openProject(project)}
                     className={cn(
                       "group flex h-11 w-full items-center px-4 text-left text-[12.5px] transition-colors hover:bg-base-200/70 cursor-pointer",
                       opening === project.path && "opacity-50 pointer-events-none",
                     )}
                   >
-                    <span className="flex flex-1 min-w-0 items-center gap-2.5">
+                    <span className="flex flex-1 min-w-0 items-center gap-2.5 pr-2">
                       <Box size={14} className="shrink-0 text-accent-500" />
                       <span className="truncate font-medium text-base-900 group-hover:text-accent-500 transition-colors">
                         {project.name}
                       </span>
                     </span>
-                    <span className="w-40 shrink-0 text-[11.5px] text-base-500">
+                    <span className="w-32 shrink-0">
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCategory(
+                            selectedCategory === project.category ? null : project.category,
+                          );
+                        }}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.2 text-[10.5px] font-medium transition-colors hover:opacity-80 cursor-pointer",
+                          getCategoryStyle(project.category),
+                        )}
+                      >
+                        {project.category}
+                      </span>
+                    </span>
+                    <span className="w-48 shrink-0 flex flex-wrap items-center gap-1 overflow-hidden pr-2">
+                      {project.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTag(selectedTag === tag ? null : tag);
+                          }}
+                          className="rounded bg-base-200 px-1.5 py-0.2 font-mono text-[9.5px] text-base-600 hover:bg-base-300 hover:text-base-900 cursor-pointer"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                      {project.tags.length > 3 && (
+                        <span className="text-[10px] text-base-400">
+                          +{project.tags.length - 3}
+                        </span>
+                      )}
+                    </span>
+                    <span className="w-36 shrink-0 text-[11.5px] text-base-500">
                       {formatDate(project.modified)}
                     </span>
-                    <span className="w-24 shrink-0 text-right font-mono text-[11px] text-base-500">
+                    <span className="w-20 shrink-0 text-right font-mono text-[11px] text-base-500">
                       {formatSize(project.size)}
                     </span>
-                  </button>
+                    <span className="w-10 shrink-0 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingMeta({
+                            path: project.path,
+                            name: project.name,
+                            category: project.category,
+                            tags: [...project.tags],
+                          });
+                          setCustomCategoryInput("");
+                          setNewTagInput("");
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:text-base-800 transition-opacity cursor-pointer"
+                        title="Edit category and tags"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </span>
+                  </div>
                 ))}
-                {filtered.length === 0 && (
+                {filteredAndSorted.length === 0 && (
                   <div className="py-12 text-center text-[12.5px] text-base-500">
-                    No projects match “{query.trim()}”.
+                    No projects match your current filters.
                   </div>
                 )}
               </div>
@@ -519,57 +947,122 @@ export function Dashboard() {
           </div>
         </div>
       </Modal>
-    </div>
-  );
-}
 
-/** Thumbnail preview or CAD blueprint placeholder */
-function ThumbImage({
-  project,
-  src,
-}: {
-  project: ProjectSummary;
-  src: string | null;
-}) {
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt={project.name}
-        draggable={false}
-        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-      />
-    );
-  }
+      {/* Edit Category & Tags Modal */}
+      <Modal
+        open={editingMeta !== null}
+        onClose={() => setEditingMeta(null)}
+        title="Category & Tags"
+        width="w-[420px]"
+      >
+        {editingMeta && (
+          <div className="flex flex-col gap-4 text-[12px]">
+            <div className="text-base-500">
+              Project:{" "}
+              <strong className="text-base-900 font-medium">{editingMeta.name}</strong>
+            </div>
 
-  const initials = project.name
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+            {/* Category selection */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-semibold text-base-700">Category</label>
+              <div className="flex flex-wrap gap-1.5">
+                {DEFAULT_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      setEditingMeta({ ...editingMeta, category: cat });
+                      setCustomCategoryInput("");
+                    }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
+                      editingMeta.category === cat && !customCategoryInput
+                        ? "bg-accent-500 text-white border-accent-600 shadow-xs"
+                        : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={customCategoryInput}
+                onChange={(e) => {
+                  setCustomCategoryInput(e.target.value);
+                  setEditingMeta({
+                    ...editingMeta,
+                    category: e.target.value || "General",
+                  });
+                }}
+                placeholder="Or enter custom category…"
+                className="mt-1 h-7 rounded-lg border border-base-300 bg-base-50 px-2.5 text-[11.5px] outline-none focus:border-accent-500"
+              />
+            </div>
 
-  return (
-    <div className="relative flex h-full w-full items-center justify-center bg-base-100 overflow-hidden">
-      {/* Subtle CAD grid pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-          backgroundSize: "16px 16px",
-        }}
-      />
-      {/* Subtle radial accent illumination */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,color-mix(in_oklch,var(--color-accent-500)_15%,transparent),transparent_70%)]" />
+            {/* Tags editing */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-semibold text-base-700">Tags</label>
+              <div className="flex flex-wrap items-center gap-1.5 min-h-[32px] rounded-lg border border-base-250 bg-base-50 p-1.5">
+                {editingMeta.tags.map((tag, idx) => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 rounded bg-base-200 px-2 py-0.5 font-mono text-[10.5px] text-base-700"
+                  >
+                    #{tag}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [...editingMeta.tags];
+                        next.splice(idx, 1);
+                        setEditingMeta({ ...editingMeta, tags: next });
+                      }}
+                      className="text-base-400 hover:text-base-800 cursor-pointer"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      const clean = newTagInput.trim().replace(/^#/, "").toLowerCase();
+                      if (clean && !editingMeta.tags.includes(clean)) {
+                        setEditingMeta({
+                          ...editingMeta,
+                          tags: [...editingMeta.tags, clean],
+                        });
+                        setNewTagInput("");
+                      }
+                    }
+                  }}
+                  placeholder={
+                    editingMeta.tags.length === 0
+                      ? "Type tag & press Enter…"
+                      : "Add tag…"
+                  }
+                  className="flex-1 min-w-[120px] bg-transparent px-1 font-mono text-[11px] outline-none placeholder:text-base-400"
+                />
+              </div>
+              <span className="text-[10px] text-base-400">
+                Press Enter or comma to add tags
+              </span>
+            </div>
 
-      {/* Floating CAD badge */}
-      <div className="relative flex flex-col items-center gap-1.5 rounded-xl border border-base-250 bg-base-50/80 px-3.5 py-2 shadow-sm backdrop-blur-sm transition-transform duration-300 group-hover:scale-105">
-        <Box size={18} className="text-accent-500" />
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-base-700">
-          {initials || "CAD"}
-        </span>
-      </div>
+            {/* Modal actions */}
+            <div className="mt-2 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setEditingMeta(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={saveEditedMeta}>
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

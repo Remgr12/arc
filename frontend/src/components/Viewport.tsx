@@ -72,9 +72,6 @@ interface MarqueeState {
 interface ViewportRefs {
   host: HTMLDivElement;
   measureEl: HTMLDivElement;
-  scaleBarLineEl: HTMLDivElement;
-  scaleBarLabelEl: HTMLSpanElement;
-  scaleGridBtnEl: HTMLButtonElement;
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
@@ -309,44 +306,12 @@ function makeInfiniteAxes(): THREE.Group {
   return group;
 }
 
-function updateScaleBar(ref: ViewportRefs): void {
-  const h = Math.max(1, ref.host.clientHeight || 600);
-  const dist = Math.max(1, ref.camera.position.distanceTo(ref.controls.target));
-  const fovRad = (ref.camera.fov * Math.PI) / 180;
-  const worldHeight = 2 * dist * Math.tan(fovRad * 0.5);
-  const worldPerPx = worldHeight / h;
-
-  // Target bar width ~80px using clean 1-2-5 steps
-  const rawUnits = worldPerPx * 80;
-  const exp = Math.pow(10, Math.floor(Math.log10(Math.max(0.001, rawUnits))));
-  const norm = rawUnits / exp;
-  const niceMult = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
-  const barUnits = niceMult * exp;
-  const barPx = Math.max(36, Math.min(150, Math.round(barUnits / worldPerPx)));
-
-  const settings = useArcStore.getState().settings;
-  const isImperial =
-    settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
-  const unit = isImperial ? "in" : "cm";
-  const gridSize = settings?.grid_size ?? 2;
-
-  let label = `${Math.round(barUnits * 100) / 100} ${unit}`;
-  if (!isImperial) {
-    if (barUnits >= 100) label = `${Math.round((barUnits / 100) * 100) / 100} m`;
-    else if (barUnits < 1) label = `${Math.round(barUnits * 10 * 10) / 10} mm`;
-  }
-
-  ref.scaleBarLineEl.style.width = `${barPx}px`;
-  ref.scaleBarLabelEl.textContent = label;
-  ref.scaleGridBtnEl.textContent = `1 sq = ${gridSize} ${unit}`;
-}
-
 function createViewport(host: HTMLDivElement): ViewportRefs {
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(host.clientWidth || 800, host.clientHeight || 600);
   renderer.autoClear = false;
   renderer.localClippingEnabled = true;
@@ -427,52 +392,6 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   measureEl.style.display = "none";
   host.appendChild(measureEl);
 
-  // Live bottom-right CAD Scale Bar + Grid Legend
-  const scaleWrap = document.createElement("div");
-  scaleWrap.className =
-    "pointer-events-auto absolute bottom-3 right-3 z-20 flex items-center gap-2.5 rounded-xl border border-base-300/80 bg-base-100/95 px-3 py-1.5 font-mono text-[11px] text-base-700 shadow-md backdrop-blur-md transition-all";
-
-  const rulerWrap = document.createElement("div");
-  rulerWrap.className = "flex flex-col items-center gap-0.5";
-
-  const scaleBarLabelEl = document.createElement("span");
-  scaleBarLabelEl.className = "text-[10.5px] font-semibold leading-none text-base-800 tabular-nums";
-  scaleBarLabelEl.textContent = "10 cm";
-
-  const scaleBarLineEl = document.createElement("div");
-  scaleBarLineEl.className =
-    "h-1.5 border-x-2 border-b-2 border-accent-500 transition-[width] duration-150";
-  scaleBarLineEl.style.width = "72px";
-
-  rulerWrap.appendChild(scaleBarLabelEl);
-  rulerWrap.appendChild(scaleBarLineEl);
-
-  const sep = document.createElement("span");
-  sep.className = "h-4 w-px bg-base-300";
-
-  const scaleGridBtnEl = document.createElement("button");
-  scaleGridBtnEl.type = "button";
-  scaleGridBtnEl.title = "Click to cycle 3D grid scale (1 / 2 / 5 / 10 per square)";
-  scaleGridBtnEl.className =
-    "rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900";
-  scaleGridBtnEl.textContent = "1 sq = 2 cm";
-  scaleGridBtnEl.addEventListener("click", () => {
-    const settings = useArcStore.getState().settings;
-    if (!settings) return;
-    const steps = [1, 2, 5, 10];
-    const idx = steps.indexOf(settings.grid_size);
-    const nextGrid = steps[(idx + 1) % steps.length];
-    void ipc
-      .setSettings({ ...settings, grid_size: nextGrid })
-      .then((next) => useArcStore.getState().updateSettings(next))
-      .catch(() => undefined);
-  });
-
-  scaleWrap.appendChild(rulerWrap);
-  scaleWrap.appendChild(sep);
-  scaleWrap.appendChild(scaleGridBtnEl);
-  host.appendChild(scaleWrap);
-
   const tc = new TransformControls(camera, renderer.domElement);
   tc.setMode("translate");
   tc.setSpace("world");
@@ -491,9 +410,6 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   const ref: ViewportRefs = {
     host,
     measureEl,
-    scaleBarLineEl,
-    scaleBarLabelEl,
-    scaleGridBtnEl,
     renderer,
     camera,
     controls,
@@ -636,7 +552,6 @@ function startLoop(ref: ViewportRefs): () => void {
       const w = ref.host.clientWidth;
       const h = ref.host.clientHeight;
       if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
-      updateScaleBar(ref);
     }
 
     if (pendingCapture) {
@@ -737,7 +652,6 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   else ref.sceneRoot.add(next);
   ref.gridNode = next;
   ref.gizmo.applyTheme(palette);
-  updateScaleBar(ref);
   ref.needsRender = true;
 }
 
@@ -863,7 +777,6 @@ function syncSceneToThree(ref: ViewportRefs): void {
     if (index >= 0) ref.sceneRoot.children.splice(index, 0, next);
     else ref.sceneRoot.add(next);
     ref.gridNode = next;
-    updateScaleBar(ref);
     ref.needsRender = true;
   }
   if (ref.gridNode.visible !== gridVis || sketchChanged || gridSizeChanged) {
@@ -2176,7 +2089,6 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.camera.position.add(shift);
       ref.controls.update();
       ref.needsRender = true;
-      updateScaleBar(ref);
     }
   };
 
@@ -2201,7 +2113,6 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
       ref.controls.update();
       ref.needsRender = true;
-      updateScaleBar(ref);
       return;
     }
 
@@ -2214,7 +2125,6 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.controls.rotateUp(-event.deltaY * rotSpeed);
       ref.controls.update();
       ref.needsRender = true;
-      updateScaleBar(ref);
       return;
     }
 
@@ -2231,7 +2141,6 @@ function attachHandlers(ref: ViewportRefs): () => void {
       ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
       ref.controls.update();
       ref.needsRender = true;
-      updateScaleBar(ref);
       return;
     }
 
