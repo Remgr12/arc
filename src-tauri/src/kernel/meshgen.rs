@@ -314,21 +314,9 @@ pub fn payload_to_solid(kind: &Geometry) -> Result<Solid, String> {
     }
 }
 
-/// B-rep boolean union/difference/intersection via truck-shapeops.
+/// B-rep boolean union/difference/intersection via truck-shapeops with adaptive tolerance.
 fn csg_boolean(op: CsgOperation, a: Solid, b: Solid) -> Result<Solid, String> {
-    const TOL: f64 = 0.001;
-    match op {
-        CsgOperation::Union => truck_shapeops::or(&a, &b, TOL)
-            .ok_or_else(|| "union failed: shapes may intersect tangentially".into()),
-        CsgOperation::Intersection => truck_shapeops::and(&a, &b, TOL)
-            .ok_or_else(|| "intersection failed: shapes may intersect tangentially".into()),
-        CsgOperation::Difference => {
-            let mut not = b.clone();
-            not.not();
-            truck_shapeops::and(&a, &not, TOL)
-                .ok_or_else(|| "difference failed: shapes may intersect tangentially".into())
-        }
-    }
+    super::csg::boolean(op, &a, &b)
 }
 
 // ------------------------------------------------------------------ helpers

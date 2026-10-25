@@ -434,16 +434,17 @@ export async function commitDirectFacePushPull(
 
   const absH = Math.abs(delta);
   const isCut = delta < 0;
-  const overshoot = isCut ? 0.4 : 0;
+  const overshoot = isCut ? 0.8 : 0;
   const height = absH + overshoot;
 
-  const offset = isCut ? -absH / 2 : absH / 2;
+  const offset = isCut ? -(absH - overshoot) / 2 : absH / 2;
   const center = origin.clone().addScaledVector(normal, offset);
   const pos: [number, number, number] = [center.x, center.y, center.z];
   const rot: [number, number, number, number] = [basis.quat.x, basis.quat.y, basis.quat.z, basis.quat.w];
 
+  let extrudeId: string | null = null;
   try {
-    const extrudeId = await ctx.createEntity(
+    extrudeId = await ctx.createEntity(
       { type: "extrude", polygon, height },
       pos,
       undefined,
@@ -458,6 +459,9 @@ export async function commitDirectFacePushPull(
     await ipc.setSelection(docId, [res.id], res.id);
     useArcStore.getState().setStatusMessage(`Direct ${isCut ? "Pocket" : "Boss"} ${Math.round(absH * 10) / 10} ${ctx.settings.unitLabel}`);
   } catch (err) {
+    if (extrudeId) {
+      await ctx.deleteEntities([extrudeId]);
+    }
     useArcStore.getState().setStatusMessage(`Direct push-pull: ${String(err)}`);
   }
 }
@@ -533,6 +537,9 @@ function commitFillet(
           ? `Fillet r=${(payload as { radius?: number }).radius}`
           : "Fillet failed · edge could not be rounded",
       );
+    })
+    .catch((err: unknown) => {
+      store.setStatusMessage(`Fillet failed: ${String(err)}`);
     });
 }
 

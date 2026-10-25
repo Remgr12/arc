@@ -78,23 +78,40 @@ pub fn helpers_add_entity(
     geometry: &Json,
     name: Option<&str>,
 ) -> Result<String, String> {
+    helpers_add_entity_with_transform(app, state, document_id, geometry, name, None)
+}
+
+/// Create an entity with an initial transform in one atomic undo step.
+pub fn helpers_add_entity_with_transform(
+    app: &AppHandle,
+    state: &SharedState,
+    document_id: &str,
+    geometry: &Json,
+    name: Option<&str>,
+    transform: Option<Transform>,
+) -> Result<String, String> {
     let kind: Geometry =
         serde_json::from_value(geometry.clone()).map_err(|e| format!("bad geometry: {e}"))?;
     let name = name.unwrap_or("").to_string();
     let mut out: Option<String> = None;
+    let mut err_msg: Option<String> = None;
     doc_mut(state, document_id, "Add", |doc| {
-        let entity = Entity::new(
+        let mut entity = Entity::new(
             EntityId::new(),
             name.clone(),
             doc.active_layer,
             kind.clone(),
         );
+        if let Some(t) = transform {
+            entity.transform = t;
+        }
         let (id, res) = doc.add_entity(entity);
-        if res.is_ok() {
-            out = Some(id.as_string());
+        match res {
+            Ok(()) => out = Some(id.as_string()),
+            Err(e) => err_msg = Some(e),
         }
     })?;
-    let out = out.ok_or("geometry rejected by kernel")?;
+    let out = out.ok_or_else(|| err_msg.unwrap_or_else(|| "geometry rejected by kernel".into()))?;
     emit_scene(app, state, document_id);
     Ok(out)
 }
@@ -383,8 +400,16 @@ pub fn create_entity(
     document_id: String,
     geometry: Json,
     name: Option<String>,
+    transform: Option<Transform>,
 ) -> Result<CreateEntityOut, String> {
-    let id = helpers_add_entity(&app, &state, &document_id, &geometry, name.as_deref())?;
+    let id = helpers_add_entity_with_transform(
+        &app,
+        &state,
+        &document_id,
+        &geometry,
+        name.as_deref(),
+        transform,
+    )?;
     let entity_id = parse_one(&id)?;
     let name_out = doc_ref(&state, &document_id, |d| {
         d.get(&entity_id).map(|e| e.name.clone())
@@ -1593,6 +1618,7 @@ pub fn csg_apply(
         CsgOperation::Intersection => "Intersection",
     };
     let mut created: Option<(String, String)> = None;
+    let mut err_msg: Option<String> = None;
     doc_mut(&state, &document_id, label, |doc| {
         let entity = Entity::new(
             EntityId::new(),
@@ -1601,15 +1627,20 @@ pub fn csg_apply(
             geometry.clone(),
         );
         let (id, res) = doc.add_entity(entity);
-        if res.is_ok() {
-            doc.remove_entity(&first);
-            doc.remove_entity(&second);
-            doc.select(vec![id], Some(id));
-            let name = doc.get(&id).map(|e| e.name.clone()).unwrap_or_default();
-            created = Some((id.as_string(), name));
+        match res {
+            Ok(()) => {
+                doc.remove_entity(&first);
+                doc.remove_entity(&second);
+                doc.select(vec![id], Some(id));
+                let name = doc.get(&id).map(|e| e.name.clone()).unwrap_or_default();
+                created = Some((id.as_string(), name));
+            }
+            Err(e) => {
+                err_msg = Some(e);
+            }
         }
     })?;
-    let (id, name) = created.ok_or("geometry rejected by kernel")?;
+    let (id, name) = created.ok_or_else(|| err_msg.unwrap_or_else(|| "geometry rejected by kernel".into()))?;
     emit_scene(&app, &state, &document_id);
     Ok(CreateEntityOut { id, name })
 }

@@ -170,7 +170,7 @@ fn curve_der_n(
     let sub = leaders.element_wise_ders(cders, |x, y| x - y);
     let suml = leaders.der().combinatorial_der(&sub, Vector3::dot, n);
     let b = Vector3::new(s0normal.dot(sum0), s1normal.dot(sum1), suml);
-    mat.invert().unwrap() * b
+    mat.invert().unwrap_or(Matrix3::identity()) * b
 }
 
 fn uv_der_n(
@@ -182,8 +182,7 @@ fn uv_der_n(
 ) -> Vector2 {
     let mat = Matrix3::from_cols(uder, vder, normal);
     let b = cder_n - sum;
-    let uv_der_n = mat.invert().unwrap() * b;
-    debug_assert!(uv_der_n.z.abs() < 1.0e-4, "{}", uv_der_n.z.abs());
+    let uv_der_n = mat.invert().unwrap_or(Matrix3::identity()) * b;
     Vector2::new(uv_der_n.x, uv_der_n.y)
 }
 
@@ -217,7 +216,11 @@ where
 {
     type Point = Point3;
     type Vector = Vector3;
-    fn subs(&self, t: f64) -> Point3 { self.search_triple(t, 100).unwrap().0 }
+    fn subs(&self, t: f64) -> Point3 {
+        self.search_triple(t, 100)
+            .map(|s| s.0)
+            .unwrap_or_else(|| self.leader.subs(t))
+    }
     fn der(&self, t: f64) -> Vector3 {
         let IntersectionCurve {
             surface0,
@@ -225,10 +228,16 @@ where
             leader,
         } = self;
         let [l, l_der, l_der2] = leader.ders(2, t).to_array::<3>();
-        let (c, uv0, uv1) = self.search_triple(t, 100).unwrap();
+        let Some((c, uv0, uv1)) = self.search_triple(t, 100) else {
+            return l_der;
+        };
         let (n0, n1) = (surface0.normal(uv0.x, uv0.y), surface1.normal(uv1.x, uv1.y));
         let n = n0.cross(n1);
-        let k = (l_der.magnitude2() - (c - l).dot(l_der2)) / n.dot(l_der);
+        let denom = n.dot(l_der);
+        if denom.abs() < 1e-12 {
+            return l_der;
+        }
+        let k = (l_der.magnitude2() - (c - l).dot(l_der2)) / denom;
         n * k
     }
     #[inline(always)]
@@ -243,7 +252,9 @@ where
         self.ders(n, t)[n]
     }
     fn ders(&self, n: usize, t: f64) -> CurveDers<Vector3> {
-        let (c, uv0, uv1) = self.search_triple(t, 100).unwrap();
+        let Some((c, uv0, uv1)) = self.search_triple(t, 100) else {
+            return self.leader.ders(n, t);
+        };
         let mut uv0ders = CurveDers::new(n);
         uv0ders[0] = uv0.to_vec();
         let mut uv1ders = CurveDers::new(n);

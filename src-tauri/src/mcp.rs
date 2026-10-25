@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const SERVER_NAME: &str = "arc-mcp";
-const SERVER_VERSION: &str = "0.24.3";
+const SERVER_VERSION: &str = "0.25.0";
 
 // ============================================================================
 // Bridge Connection & Auto-Discovery
@@ -663,7 +663,8 @@ fn execute_tool(
         // --- Scene Inspection & Cleanup ---
         "inspect_scene" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let scene = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let envelope = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let scene = envelope.get("scene").unwrap_or(&envelope);
             let name = scene.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled");
             let units = scene.get("units").and_then(|v| v.as_str()).unwrap_or("cm");
 
@@ -703,7 +704,8 @@ fn execute_tool(
 
         "clear_scene" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let scene = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let envelope = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let scene = envelope.get("scene").unwrap_or(&envelope);
             let mut ids = Vec::new();
             if let Some(entities) = scene.get("entities").and_then(|e| e.as_array()) {
                 for e in entities {

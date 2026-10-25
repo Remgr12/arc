@@ -40,11 +40,17 @@ export const ipc = {
     invoke<SceneEnvelope>("get_scene", { documentId }).then((envelope) => envelope.scene),
 
   // entities
-  createEntity: (documentId: string, geometry: Geometry, name?: string) =>
+  createEntity: (
+    documentId: string,
+    geometry: Geometry,
+    name?: string,
+    transform?: Transform,
+  ) =>
     invoke<{ id: string; name: string }>("create_entity", {
       documentId,
       geometry,
       name: name ?? null,
+      transform: transform ?? null,
     }),
   updateGeometry: (documentId: string, entityId: string, geometry: Geometry): Promise<void> =>
     invoke("update_geometry", { documentId, entityId, geometry }),

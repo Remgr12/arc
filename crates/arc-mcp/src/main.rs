@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const SERVER_NAME: &str = "arc-mcp";
-const SERVER_VERSION: &str = "0.24.3";
+const SERVER_VERSION: &str = "0.25.0";
 
 // ============================================================================
 // Bridge Connection & Auto-Discovery
@@ -55,7 +55,7 @@ fn candidate_bridge_paths() -> Vec<PathBuf> {
 }
 
 impl Bridge {
-    fn load() -> Result<Self, String> {
+    fn read_bridge_info() -> Result<Self, String> {
         if let Ok(port_str) = env::var("ARC_BRIDGE_PORT") {
             let port: u16 = port_str
                 .parse()
@@ -86,6 +86,80 @@ impl Bridge {
                     if let (Some(port), Some(token)) = (port, token) {
                         return Ok(Bridge { port, token });
                     }
+                }
+            }
+        }
+
+        Err("bridge.json not found".to_string())
+    }
+
+    fn find_arc_binary() -> Option<PathBuf> {
+        if let Ok(path) = env::var("ARC_BINARY") {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        if let Ok(exe) = env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let candidate = dir.join(if cfg!(windows) { "arc.exe" } else { "arc" });
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+        }
+        for rel in &["target/release/arc", "target/debug/arc", "../target/release/arc", "../target/debug/arc"] {
+            let p = PathBuf::from(rel);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    fn launch_arc() -> Result<(), String> {
+        let bin = Self::find_arc_binary().ok_or_else(|| {
+            "Could not locate the Arc executable ('arc'). Please build or run Arc first.".to_string()
+        })?;
+
+        let is_headless_linux = cfg!(target_os = "linux")
+            && env::var("DISPLAY").is_err()
+            && env::var("WAYLAND_DISPLAY").is_err();
+
+        let mut cmd = if is_headless_linux && PathBuf::from("/usr/bin/xvfb-run").exists() {
+            let mut c = std::process::Command::new("/usr/bin/xvfb-run");
+            c.arg("-a").arg(bin);
+            c
+        } else {
+            std::process::Command::new(bin)
+        };
+
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+
+        cmd.spawn().map_err(|e| format!("Failed to spawn Arc desktop: {e}"))?;
+        Ok(())
+    }
+
+    fn load() -> Result<Self, String> {
+        // 1. If an existing bridge is responding, use it immediately
+        if let Ok(bridge) = Self::read_bridge_info() {
+            if TcpStream::connect(("127.0.0.1", bridge.port)).is_ok() {
+                return Ok(bridge);
+            }
+        }
+
+        // 2. Otherwise auto-launch Arc in background
+        let _ = Self::launch_arc();
+
+        // 3. Poll for up to 6 seconds for bridge to become ready
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(6) {
+            std::thread::sleep(Duration::from_millis(150));
+            if let Ok(bridge) = Self::read_bridge_info() {
+                if TcpStream::connect(("127.0.0.1", bridge.port)).is_ok() {
+                    return Ok(bridge);
                 }
             }
         }
@@ -169,6 +243,35 @@ fn resolve_or_create_doc(bridge: &Bridge, args: &Value) -> Result<String, String
         return Ok(id.to_string());
     }
     Err("Failed to automatically create an active CAD document.".into())
+}
+
+fn resolve_entity_id(bridge: &Bridge, doc_id: &str, id_or_name: &str) -> String {
+    let is_uuid = id_or_name.len() == 36
+        && id_or_name
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() || c == '-');
+    if is_uuid {
+        return id_or_name.to_string();
+    }
+    if let Ok(envelope) = bridge.call("get_scene", json!({ "document_id": doc_id })) {
+        let scene = envelope.get("scene").unwrap_or(&envelope);
+        if let Some(entities) = scene.get("entities").and_then(|e| e.as_array()) {
+            for entity in entities {
+                if let (Some(id), Some(name)) = (
+                    entity.get("id").and_then(|v| v.as_str()),
+                    entity.get("name").and_then(|v| v.as_str()),
+                ) {
+                    if name.eq_ignore_ascii_case(id_or_name)
+                        || name.replace(' ', "_").eq_ignore_ascii_case(id_or_name)
+                        || name.replace('-', "_").eq_ignore_ascii_case(id_or_name)
+                    {
+                        return id.to_string();
+                    }
+                }
+            }
+        }
+    }
+    id_or_name.to_string()
 }
 
 // ============================================================================
@@ -572,8 +675,10 @@ fn execute_tool(
         "boolean" | "csg" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
             let op = args.get("operation").and_then(|v| v.as_str()).ok_or("missing 'operation' (union, difference, intersection)")?;
-            let first_id = args.get("first_id").and_then(|v| v.as_str()).ok_or("missing 'first_id'")?;
-            let second_id = args.get("second_id").and_then(|v| v.as_str()).ok_or("missing 'second_id'")?;
+            let raw_first = args.get("first_id").and_then(|v| v.as_str()).ok_or("missing 'first_id'")?;
+            let raw_second = args.get("second_id").and_then(|v| v.as_str()).ok_or("missing 'second_id'")?;
+            let first_id = resolve_entity_id(bridge, &doc_id, raw_first);
+            let second_id = resolve_entity_id(bridge, &doc_id, raw_second);
 
             let res = bridge.call(
                 "csg_apply",
@@ -596,7 +701,8 @@ fn execute_tool(
         // --- Entity Transforms & Modifications ---
         "transform" | "set_transform" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let entity_id = args.get("entity_id").and_then(|v| v.as_str()).ok_or("missing 'entity_id'")?;
+            let raw_id = args.get("entity_id").and_then(|v| v.as_str()).ok_or("missing 'entity_id'")?;
+            let entity_id = resolve_entity_id(bridge, &doc_id, raw_id);
 
             let pos = parse_vec3(args.get("position"), [0.0, 0.0, 0.0]);
             let rot = parse_rotation_degrees_to_quat(args.get("rotation"));
@@ -623,7 +729,8 @@ fn execute_tool(
 
         "set_color" | "color" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let entity_id = args.get("entity_id").and_then(|v| v.as_str()).ok_or("missing 'entity_id'")?;
+            let raw_id = args.get("entity_id").and_then(|v| v.as_str()).ok_or("missing 'entity_id'")?;
+            let entity_id = resolve_entity_id(bridge, &doc_id, raw_id);
             let color = parse_color(args.get("color")).ok_or("invalid or missing 'color'")?;
 
             bridge.call(
@@ -640,11 +747,20 @@ fn execute_tool(
 
         "delete" | "delete_entities" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let ids = args
+            let ids: Vec<Value> = args
                 .get("entity_ids")
                 .and_then(|v| v.as_array())
                 .cloned()
-                .ok_or("missing array 'entity_ids'")?;
+                .ok_or("missing array 'entity_ids'")?
+                .into_iter()
+                .map(|val| {
+                    if let Some(s) = val.as_str() {
+                        json!(resolve_entity_id(bridge, &doc_id, s))
+                    } else {
+                        val
+                    }
+                })
+                .collect();
             bridge.call("delete_entities", json!({ "document_id": doc_id, "entity_ids": ids }))?;
             Ok(json!({ "status": "success", "deleted": ids }))
         }
@@ -663,7 +779,8 @@ fn execute_tool(
         // --- Scene Inspection & Cleanup ---
         "inspect_scene" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let scene = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let envelope = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let scene = envelope.get("scene").unwrap_or(&envelope);
             let name = scene.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled");
             let units = scene.get("units").and_then(|v| v.as_str()).unwrap_or("cm");
 
@@ -703,7 +820,8 @@ fn execute_tool(
 
         "clear_scene" => {
             let doc_id = resolve_or_create_doc(bridge, args)?;
-            let scene = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let envelope = bridge.call("get_scene", json!({ "document_id": doc_id }))?;
+            let scene = envelope.get("scene").unwrap_or(&envelope);
             let mut ids = Vec::new();
             if let Some(entities) = scene.get("entities").and_then(|e| e.as_array()) {
                 for e in entities {

@@ -4,7 +4,7 @@ members = ["src-tauri", "crates/arc-mcp"]
 exclude = ["frontend", "crates/truck"]
 
 [workspace.package]
-version = "0.24.3"
+version = "0.25.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remgr12/arc"
@@ -40,7 +40,7 @@ unused_mut = "warn"
 [profile.release]
 lto = true
 codegen-units = 1
-panic = "abort"
+panic = "unwind"
 strip = true
 
 [profile.dev]

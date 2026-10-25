@@ -867,7 +867,14 @@ export const mirrorTool: ToolHandler = defineTool({
     if (!raw) return true;
     const point = ctx.snap(raw).point;
     if (mirrorSelection(ctx).length === 0) {
-      ctx.setStatus("Select curves first, then mirror");
+      const picked = ctx.pickEntity(event);
+      const entity = ctx.entityById(picked ?? "");
+      if (picked && entity && isSketchEntity(entity)) {
+        void ctx.setSelection([picked], picked);
+        ctx.setStatus("Curve selected · click the first point on the mirror axis");
+        return true;
+      }
+      ctx.setStatus("Select curves first (or click a curve), then define mirror axis");
       return true;
     }
     if (!mirrorAxis) {

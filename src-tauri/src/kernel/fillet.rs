@@ -18,10 +18,16 @@ const EDGE_TOL: f64 = 1e-3;
 /// Rolling-ball surface approximation tolerance.
 const FILLET_TOL: f64 = 1e-3;
 
+fn close_tol(a: [f64; 3], b: [f64; 3], tol: f64) -> bool {
+    (a[0] - b[0]).abs() <= tol
+        && (a[1] - b[1]).abs() <= tol
+        && (a[2] - b[2]).abs() <= tol
+}
+
+#[allow(dead_code)]
+#[inline]
 fn close(a: [f64; 3], b: [f64; 3]) -> bool {
-    (a[0] - b[0]).abs() <= EDGE_TOL
-        && (a[1] - b[1]).abs() <= EDGE_TOL
-        && (a[2] - b[2]).abs() <= EDGE_TOL
+    close_tol(a, b, EDGE_TOL)
 }
 
 fn pt(point: cgmath::Point3<f64>) -> [f64; 3] {
@@ -42,7 +48,12 @@ struct EdgeUse {
 /// Finds the face other than the two filleted faces that lies at one picked
 /// edge end (the end-cap face trimming its edge is the one stamped by
 /// `fillet_with_side`).
-fn side_face_at(solid: &Solid, skip: (&EdgeUse, &EdgeUse), end: [f64; 3]) -> Option<EdgeUse> {
+fn side_face_at(
+    solid: &Solid,
+    skip: (&EdgeUse, &EdgeUse),
+    end: [f64; 3],
+    tol: f64,
+) -> Option<EdgeUse> {
     for (shell, shell_ref) in solid.boundaries().iter().enumerate() {
         for (face, face_ref) in shell_ref.iter().enumerate() {
             if (shell == skip.0.shell && face == skip.0.face)
@@ -51,7 +62,9 @@ fn side_face_at(solid: &Solid, skip: (&EdgeUse, &EdgeUse), end: [f64; 3]) -> Opt
                 continue;
             }
             for cand in face_ref.edge_iter() {
-                if close(pt(cand.front().point()), end) || close(pt(cand.back().point()), end) {
+                if close_tol(pt(cand.front().point()), end, tol)
+                    || close_tol(pt(cand.back().point()), end, tol)
+                {
                     return Some(EdgeUse {
                         shell,
                         face,
@@ -78,32 +91,42 @@ pub fn solid_fillet(solid: &Solid, edge: [[f64; 3]; 2], radius: f64) -> Result<S
 
     // Endpoint matching alone does not uniquely identify an edge (all four
     // edges of a box corner share endpoints), so both picks are required.
-    let mut uses: HashMap<EdgeID, Vec<EdgeUse>> = HashMap::new();
-    for (shell, shell_ref) in solid.boundaries().iter().enumerate() {
-        for (face, face_ref) in shell_ref.iter().enumerate() {
-            for cand in face_ref.edge_iter() {
-                let (p0, p1) = (pt(cand.front().point()), pt(cand.back().point()));
-                if !(close(p0, picked_a) && close(p1, picked_b))
-                    && !(close(p0, picked_b) && close(p1, picked_a))
-                {
-                    continue;
+    // Use multi-tiered tolerances to robustly tolerate mesh tessellation & transform rounding.
+    let mut matched: Vec<(EdgeID, Vec<EdgeUse>)> = Vec::new();
+    let mut used_tol = EDGE_TOL;
+    for &tol in &[1e-3, 5e-3, 0.01, 0.05] {
+        let mut uses: HashMap<EdgeID, Vec<EdgeUse>> = HashMap::new();
+        for (shell, shell_ref) in solid.boundaries().iter().enumerate() {
+            for (face, face_ref) in shell_ref.iter().enumerate() {
+                for cand in face_ref.edge_iter() {
+                    let (p0, p1) = (pt(cand.front().point()), pt(cand.back().point()));
+                    if !(close_tol(p0, picked_a, tol) && close_tol(p1, picked_b, tol))
+                        && !(close_tol(p0, picked_b, tol) && close_tol(p1, picked_a, tol))
+                    {
+                        continue;
+                    }
+                    uses.entry(cand.id()).or_default().push(EdgeUse {
+                        shell,
+                        face,
+                        face_ref: face_ref.clone(),
+                        front: p0,
+                        back: p1,
+                    });
                 }
-                uses.entry(cand.id()).or_default().push(EdgeUse {
-                    shell,
-                    face,
-                    face_ref: face_ref.clone(),
-                    front: p0,
-                    back: p1,
-                });
             }
+        }
+
+        let candidates = uses
+            .into_iter()
+            .filter(|(_, face_uses)| face_uses.len() == 2)
+            .collect::<Vec<_>>();
+        if !candidates.is_empty() {
+            matched = candidates;
+            used_tol = tol;
+            break;
         }
     }
 
-    // Filleting requires a topological edge shared by exactly two faces.
-    let mut matched = uses
-        .into_iter()
-        .filter(|(_, face_uses)| face_uses.len() == 2)
-        .collect::<Vec<_>>();
     if matched.is_empty() {
         return Err("fillet failed: picked edge is not shared by two faces".into());
     }
@@ -117,8 +140,8 @@ pub fn solid_fillet(solid: &Solid, edge: [[f64; 3]; 2], radius: f64) -> Result<S
     // The end-cap faces trimming the fillet's end arcs: side0 corresponds to
     // the front end of the picked edge as found in face0's arc, side1 to its
     // back end.
-    let side0 = side_face_at(solid, (&use0, &use1), use0.front);
-    let side1 = side_face_at(solid, (&use0, &use1), use0.back);
+    let side0 = side_face_at(solid, (&use0, &use1), use0.front, used_tol);
+    let side1 = side_face_at(solid, (&use0, &use1), use0.back, used_tol);
 
     let pieces = truck_shapeops::fillet::fillet_with_side::<Curve, Surface, f64>(
         &use0.face_ref,
@@ -167,12 +190,12 @@ pub fn solid_fillet(solid: &Solid, edge: [[f64; 3]; 2], radius: f64) -> Result<S
 mod tests {
     use super::*;
     use crate::kernel::shapes;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     fn box_solid() -> Solid {
         shapes::box_solid(60.0, 40.0, 20.0).expect("box")
     }
 
+    #[allow(dead_code)]
     fn find_picked(solid: &Solid, edge: [[f64; 3]; 2]) -> (EdgeID, EdgeUse, EdgeUse) {
         let (picked_a, picked_b) = (edge[0], edge[1]);
         let mut uses: HashMap<EdgeID, Vec<EdgeUse>> = HashMap::new();

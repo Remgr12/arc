@@ -80,6 +80,7 @@ fn main() {
                 .ok()
                 .and_then(|p| p.parent().map(|d| d.join("plugins")))
                 .unwrap_or(data_dir.join("plugins"));
+            #[allow(unused_mut)]
             let mut dirs = vec![exe_plugins, data_dir.join("plugins")];
             #[cfg(debug_assertions)]
             if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {

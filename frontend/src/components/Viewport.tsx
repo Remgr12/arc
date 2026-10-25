@@ -3417,38 +3417,17 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       const docId = activeDoc();
       if (!docId) return Promise.resolve(null);
       ref.lastCommitAt = performance.now();
+      const rot = rotation ?? [0, 0, 0, 1];
+      const transform: Transform = {
+        position,
+        rotation: rot,
+        scale: [1, 1, 1],
+      };
       return ipc
-        .createEntity(docId, geometry, name)
+        .createEntity(docId, geometry, name, transform)
         .then(({ id }) => {
-          const rot = rotation ?? [0, 0, 0, 1];
-          const needsPlace =
-            position[0] !== 0 ||
-            position[1] !== 0 ||
-            position[2] !== 0 ||
-            rot[0] !== 0 ||
-            rot[1] !== 0 ||
-            rot[2] !== 0 ||
-            rot[3] !== 1;
-          const placed = needsPlace
-            ? ipc
-                .setTransform(
-                  docId,
-                  [
-                    {
-                      id,
-                      transform: {
-                        position,
-                        rotation: rot,
-                        scale: [1, 1, 1],
-                      },
-                    },
-                  ],
-                  true,
-                )
-                .catch(() => undefined)
-            : Promise.resolve();
-          return placed
-            .then(() => ipc.setSelection(docId, [id], id))
+          return ipc
+            .setSelection(docId, [id], id)
             .then(() => id)
             .catch(() => id);
         })
@@ -3456,13 +3435,13 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     },
     updateGeometry(id, geometry) {
       const docId = activeDoc();
-      if (!docId) return Promise.resolve();
-      return ipc.updateGeometry(docId, id, geometry).catch(() => undefined);
+      if (!docId) return Promise.reject(new Error("no active document"));
+      return ipc.updateGeometry(docId, id, geometry);
     },
     deleteEntities(ids) {
       const docId = activeDoc();
       if (!docId || ids.length === 0) return Promise.resolve();
-      return ipc.deleteEntities(docId, ids).catch(() => undefined);
+      return ipc.deleteEntities(docId, ids);
     },
     setVisible(ids, visible) {
       const docId = activeDoc();

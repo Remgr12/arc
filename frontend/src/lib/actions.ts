@@ -488,12 +488,17 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
       ],
       false,
     );
-    const res = await ipc.csgApply(docId, "difference", entity.id, cutter.id);
-    const overview = await ipc.getState();
-    store.setOverview(overview);
-    store.setScene(await ipc.getScene(docId));
-    await ipc.setSelection(docId, [res.id], res.id);
-    store.setStatusMessage(`Shelled solid (wall thickness ${t} cm)`);
+    try {
+      const res = await ipc.csgApply(docId, "difference", entity.id, cutter.id);
+      const overview = await ipc.getState();
+      store.setOverview(overview);
+      store.setScene(await ipc.getScene(docId));
+      await ipc.setSelection(docId, [res.id], res.id);
+      store.setStatusMessage(`Shelled solid (wall thickness ${t} cm)`);
+    } catch (err) {
+      await ipc.deleteEntities(docId, [cutter.id]);
+      store.setStatusMessage(`Shell failed: ${String(err)}`);
+    }
   }),
 
   /** Bevel the currently selected 3D edge at 45° by `distance` using a CSG cutter. */
@@ -576,12 +581,17 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
       ],
       false,
     );
-    const res = await ipc.csgApply(docId, "difference", entity.id, cutter.id);
-    const overview = await ipc.getState();
-    store.setOverview(overview);
-    store.setScene(await ipc.getScene(docId));
-    await ipc.setSelection(docId, [res.id], res.id);
-    store.setStatusMessage(`Chamfered edge (${d} cm × 45°)`);
+    try {
+      const res = await ipc.csgApply(docId, "difference", entity.id, cutter.id);
+      const overview = await ipc.getState();
+      store.setOverview(overview);
+      store.setScene(await ipc.getScene(docId));
+      await ipc.setSelection(docId, [res.id], res.id);
+      store.setStatusMessage(`Chamfered edge (${d} cm × 45°)`);
+    } catch (err) {
+      await ipc.deleteEntities(docId, [cutter.id]);
+      store.setStatusMessage(`Chamfer failed: ${String(err)}`);
+    }
   }),
 
   /** Create a linear array of `count` copies spaced by `spacing` along `axis` ("x" | "y" | "z"). */

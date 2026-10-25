@@ -172,15 +172,20 @@ pub fn export_document(doc: &crate::core::Document) -> Result<String, String> {
     match solids.len() {
         0 => Err("nothing to export".into()),
         1 => export_solid(&solids[0], &doc.name),
-        n => {
-            let mut fused = solids[0].clone();
-            const TOL: f64 = 0.001;
-            for s in &solids[1..] {
-                fused = truck_shapeops::or(&fused, s, TOL).ok_or_else(|| {
-                    format!("STEP export failed fusing {n} shapes (tangential intersection?)")
-                })?;
-            }
-            export_solid(&fused, &doc.name)
+        _ => {
+            let compressed_solids: Vec<_> = solids.iter().map(|s| s.compress()).collect();
+            let shells: Vec<_> = compressed_solids.iter().flat_map(|s| &s.boundaries).collect();
+            let model: out::StepModel<_, _, _> = shells.into_iter().collect();
+            let repr = StepDesign::from_model(model);
+            let step_string = out::StepDisplay::new(
+                out::StepHeaderDescriptor {
+                    organization_system: doc.name.clone(),
+                    ..Default::default()
+                },
+                repr,
+            )
+            .to_string();
+            Ok(step_string)
         }
     }
 }

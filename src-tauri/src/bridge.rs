@@ -210,12 +210,16 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
         "get_entities" => to_json(commands::get_entities(st(app), d("document_id")?)),
         "create_entity" => {
             let doc_id = d("document_id")?;
+            let transform = params
+                .get("transform")
+                .and_then(|t| serde_json::from_value(t.clone()).ok());
             let res = commands::create_entity(
                 app.clone(),
                 st(app),
                 doc_id.clone(),
                 val("geometry")?,
                 opt("name"),
+                transform,
             )?;
             let entity_id = res.id.clone();
             if let Some(pos_val) = params.get("position") {
@@ -258,12 +262,16 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             for ent in entities {
                 let geom = ent.get("geometry").cloned().ok_or("entity missing 'geometry'")?;
                 let name = ent.get("name").and_then(|v| v.as_str()).map(String::from);
+                let transform = ent
+                    .get("transform")
+                    .and_then(|t| serde_json::from_value(t.clone()).ok());
                 let res = commands::create_entity(
                     app.clone(),
                     st(app),
                     doc_id.clone(),
                     geom,
                     name,
+                    transform,
                 )?;
                 if let Some(pos_val) = ent.get("position") {
                     if let Ok(pos) = serde_json::from_value::<[f64; 3]>(pos_val.clone()) {

@@ -193,25 +193,27 @@ let ext: ExtrudeDraft | null = null;
 const CUT_COLOR = new THREE.Color(0xef4444);
 
 function findCutTarget(d: ExtrudeDraft, h: number): string | null {
-  // Auto-subtract when extruding inward (h < 0) or when Shift (forceCut) is held.
-  if (h >= 0 && !d.forceCut) return null;
   const probe = d.centroid.clone().addScaledVector(d.normal, h * 0.5);
   const endPt = d.centroid.clone().addScaledVector(d.normal, h);
   let bestId: string | null = null;
   let bestDist = Infinity;
 
   for (const candidate of d.candidateTargets) {
-    if (
-      candidate.box.containsPoint(probe) ||
-      candidate.box.containsPoint(endPt) ||
-      candidate.box.containsPoint(d.centroid)
-    ) {
-      const center = candidate.box.getCenter(new THREE.Vector3());
-      const dist = center.distanceTo(probe);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestId = candidate.id;
-      }
+    const isInsideHost = candidate.box.containsPoint(d.centroid);
+    const penetratesHost = candidate.box.containsPoint(probe) || candidate.box.containsPoint(endPt);
+
+    // Auto-cut when:
+    // 1) Explicitly forced with Shift (forceCut)
+    // 2) Extruding inward from a boundary face (h < 0 and probe penetrates host)
+    // 3) Sketch was created inside a host solid (isInsideHost and penetratesHost)
+    const canCut = d.forceCut || (h < 0 && penetratesHost) || (isInsideHost && penetratesHost);
+    if (!canCut) continue;
+
+    const center = candidate.box.getCenter(new THREE.Vector3());
+    const dist = center.distanceTo(probe);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestId = candidate.id;
     }
   }
   return bestId;
@@ -359,9 +361,11 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
   });
 
   // Add overshoot on boundary faces when boolean-cutting to prevent coplanar face degeneration in truck_shapeops
-  const overshoot = isCutting ? 0.4 : 0;
+  const overshoot = isCutting ? 0.8 : 0;
   const finalH = absH + overshoot;
-  const offsetAlongNormal = rawH >= 0 ? absH / 2 : -(absH / 2);
+  const offsetAlongNormal = isCutting
+    ? (rawH >= 0 ? (absH - overshoot) / 2 : -(absH - overshoot) / 2)
+    : (rawH >= 0 ? absH / 2 : -absH / 2);
   const center = d.centroid.clone().addScaledVector(d.normal, offsetAlongNormal);
   const pos: [number, number, number] = [center.x, center.y, center.z];
   const rot: [number, number, number, number] = [d.quat.x, d.quat.y, d.quat.z, d.quat.w];
@@ -401,7 +405,9 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
         ctx.setStatus(`Extrude-Cut ${formatNum(absH)} ${ctx.settings.unitLabel}`);
         return;
       } catch (err) {
-        ctx.setStatus(`Extrude-cut failed (${String(err)}) · kept extruded body`);
+        await ctx.deleteEntities([createdId]);
+        ctx.setStatus(`Extrude-cut failed (${String(err)})`);
+        return;
       }
     }
     ctx.setStatus(`Extruded H ${formatNum(absH)} ${ctx.settings.unitLabel} · pick another closed profile`);
@@ -629,20 +635,12 @@ function commitRevolve(ctx: ToolContext): void {
     Math.abs(quat.y) < 1e-6 &&
     Math.abs(quat.z) < 1e-6 &&
     Math.abs(quat.w - 1) < 1e-6;
-  void ctx
-    .createEntity(
-      { type: "revolve", profile, steps: 64, angle_deg: d.angle },
-      position,
-    )
-    .then((id) => {
-      if (id && !isIdentityQuat) {
-        void ctx.setTransform(
-          id,
-          { position, rotation, scale: [1, 1, 1] },
-          false,
-        );
-      }
-    });
+  void ctx.createEntity(
+    { type: "revolve", profile, steps: 64, angle_deg: d.angle },
+    position,
+    undefined,
+    isIdentityQuat ? undefined : rotation,
+  );
   rev = null;
   clearDraft(ctx);
   ctx.showMeasure(null);
@@ -674,7 +672,11 @@ export const revolveTool: ToolHandler = {
         ctx.setStatus("Profile must be open · revolve needs an open chain");
         return true;
       }
-      const plane = planeThroughPoints(picked.chain.points);
+      const plane =
+        planeThroughPoints(picked.chain.points) ??
+        (picked.chain.points.length === 2
+          ? planeThroughSegment(picked.chain.points[0], picked.chain.points[1])
+          : null);
       if (!plane) {
         ctx.setStatus("Degenerate profile");
         return true;
