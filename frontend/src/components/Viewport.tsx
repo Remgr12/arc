@@ -1259,6 +1259,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     const isConstruction = entity.name?.startsWith("[C] ");
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData, 3));
+    geometry.computeBoundingBox();
     if (isConstruction) {
       const dashMat = new THREE.LineDashedMaterial({
         color: 0xf59e0b,
@@ -1304,6 +1305,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
       geometry.computeVertexNormals();
     }
     geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
     obj = new THREE.Mesh(geometry, ref.columnMaterial.clone());
     obj.castShadow = true;
     obj.receiveShadow = true;
@@ -1329,6 +1331,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   // Entry animation metadata; present() and the render loop animate from here.
   obj.userData.spawnAt = performance.now();
   obj.userData.realScale = [...entity.transform.scale] as [number, number, number];
+  obj.userData.realPosition = [...entity.transform.position] as [number, number, number];
   ref.spawningObjects.add(obj);
   return obj;
 }
@@ -1416,11 +1419,12 @@ function present(
   // write-back on drag end brings the store back in sync.
   const gizmoHeld = ref.gizmoDragging && ref.tc.object === obj;
   if (!gizmoHeld) {
-    obj.position.set(...entity.transform.position);
-    obj.quaternion.set(...entity.transform.rotation);
+    obj.userData.realPosition = [...entity.transform.position] as [number, number, number];
     obj.userData.realScale = [...entity.transform.scale] as [number, number, number];
+    obj.quaternion.set(...entity.transform.rotation);
     const spawnAt = obj.userData.spawnAt as number | undefined;
     if (spawnAt === undefined) {
+      obj.position.set(...entity.transform.position);
       obj.scale.set(...entity.transform.scale);
     } else {
       applySpawnScale(obj, performance.now());
@@ -1477,17 +1481,87 @@ function present(
   }
 }
 
-/** Ease the object from zero scale to its real scale during the spawn window. Returns true when done. */
+/**
+ * Rises newly-spawned constructs up along their normal into their resting position,
+ * growing upward from their base footprint instead of popping out radially from the center.
+ * Returns true when the animation is complete.
+ */
 function applySpawnScale(obj: THREE.Object3D, now: number): boolean {
-  const spawnAt = obj.userData.spawnAt as number;
-  const realScale = obj.userData.realScale as [number, number, number];
-  const t = Math.min(1, (now - spawnAt) / SPAWN_DURATION);
-  const k = t * t * (3 - 2 * t); // smoothstep
-  obj.scale.set(realScale[0] * k, realScale[1] * k, realScale[2] * k);
+  const spawnAt = obj.userData.spawnAt as number | undefined;
+  if (spawnAt === undefined) return true;
+  const realScale = (obj.userData.realScale || [1, 1, 1]) as [number, number, number];
+  const realPos = (obj.userData.realPosition || [
+    obj.position.x,
+    obj.position.y,
+    obj.position.z,
+  ]) as [number, number, number];
+
+  const t = Math.min(1, Math.max(0, (now - spawnAt) / SPAWN_DURATION));
+
   if (t >= 1) {
+    obj.position.set(realPos[0], realPos[1], realPos[2]);
+    obj.scale.set(realScale[0], realScale[1], realScale[2]);
     delete obj.userData.spawnAt;
+    delete obj.userData.realPosition;
+    delete obj.userData.realScale;
     return true;
   }
+
+  // Smooth ease-out with a subtle, tactile settling into place (c1 = 0.3)
+  const c1 = 0.3;
+  const c3 = c1 + 1;
+  const k = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+
+  // Vertical rise progression (starts near 0, reaches 1 at t = 1)
+  const ky = Math.max(0.01, k);
+  // Horizontal footprint maintains cross-section (starts at 0.88, smoothly fills to 1.0)
+  const kxz = 0.88 + 0.12 * (1 - Math.pow(1 - t, 2));
+
+  // Determine height and local bottom from bounding box
+  const geom = (obj as THREE.Mesh | THREE.Line).geometry;
+  if (geom && !geom.boundingBox) {
+    geom.computeBoundingBox();
+  }
+  const box = geom?.boundingBox;
+
+  if (box) {
+    const rawMinY = box.min.y;
+    const rawMaxY = box.max.y;
+    const height = Math.abs(rawMaxY - rawMinY) * realScale[1];
+    const minY = rawMinY * realScale[1];
+
+    // Local UP axis rotated by the entity's orientation (so it rises cleanly out of any face or ground)
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(obj.quaternion);
+
+    if (height > 0.5) {
+      // 3D construct: anchor the bottom and rise upward into full height
+      const riseDist = Math.min(8, Math.max(2, height * 0.22));
+      const riseOffset = -riseDist * Math.pow(1 - t, 2);
+      const shift = minY * (1 - ky) + riseOffset;
+      obj.position.set(
+        realPos[0] + up.x * shift,
+        realPos[1] + up.y * shift,
+        realPos[2] + up.z * shift,
+      );
+      obj.scale.set(realScale[0] * kxz, realScale[1] * ky, realScale[2] * kxz);
+    } else {
+      // Thin / 2D construct: rise up into the plane
+      const riseOffset = -4 * Math.pow(1 - t, 2);
+      obj.position.set(
+        realPos[0] + up.x * riseOffset,
+        realPos[1] + up.y * riseOffset,
+        realPos[2] + up.z * riseOffset,
+      );
+      const kPlanar = Math.max(0.05, k);
+      obj.scale.set(realScale[0] * kPlanar, realScale[1] * kPlanar, realScale[2] * kPlanar);
+    }
+  } else {
+    // Fallback: general vertical rise
+    const riseOffset = -6 * Math.pow(1 - t, 2);
+    obj.position.set(realPos[0], realPos[1] + riseOffset, realPos[2]);
+    obj.scale.set(realScale[0] * kxz, realScale[1] * ky, realScale[2] * kxz);
+  }
+
   return false;
 }
 
@@ -1495,7 +1569,7 @@ const BLACK = new THREE.Color(0x000000);
 const SHAPR_CYAN = new THREE.Color(0x28b5f5);
 const SKETCH_FILL_GRAY = new THREE.Color(0xc8ccd4);
 const SKETCH_LINE_COLOR = new THREE.Color(0x1f2329);
-const SPAWN_DURATION = 220;
+const SPAWN_DURATION = 240;
 
 function layerVisible(layer: LayerData | undefined): boolean {
   return !(layer && !layer.visible);
