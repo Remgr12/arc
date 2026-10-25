@@ -129,6 +129,7 @@ fn main() {
             commands::get_state,
             commands::get_plugins,
             commands::list_projects,
+            commands::delete_project,
             commands::get_settings,
             commands::set_settings,
             commands::new_document,

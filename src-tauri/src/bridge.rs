@@ -197,6 +197,11 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             d("id")?,
         )),
         "close_document" => to_json(commands::close_document(app.clone(), st(app), d("id")?)),
+        "delete_project" => to_json(commands::delete_project(
+            app.clone(),
+            st(app),
+            d("path")?,
+        )),
         "get_scene" => to_json(commands::get_scene(st(app), d("document_id")?)),
         "create_entity" => to_json(commands::create_entity(
             app.clone(),

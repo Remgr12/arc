@@ -155,22 +155,16 @@ impl Document {
 
     /// Add an entity (also generates mesh). Returns (id, error).
     pub fn add_entity(&mut self, mut entity: Entity) -> (EntityId, Result<(), String>) {
-        let err = entity.kind.validate().and_then(|_| {
-            // generate immediately to surface mesh errors
-            meshgen::generate(&entity.kind).map(|_| ())
-        });
+        let buffer = match entity.kind.validate().and_then(|_| meshgen::generate(&entity.kind)) {
+            Ok(buf) => Arc::new(buf),
+            Err(e) => return (entity.id, Err(e)),
+        };
         let id = entity.id;
-        if let Err(e) = &err {
-            return (id, Err(e.clone()));
-        }
         if entity.name.is_empty() {
             entity.name = self.allocate_name(&entity.kind);
         }
-        let buffer = meshgen::generate(&entity.kind).ok().map(Arc::new);
         self.entities.insert(id, entity);
-        if let Some(buffer) = buffer {
-            self.mesh_cache.insert(id, buffer);
-        }
+        self.mesh_cache.insert(id, buffer);
         self.touch();
         (id, Ok(()))
     }
@@ -201,10 +195,10 @@ impl Document {
     /// Update geometry payload; mesh regenerates.
     pub fn set_kind(&mut self, id: &EntityId, kind: Geometry) -> Result<(), String> {
         kind.validate()?;
-        meshgen::generate(&kind)?; // surface mesh errors early
+        let buf = meshgen::generate(&kind)?; // surface mesh errors early
         if let Some(e) = self.entities.get_mut(id) {
             e.kind = kind;
-            self.mesh_cache.remove(id);
+            self.mesh_cache.insert(*id, Arc::new(buf));
             self.touch();
         }
         Ok(())

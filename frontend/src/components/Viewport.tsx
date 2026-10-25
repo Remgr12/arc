@@ -103,6 +103,7 @@ interface ViewportRefs {
   lastGridSize: number;
   lastLowSpecMode: boolean;
   lastCursorAt: number;
+  spawningObjects: Set<THREE.Object3D>;
   disposed: boolean;
   gizmo: ViewCube;
   viewAnim: ViewAnim | null;
@@ -445,6 +446,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     lastGridSize: initialGridSize,
     lastLowSpecMode: false,
     lastCursorAt: 0,
+    spawningObjects: new Set(),
     disposed: false,
     gizmo: null as unknown as ViewCube,
     viewAnim: null,
@@ -480,6 +482,14 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     const dragging = Boolean((event as unknown as { value: boolean }).value);
     ref.gizmoDragging = dragging;
     ref.controls.enabled = !dragging;
+    if (dragging) {
+      const settings = useArcStore.getState().settings;
+      const snapEnabled = settings?.snap_enabled ?? true;
+      const gridSize = settings?.grid_size ?? 1;
+      ref.tc.setTranslationSnap(snapEnabled ? gridSize : null);
+      ref.tc.setRotationSnap(snapEnabled ? THREE.MathUtils.degToRad(15) : null);
+      ref.tc.setScaleSnap(snapEnabled ? 0.1 : null);
+    }
     ref.needsRender = true;
     ref.renderer.shadowMap.needsUpdate = true;
     if (!dragging) writeBackGizmo(ref);
@@ -537,9 +547,11 @@ function startLoop(ref: ViewportRefs): () => void {
     }
 
     // Animate any newly-spawned entities.
-    for (const obj of ref.objects.values()) {
-      if (obj.userData.spawnAt !== undefined) {
-        applySpawnScale(obj, now);
+    if (ref.spawningObjects.size > 0) {
+      for (const obj of ref.spawningObjects) {
+        if (applySpawnScale(obj, now)) {
+          ref.spawningObjects.delete(obj);
+        }
         ref.needsRender = true;
       }
     }
@@ -940,6 +952,13 @@ function switchTool(ref: ViewportRefs, tool: ToolId): void {
 
 function updateGizmoAttachment(ref: ViewportRefs): void {
   const state = useArcStore.getState();
+  const settings = state.settings;
+  const snapEnabled = settings?.snap_enabled ?? true;
+  const gridSize = settings?.grid_size ?? 1;
+  ref.tc.setTranslationSnap(snapEnabled ? gridSize : null);
+  ref.tc.setRotationSnap(snapEnabled ? THREE.MathUtils.degToRad(15) : null);
+  ref.tc.setScaleSnap(snapEnabled ? 0.1 : null);
+
   const gizmoMode: GizmoMode | null =
     state.tool === "move"
       ? "translate"
@@ -1002,6 +1021,7 @@ function rebuildEntities(ref: ViewportRefs, scene: SceneData): void {
     if (!byId.has(id)) {
       if (ref.tc.object === obj) ref.tc.detach();
       ref.entityRoot.remove(obj);
+      ref.spawningObjects.delete(obj);
       disposeObject(obj);
       ref.objects.delete(id);
     }
@@ -1145,7 +1165,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   if (lineData && !tris) {
     const isConstruction = entity.name?.startsWith("[C] ");
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData.slice(), 3));
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(lineData, 3));
     if (isConstruction) {
       const dashMat = new THREE.LineDashedMaterial({
         color: 0xf59e0b,
@@ -1181,11 +1201,11 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   } else {
     if (!tris) return null;
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(tris.slice(), 3));
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(tris, 3));
     if (entity.triNormals && entity.triNormals.length > 0) {
       geometry.setAttribute(
         "normal",
-        new THREE.Float32BufferAttribute(entity.triNormals.slice(), 3),
+        new THREE.Float32BufferAttribute(entity.triNormals, 3),
       );
     } else {
       geometry.computeVertexNormals();
@@ -1199,7 +1219,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
     const edgeGeo = lineData
       ? new THREE.BufferGeometry().setAttribute(
           "position",
-          new THREE.Float32BufferAttribute(lineData.slice(), 3),
+          new THREE.Float32BufferAttribute(lineData, 3),
         )
       : new THREE.EdgesGeometry(geometry, 24);
     const edgeMat = new THREE.LineBasicMaterial({
@@ -1216,6 +1236,7 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
   // Entry animation metadata; present() and the render loop animate from here.
   obj.userData.spawnAt = performance.now();
   obj.userData.realScale = [...entity.transform.scale] as [number, number, number];
+  ref.spawningObjects.add(obj);
   return obj;
 }
 
@@ -1363,14 +1384,18 @@ function present(
   }
 }
 
-/** Ease the object from zero scale to its real scale during the spawn window. */
-function applySpawnScale(obj: THREE.Object3D, now: number): void {
+/** Ease the object from zero scale to its real scale during the spawn window. Returns true when done. */
+function applySpawnScale(obj: THREE.Object3D, now: number): boolean {
   const spawnAt = obj.userData.spawnAt as number;
   const realScale = obj.userData.realScale as [number, number, number];
   const t = Math.min(1, (now - spawnAt) / SPAWN_DURATION);
   const k = t * t * (3 - 2 * t); // smoothstep
   obj.scale.set(realScale[0] * k, realScale[1] * k, realScale[2] * k);
-  if (t >= 1) delete obj.userData.spawnAt;
+  if (t >= 1) {
+    delete obj.userData.spawnAt;
+    return true;
+  }
+  return false;
 }
 
 const BLACK = new THREE.Color(0x000000);
@@ -1692,12 +1717,10 @@ function pickFaceAt(
   // If a closed sketch profile face (`isProfileFill`) lies in front of or coplanar
   // with the solid face, let `pickEntityAt` select the sketch profile instead!
   let closestSketchFillDist = Infinity;
-  for (const entity of scene.entities) {
-    if (entity.category !== "sketch" || !entity.visible || entity.locked) continue;
-    const obj = ref.objects.get(entity.id);
-    if (!obj || !obj.visible) continue;
+  for (const obj of ref.objects.values()) {
+    if (!obj.visible) continue;
     for (const child of obj.children) {
-      if (child.userData.isProfileFill) {
+      if (child.userData.isProfileFill && child.visible) {
         const fillHits = ref.raycaster.intersectObject(child, false);
         if (fillHits.length > 0 && fillHits[0].distance < closestSketchFillDist) {
           closestSketchFillDist = fillHits[0].distance;
@@ -1794,7 +1817,9 @@ function pickEntityAt(
 }
 
 function snapCoord(value: number, gridSize: number, enabled: boolean): number {
-  return enabled ? Math.round(value / gridSize) * gridSize : value;
+  if (!enabled || gridSize <= 0) return value;
+  const snapped = Math.round(value / gridSize) * gridSize;
+  return Math.abs(snapped) < 1e-10 ? 0 : Number(snapped.toFixed(6));
 }
 
 // --------------------------------------------------------------- marquee
@@ -2073,7 +2098,17 @@ function attachHandlers(ref: ViewportRefs): () => void {
         } else {
           world = pointOnHorizontalPlane(ray, 0);
         }
-        if (world) store.setCursorWorld([world.x, world.y, world.z]);
+        if (world) {
+          const prev = store.cursorWorld;
+          if (
+            !prev ||
+            Math.abs(world.x - prev[0]) > 0.05 ||
+            Math.abs(world.y - prev[1]) > 0.05 ||
+            Math.abs(world.z - prev[2]) > 0.05
+          ) {
+            store.setCursorWorld([world.x, world.y, world.z]);
+          }
+        }
       }
     }
     handlerFor(store.tool)?.onPointerMove?.(event, ctx);
@@ -2465,14 +2500,19 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       const endpointTolerance = Math.max(gridSize * 0.4, 20 * unitsPerPx);
       const tolerance = endpointTolerance * 0.55;
 
-      const showSnapMarker = (pt: THREE.Vector3 | null, kind?: SnapKind) => {
+      const showSnapMarker = (
+        pt: THREE.Vector3 | null,
+        kind?: SnapKind,
+        customColor?: number,
+      ) => {
         if (!pt || !kind || kind === "grid") {
           ref.ctx.clearPreview("snap-marker");
           return;
         }
         const radius = Math.max(0.65, 10 * unitsPerPx);
         const color =
-          kind === "midpoint"
+          customColor ??
+          (kind === "midpoint"
             ? 0x10b981
             : kind === "center" || kind === "origin"
               ? 0xf59e0b
@@ -2486,7 +2526,9 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
                       ? 0x14b8a6
                       : kind === "aligned" || kind === "polar"
                         ? 0xa855f7
-                        : 0x22d3ee; // endpoint / default cyan
+                        : kind === "axis"
+                          ? 0x38bdf8
+                          : 0x22d3ee); // endpoint / default cyan
 
         let markerGeo: THREE.BufferGeometry;
         let isLineSegments = false;
@@ -2531,6 +2573,26 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
             new THREE.Vector3(0, s * 1.1, 0),
           ];
           markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        } else if (kind === "axis") {
+          // Axis marker: diamond with center crosshair
+          const pts = [
+            // Diamond
+            new THREE.Vector3(0, s * 1.2, 0),
+            new THREE.Vector3(s * 1.2, 0, 0),
+            new THREE.Vector3(s * 1.2, 0, 0),
+            new THREE.Vector3(0, -s * 1.2, 0),
+            new THREE.Vector3(0, -s * 1.2, 0),
+            new THREE.Vector3(-s * 1.2, 0, 0),
+            new THREE.Vector3(-s * 1.2, 0, 0),
+            new THREE.Vector3(0, s * 1.2, 0),
+            // Center crosshair
+            new THREE.Vector3(-s * 0.65, 0, 0),
+            new THREE.Vector3(s * 0.65, 0, 0),
+            new THREE.Vector3(0, -s * 0.65, 0),
+            new THREE.Vector3(0, s * 0.65, 0),
+          ];
+          markerGeo = new THREE.BufferGeometry().setFromPoints(pts);
+          isLineSegments = true;
         } else if (kind === "perpendicular") {
           // Right-angle perpendicular symbol
           const pts = [
@@ -2582,21 +2644,25 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           marker.quaternion.copy(basis.quat);
           marker.position.copy(pt).addScaledVector(basis.normal, 0.08);
         } else {
-          marker.rotation.x = -Math.PI / 2;
-          marker.position.set(pt.x, pt.y + 0.06, pt.z);
+          marker.quaternion.copy(ref.camera.quaternion);
+          marker.position.copy(pt);
         }
         marker.renderOrder = 9999;
         ref.ctx.setPreview(marker, "snap-marker");
       };
 
-      const setGuideLine = (p0: THREE.Vector3 | null, p1: THREE.Vector3 | null) => {
+      const setGuideLine = (
+        p0: THREE.Vector3 | null,
+        p1: THREE.Vector3 | null,
+        color: number = 0xa855f7,
+      ) => {
         if (!p0 || !p1) {
           ref.ctx.clearPreview("alignment-guide");
           return;
         }
         const geom = new THREE.BufferGeometry().setFromPoints([p0, p1]);
         const mat = new THREE.LineDashedMaterial({
-          color: 0xa855f7, // purple extension line like Shapr3D
+          color,
           dashSize: 2.5,
           gapSize: 2,
           transparent: true,
@@ -2873,46 +2939,64 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         }
 
         // 6. Shapr3D Inference Alignment Guidelines (horizontal & vertical extension lines)
-        let alignedRefPt: THREE.Vector3 | null = null;
-        let alignedTargetPt: THREE.Vector3 | null = null;
-        const alignTol = tolerance * 1.15;
+        const alignTol = Math.max(tolerance * 1.3, gridSize * 0.35, 14 * unitsPerPx);
 
-        // Check alignment with origin axes (U = 0 or V = 0)
-        if (Math.abs(uCoord) <= alignTol) {
-          uCoord = 0;
-          alignedRefPt = basis.origin.clone();
-          alignedTargetPt = basis.origin.clone().addScaledVector(basis.v, vCoord);
-        } else if (Math.abs(vCoord) <= alignTol) {
-          vCoord = 0;
-          alignedRefPt = basis.origin.clone();
-          alignedTargetPt = basis.origin.clone().addScaledVector(basis.u, uCoord);
-        } else if (snapEnabled) {
-          // Check alignment with any existing guidepoint
-          for (const gp of guidePoints) {
-            if (Math.abs(uCoord - gp.u) <= alignTol) {
-              uCoord = gp.u;
-              alignedRefPt = gp.pt;
-              alignedTargetPt = basis.origin
-                .clone()
-                .addScaledVector(basis.u, uCoord)
-                .addScaledVector(basis.v, vCoord);
-              break;
-            } else if (Math.abs(vCoord - gp.v) <= alignTol) {
-              vCoord = gp.v;
-              alignedRefPt = gp.pt;
-              alignedTargetPt = basis.origin
-                .clone()
-                .addScaledVector(basis.u, uCoord)
-                .addScaledVector(basis.v, vCoord);
-              break;
-            }
-          }
+        // Check alignment with sketch plane origin axes (U = 0 or V = 0)
+        const nearUZero = Math.abs(uCoord) <= alignTol;
+        const nearVZero = Math.abs(vCoord) <= alignTol;
+
+        if (nearUZero && nearVZero) {
+          const originPt = basis.origin.clone();
+          setGuideLine(null, null);
+          showSnapMarker(originPt, "origin");
+          return { point: originPt, kind: "origin" };
         }
 
-        if (alignedRefPt && alignedTargetPt) {
-          setGuideLine(alignedRefPt, alignedTargetPt);
-          showSnapMarker(alignedTargetPt, "aligned");
-          return { point: alignedTargetPt, kind: "aligned" };
+        if (nearUZero) {
+          // Snapped to V axis (U = 0)
+          const snappedV = snapCoord(vCoord, gridSize, snapEnabled);
+          const axisPt = basis.origin.clone().addScaledVector(basis.v, snappedV);
+          const pStart = basis.origin.clone().addScaledVector(basis.v, -1000);
+          const pEnd = basis.origin.clone().addScaledVector(basis.v, 1000);
+          setGuideLine(pStart, pEnd, 0x22c55e); // Green V-axis
+          showSnapMarker(axisPt, "axis", 0x22c55e);
+          return { point: axisPt, kind: "axis" };
+        }
+
+        if (nearVZero) {
+          // Snapped to U axis (V = 0)
+          const snappedU = snapCoord(uCoord, gridSize, snapEnabled);
+          const axisPt = basis.origin.clone().addScaledVector(basis.u, snappedU);
+          const pStart = basis.origin.clone().addScaledVector(basis.u, -1000);
+          const pEnd = basis.origin.clone().addScaledVector(basis.u, 1000);
+          setGuideLine(pStart, pEnd, 0xef4444); // Red U-axis
+          showSnapMarker(axisPt, "axis", 0xef4444);
+          return { point: axisPt, kind: "axis" };
+        }
+
+        // Check alignment with any existing guidepoint
+        if (snapEnabled) {
+          for (const gp of guidePoints) {
+            if (Math.abs(uCoord - gp.u) <= alignTol) {
+              const snappedV = snapCoord(vCoord, gridSize, snapEnabled);
+              const alignedTargetPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, gp.u)
+                .addScaledVector(basis.v, snappedV);
+              setGuideLine(gp.pt, alignedTargetPt, 0xa855f7);
+              showSnapMarker(alignedTargetPt, "aligned", 0xa855f7);
+              return { point: alignedTargetPt, kind: "aligned" };
+            } else if (Math.abs(vCoord - gp.v) <= alignTol) {
+              const snappedU = snapCoord(uCoord, gridSize, snapEnabled);
+              const alignedTargetPt = basis.origin
+                .clone()
+                .addScaledVector(basis.u, snappedU)
+                .addScaledVector(basis.v, gp.v);
+              setGuideLine(gp.pt, alignedTargetPt, 0xa855f7);
+              showSnapMarker(alignedTargetPt, "aligned", 0xa855f7);
+              return { point: alignedTargetPt, kind: "aligned" };
+            }
+          }
         }
         setGuideLine(null, null);
 
@@ -2929,14 +3013,17 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       }
 
       // --- 3D VIEWPORT SNAPPING (when not in 2D sketch mode) ---
-      setGuideLine(null, null);
-      const origin = new THREE.Vector3(0, world.y, 0);
-      if (world.distanceTo(origin) <= tolerance) {
-        showSnapMarker(origin, "origin");
-        return { point: origin.clone(), kind: "origin" };
+      const axisTol = Math.max(tolerance * 1.35, 14 * unitsPerPx, gridSize * 0.35);
+
+      // 1. Check true 3D Origin (0, 0, 0)
+      const trueOrigin = new THREE.Vector3(0, 0, 0);
+      if (world.distanceTo(trueOrigin) <= axisTol * 1.25) {
+        setGuideLine(null, null);
+        showSnapMarker(trueOrigin, "origin");
+        return { point: trueOrigin, kind: "origin" };
       }
 
-      // Check sketch & solid vertices, midpoints, and centers BEFORE axis lines!
+      // 2. Check sketch & solid vertices, midpoints, and centers BEFORE axis lines!
       let best: THREE.Vector3 | null = null;
       let bestKind: SnapKind = "endpoint";
       let bestDist = endpointTolerance;
@@ -2995,21 +3082,63 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         }
       }
       if (best) {
+        setGuideLine(null, null);
         showSnapMarker(best, bestKind);
         return { point: best, kind: bestKind };
       }
 
-      if (Math.abs(world.z) <= tolerance) {
-        const pt = new THREE.Vector3(snapCoord(world.x, gridSize, snapEnabled), world.y, 0);
-        showSnapMarker(pt, "axis");
-        return { point: pt, kind: "axis" };
-      }
-      if (Math.abs(world.x) <= tolerance) {
-        const pt = new THREE.Vector3(0, world.y, snapCoord(world.z, gridSize, snapEnabled));
-        showSnapMarker(pt, "axis");
+      // 3. Primary 3D Axes Snapping (X, Y, Z axes)
+      const distToXAxis = Math.hypot(world.y, world.z);
+      const distToYAxis = Math.hypot(world.x, world.z);
+      const distToZAxis = Math.hypot(world.x, world.y);
+
+      // Determine if cursor is closest to X, Y, or Z axis
+      if (distToYAxis <= axisTol && distToYAxis <= distToXAxis && distToYAxis <= distToZAxis) {
+        // Y-axis (vertical green)
+        const snappedY = snapCoord(world.y, gridSize, snapEnabled);
+        const pt = new THREE.Vector3(0, snappedY, 0);
+        setGuideLine(new THREE.Vector3(0, -1000, 0), new THREE.Vector3(0, 1000, 0), 0x22c55e);
+        showSnapMarker(pt, "axis", 0x22c55e);
         return { point: pt, kind: "axis" };
       }
 
+      if (distToXAxis <= axisTol && distToXAxis <= distToZAxis) {
+        // X-axis (red)
+        const snappedX = snapCoord(world.x, gridSize, snapEnabled);
+        const pt = new THREE.Vector3(snappedX, 0, 0);
+        setGuideLine(new THREE.Vector3(-1000, 0, 0), new THREE.Vector3(1000, 0, 0), 0xef4444);
+        showSnapMarker(pt, "axis", 0xef4444);
+        return { point: pt, kind: "axis" };
+      }
+
+      if (distToZAxis <= axisTol) {
+        // Z-axis (blue)
+        const snappedZ = snapCoord(world.z, gridSize, snapEnabled);
+        const pt = new THREE.Vector3(0, 0, snappedZ);
+        setGuideLine(new THREE.Vector3(0, 0, -1000), new THREE.Vector3(0, 0, 1000), 0x3b82f6);
+        showSnapMarker(pt, "axis", 0x3b82f6);
+        return { point: pt, kind: "axis" };
+      }
+
+      // 4. Ground / Horizontal Plane Axes Lines (when drafting at a specific plane height, e.g. Y = world.y)
+      if (Math.abs(world.z) <= axisTol) {
+        const snappedX = snapCoord(world.x, gridSize, snapEnabled);
+        const snappedY = snapCoord(world.y, gridSize, snapEnabled);
+        const pt = new THREE.Vector3(snappedX, snappedY, 0);
+        setGuideLine(new THREE.Vector3(-1000, snappedY, 0), new THREE.Vector3(1000, snappedY, 0), 0xef4444);
+        showSnapMarker(pt, "axis", 0xef4444);
+        return { point: pt, kind: "axis" };
+      }
+      if (Math.abs(world.x) <= axisTol) {
+        const snappedY = snapCoord(world.y, gridSize, snapEnabled);
+        const snappedZ = snapCoord(world.z, gridSize, snapEnabled);
+        const pt = new THREE.Vector3(0, snappedY, snappedZ);
+        setGuideLine(new THREE.Vector3(0, snappedY, -1000), new THREE.Vector3(0, snappedY, 1000), 0x3b82f6);
+        showSnapMarker(pt, "axis", 0x3b82f6);
+        return { point: pt, kind: "axis" };
+      }
+
+      setGuideLine(null, null);
       showSnapMarker(null);
       return {
         point: new THREE.Vector3(

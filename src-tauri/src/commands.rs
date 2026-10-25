@@ -812,6 +812,41 @@ pub fn list_projects(dir: String) -> Vec<ProjectSummary> {
     out
 }
 
+#[tauri::command]
+pub fn delete_project(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    path: String,
+) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.is_file() {
+        return Err("project file not found".into());
+    }
+
+    // If open in memory, close it
+    let matching_ids: Vec<String> = {
+        let s = state.lock();
+        s.doc_paths
+            .iter()
+            .filter(|(_, p_buf)| p_buf.to_str() == Some(&path))
+            .map(|(id, _)| id.clone())
+            .collect()
+    };
+    for id in matching_ids {
+        let _ = close_document(app.clone(), state.clone(), id);
+    }
+
+    // Remove thumbnail if present
+    if let Some(thumb) = thumbnail_path(p) {
+        if thumb.is_file() {
+            let _ = std::fs::remove_file(thumb);
+        }
+    }
+
+    std::fs::remove_file(p).map_err(|e| format!("failed to delete project: {e}"))?;
+    Ok(())
+}
+
 // ------------------------------------------------------------ project thumbnails
 
 /// `<name>.thumbnail.png` sitting beside the .arc file.
@@ -1527,7 +1562,6 @@ pub fn csg_apply(
         first_transform: Some(first_t),
         second_transform: Some(second_t),
     };
-    crate::kernel::meshgen::generate(&geometry)?;
     let label = match op {
         CsgOperation::Union => "Union",
         CsgOperation::Difference => "Difference",

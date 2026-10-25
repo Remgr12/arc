@@ -49,17 +49,19 @@ export function previewMaterial(ctx: ToolContext): THREE.MeshStandardMaterial {
   return mat;
 }
 
-function decoratePreviewMesh(mesh: THREE.Mesh, ctx: ToolContext): THREE.Mesh {
-  const edges = new THREE.EdgesGeometry(mesh.geometry, 25);
-  const lineMat = new THREE.LineBasicMaterial({
-    color: ctx.palette.hover,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  });
-  const wire = new THREE.LineSegments(edges, lineMat);
-  wire.renderOrder = 998;
-  mesh.add(wire);
+function decoratePreviewMesh(mesh: THREE.Mesh, ctx: ToolContext, withEdges = true): THREE.Mesh {
+  if (withEdges) {
+    const edges = new THREE.EdgesGeometry(mesh.geometry, 25);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: ctx.palette.hover,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+    });
+    const wire = new THREE.LineSegments(edges, lineMat);
+    wire.renderOrder = 998;
+    mesh.add(wire);
+  }
   mesh.renderOrder = 997;
   return mesh;
 }
@@ -263,12 +265,13 @@ export const sphereTool = makeSimpleTool("sphere", (a, b, ctx) => {
   const r = footprintRadius(a, b, ctx);
   const u = ctx.settings.unitLabel;
   const mesh = decoratePreviewMesh(
-    new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), previewMaterial(ctx)),
+    new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), previewMaterial(ctx)),
     ctx,
+    false,
   );
   mesh.position.set(a.x, a.y + r, a.z);
   return {
-    geometry: { type: "sphere", radius: r, segments: 32 },
+    geometry: { type: "sphere", radius: r, segments: 24 },
     position: [a.x, a.y + r, a.z],
     preview: mesh,
     label: `R ${Math.round(r * 100) / 100} ${u}`,
@@ -281,14 +284,15 @@ export const torusTool = makeSimpleTool("torus", (a, b, ctx) => {
   const u = ctx.settings.unitLabel;
   const mesh = decoratePreviewMesh(
     new THREE.Mesh(
-      new THREE.TorusGeometry(r, tube, 14, 48).rotateX(Math.PI / 2),
+      new THREE.TorusGeometry(r, tube, 12, 32).rotateX(Math.PI / 2),
       previewMaterial(ctx),
     ),
     ctx,
+    false,
   );
   mesh.position.set(a.x, a.y + tube, a.z);
   return {
-    geometry: { type: "torus", radius: r, tube, segments: 32, tubular_segments: 16 },
+    geometry: { type: "torus", radius: r, tube, segments: 24, tubular_segments: 16 },
     position: [a.x, a.y + tube, a.z],
     preview: mesh,
     label: `R ${Math.round(r * 100) / 100} ${u}`,
@@ -593,14 +597,14 @@ export const cylinderTool = makeHeightTool({
   footprint: (a, b, ctx) => ({ w: 0, d: 0, r: footprintRadius(a, b, ctx) }),
   mesh: (a, _b, fp, h, ctx) => {
     const mesh = decoratePreviewMesh(
-      new THREE.Mesh(new THREE.CylinderGeometry(fp.r, fp.r, h, 32), previewMaterial(ctx)),
+      new THREE.Mesh(new THREE.CylinderGeometry(fp.r, fp.r, h, 24), previewMaterial(ctx)),
       ctx,
     );
     mesh.position.set(a.x, a.y + h / 2, a.z);
     return mesh;
   },
   position: (a) => [a.x, a.y, a.z],
-  geometry: (fp, h) => ({ type: "cylinder", radius: fp.r, height: h, segments: 32 }),
+  geometry: (fp, h) => ({ type: "cylinder", radius: fp.r, height: h, segments: 24 }),
   label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });
 
@@ -609,13 +613,13 @@ export const coneTool = makeHeightTool({
   footprint: (a, b, ctx) => ({ w: 0, d: 0, r: footprintRadius(a, b, ctx) }),
   mesh: (a, _b, fp, h, ctx) => {
     const mesh = decoratePreviewMesh(
-      new THREE.Mesh(new THREE.ConeGeometry(fp.r, h, 32), previewMaterial(ctx)),
+      new THREE.Mesh(new THREE.ConeGeometry(fp.r, h, 24), previewMaterial(ctx)),
       ctx,
     );
     mesh.position.set(a.x, a.y + h / 2, a.z);
     return mesh;
   },
   position: (a) => [a.x, a.y, a.z],
-  geometry: (fp, h) => ({ type: "cone", radius: fp.r, height: h, segments: 32 }),
+  geometry: (fp, h) => ({ type: "cone", radius: fp.r, height: h, segments: 24 }),
   label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });

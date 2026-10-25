@@ -67,8 +67,8 @@ const FACES: FaceDef[] = [
   },
 ];
 
-const GIZMO_SIZE = 120; // css px (comfortably sized for HiDPI displays)
-const GIZMO_RIGHT_MARGIN = 72; // clearance from top-right utility dock
+const GIZMO_SIZE = 86; // css px (compact & balanced on HiDPI displays)
+const GIZMO_RIGHT_MARGIN = 66; // clearance from top-right utility dock
 const GIZMO_TOP_MARGIN = 12;
 const TEX_SIZE = 512; // 512x512 high-res textures for pin-sharp HiDPI text
 const BEVEL_FRAC = 0.15; // 15% border zone for edges & corners, leaving 70% for center face

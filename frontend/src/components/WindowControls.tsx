@@ -152,7 +152,7 @@ export function WindowControls({ variant = "windows", className }: WindowControl
           type="button"
           onClick={handleMinimize}
           title="Minimize"
-          className="flex h-7 w-8 items-center justify-center rounded text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
+          className="flex h-8 w-9 items-center justify-center rounded text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
         >
           <Minus size={14} strokeWidth={1.8} />
         </button>
@@ -162,7 +162,7 @@ export function WindowControls({ variant = "windows", className }: WindowControl
           type="button"
           onClick={handleToggleMaximize}
           title={isMaximized ? "Restore" : "Maximize"}
-          className="flex h-7 w-8 items-center justify-center rounded text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
+          className="flex h-8 w-9 items-center justify-center rounded text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
         >
           {isMaximized ? (
             <Copy size={13} strokeWidth={1.8} />
@@ -176,7 +176,7 @@ export function WindowControls({ variant = "windows", className }: WindowControl
           type="button"
           onClick={handleClose}
           title="Close"
-          className="flex h-7 w-8 items-center justify-center rounded text-base-500 hover:bg-[#e81123] hover:text-white active:bg-[#c4101f] transition-colors focus:outline-none cursor-pointer"
+          className="flex h-8 w-9 items-center justify-center rounded text-base-500 hover:bg-[#e81123] hover:text-white active:bg-[#c4101f] transition-colors focus:outline-none cursor-pointer"
         >
           <X size={14} strokeWidth={2} />
         </button>
@@ -186,13 +186,13 @@ export function WindowControls({ variant = "windows", className }: WindowControl
 
   // Windows style (default)
   return (
-    <div className={cn("flex h-full items-center select-none", className)}>
+    <div className={cn("flex h-full self-stretch items-stretch select-none", className)}>
       {/* Minimize */}
       <button
         type="button"
         onClick={handleMinimize}
         title="Minimize"
-        className="flex h-full w-11 items-center justify-center text-base-500 hover:bg-base-200/80 active:bg-base-300 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
+        className="flex h-full min-h-10 w-12 items-center justify-center text-base-500 hover:bg-base-200/80 active:bg-base-300 hover:text-base-800 transition-colors focus:outline-none cursor-pointer py-2.5"
       >
         <Minus size={14} strokeWidth={1.8} />
       </button>
@@ -202,7 +202,7 @@ export function WindowControls({ variant = "windows", className }: WindowControl
         type="button"
         onClick={handleToggleMaximize}
         title={isMaximized ? "Restore" : "Maximize"}
-        className="flex h-full w-11 items-center justify-center text-base-500 hover:bg-base-200/80 active:bg-base-300 hover:text-base-800 transition-colors focus:outline-none cursor-pointer"
+        className="flex h-full min-h-10 w-12 items-center justify-center text-base-500 hover:bg-base-200/80 active:bg-base-300 hover:text-base-800 transition-colors focus:outline-none cursor-pointer py-2.5"
       >
         {isMaximized ? (
           <Copy size={13} strokeWidth={1.8} />
@@ -216,7 +216,7 @@ export function WindowControls({ variant = "windows", className }: WindowControl
         type="button"
         onClick={handleClose}
         title="Close"
-        className="flex h-full w-11 items-center justify-center text-base-500 hover:bg-[#e81123] hover:text-white active:bg-[#c4101f] transition-colors focus:outline-none cursor-pointer"
+        className="flex h-full min-h-10 w-12 items-center justify-center text-base-500 hover:bg-[#e81123] hover:text-white active:bg-[#c4101f] transition-colors focus:outline-none cursor-pointer py-2.5"
       >
         <X size={15} strokeWidth={1.8} />
       </button>

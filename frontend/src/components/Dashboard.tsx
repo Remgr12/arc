@@ -7,7 +7,6 @@ import {
   Clock,
   Folder,
   FolderOpen,
-  Layers,
   LayoutGrid,
   List,
   Pencil,
@@ -16,6 +15,7 @@ import {
   Settings,
   Sliders,
   Tag,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -46,17 +46,53 @@ const DEFAULT_CATEGORIES = [
   "General",
 ];
 
-const CATEGORY_STYLES: Record<string, string> = {
-  Mechanical: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  Architecture: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  "3D Printing": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  Electronics: "bg-purple-500/10 text-purple-600 border-purple-500/20",
-  Drafts: "bg-base-200 text-base-600 border-base-300",
-  General: "bg-accent-500/10 text-accent-600 border-accent-500/20",
+interface CategoryTheme {
+  dot: string;
+  pill: string;
+  activePill: string;
+}
+
+const CATEGORY_THEMES: Record<string, CategoryTheme> = {
+  Mechanical: {
+    dot: "bg-blue-500",
+    pill: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25 hover:bg-blue-500/15",
+    activePill: "bg-blue-500 text-white border-blue-600 shadow-sm",
+  },
+  Architecture: {
+    dot: "bg-amber-500",
+    pill: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:bg-amber-500/15",
+    activePill: "bg-amber-500 text-white border-amber-600 shadow-sm",
+  },
+  "3D Printing": {
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/15",
+    activePill: "bg-emerald-500 text-white border-emerald-600 shadow-sm",
+  },
+  Electronics: {
+    dot: "bg-purple-500",
+    pill: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25 hover:bg-purple-500/15",
+    activePill: "bg-purple-500 text-white border-purple-600 shadow-sm",
+  },
+  Drafts: {
+    dot: "bg-base-400",
+    pill: "bg-base-200/80 text-base-700 dark:text-base-300 border-base-300 hover:bg-base-200",
+    activePill: "bg-base-700 text-white border-base-800 shadow-sm",
+  },
+  General: {
+    dot: "bg-accent-500",
+    pill: "bg-accent-500/10 text-accent-600 dark:text-accent-400 border-accent-500/25 hover:bg-accent-500/15",
+    activePill: "bg-accent-500 text-white border-accent-600 shadow-sm",
+  },
 };
 
-function getCategoryStyle(cat: string): string {
-  return CATEGORY_STYLES[cat] ?? "bg-accent-500/10 text-accent-600 border-accent-500/20";
+function getCategoryTheme(cat: string): CategoryTheme {
+  return (
+    CATEGORY_THEMES[cat] ?? {
+      dot: "bg-accent-500",
+      pill: "bg-accent-500/10 text-accent-600 dark:text-accent-400 border-accent-500/25 hover:bg-accent-500/15",
+      activePill: "bg-accent-500 text-white border-accent-600 shadow-sm",
+    }
+  );
 }
 
 function loadMetaMap(): Record<string, ProjectMeta> {
@@ -107,6 +143,28 @@ export function Dashboard() {
   } | null>(null);
   const [newTagInput, setNewTagInput] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
+
+  const [deletingProject, setDeletingProject] = useState<ProjectSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteProject = async (p: ProjectSummary) => {
+    try {
+      setDeleting(true);
+      await ipc.deleteProject(p.path);
+      setMetaMap((prev) => {
+        const next = { ...prev };
+        delete next[p.path];
+        saveMetaMap(next);
+        return next;
+      });
+      setDeletingProject(null);
+      refresh();
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const refresh = useCallback(() => {
     if (!folder) {
@@ -376,16 +434,34 @@ export function Dashboard() {
                 </button>
               )}
             </div>
-            {[...categoryCounts.entries()].map(([cat, count]) => (
-              <SidebarNavButton
-                key={cat}
-                active={selectedCategory === cat}
-                onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                badge={count}
-              >
-                {cat}
-              </SidebarNavButton>
-            ))}
+            {[...categoryCounts.entries()].map(([cat, count]) => {
+              const theme = getCategoryTheme(cat);
+              const isSelected = selectedCategory?.toLowerCase() === cat.toLowerCase();
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(isSelected ? null : cat)}
+                  className={cn(
+                    "group flex h-8 w-full items-center justify-between rounded-lg px-2.5 text-left text-[12px] transition-all cursor-pointer",
+                    isSelected
+                      ? "bg-base-200/90 font-medium text-base-900 shadow-xs"
+                      : "text-base-600 hover:bg-base-200/60 hover:text-base-900",
+                  )}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={cn("h-2 w-2 shrink-0 rounded-full transition-transform group-hover:scale-110", theme.dot)} />
+                    <span className="truncate">{cat}</span>
+                  </span>
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                    isSelected ? "bg-base-300 text-base-900 font-semibold" : "bg-base-200 text-base-500"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </section>
 
           {/* Tags Navigation (if any tags exist) */}
@@ -405,23 +481,29 @@ export function Dashboard() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1 px-1">
-                {allTags.slice(0, 16).map(([tag, count]) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                    className={cn(
-                      "flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] transition-colors cursor-pointer",
-                      selectedTag === tag
-                        ? "bg-accent-500 text-white font-medium shadow-xs"
-                        : "bg-base-200/80 text-base-600 hover:bg-base-200 hover:text-base-900",
-                    )}
-                  >
-                    <span>#{tag}</span>
-                    <span className="opacity-60 text-[9px]">{count}</span>
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-1.5 px-1">
+                {allTags.slice(0, 20).map(([tag, count]) => {
+                  const isSelected = selectedTag?.toLowerCase() === tag.toLowerCase();
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setSelectedTag(isSelected ? null : tag)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                        isSelected
+                          ? "bg-accent-500 text-white shadow-xs"
+                          : "border border-base-250/70 bg-base-100 text-base-600 hover:border-base-300 hover:bg-base-200/80 hover:text-base-900",
+                      )}
+                    >
+                      <span className={isSelected ? "text-white/80" : "text-base-400"}>#</span>
+                      <span>{tag}</span>
+                      <span className={cn("ml-0.5 text-[9.5px]", isSelected ? "text-white/70" : "text-base-400")}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -695,7 +777,7 @@ export function Dashboard() {
                   )}
                 >
                   <div>
-                    {/* Top: Category Pill + Edit Tags/Category button */}
+                    {/* Top: Category Pill + Edit / Delete Actions */}
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
@@ -706,33 +788,51 @@ export function Dashboard() {
                           );
                         }}
                         className={cn(
-                          "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold transition-colors cursor-pointer",
-                          getCategoryStyle(project.category),
+                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all cursor-pointer shadow-2xs",
+                          getCategoryTheme(project.category).pill,
                         )}
                         title={`Filter by category ${project.category}`}
                       >
-                        <Layers size={10} strokeWidth={2.2} />
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            getCategoryTheme(project.category).dot,
+                          )}
+                        />
                         <span>{project.category}</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingMeta({
-                            path: project.path,
-                            name: project.name,
-                            category: project.category,
-                            tags: [...project.tags],
-                          });
-                          setCustomCategoryInput("");
-                          setNewTagInput("");
-                        }}
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-base-400 opacity-0 group-hover:opacity-100 hover:bg-base-200 hover:text-base-800 transition-all cursor-pointer"
-                        title="Edit category and tags"
-                      >
-                        <Pencil size={11} />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingMeta({
+                              path: project.path,
+                              name: project.name,
+                              category: project.category,
+                              tags: [...project.tags],
+                            });
+                            setCustomCategoryInput("");
+                            setNewTagInput("");
+                          }}
+                          className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-base-200 hover:text-base-800 transition-all cursor-pointer"
+                          title="Edit category and tags"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingProject(project);
+                          }}
+                          className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-600 transition-all cursor-pointer"
+                          title="Delete project"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Project Name */}
@@ -747,26 +847,30 @@ export function Dashboard() {
                     </button>
 
                     {/* Tags Row */}
-                    <div className="flex flex-wrap items-center gap-1 mb-3 min-h-[22px]">
-                      {project.tags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTag(selectedTag === tag ? null : tag);
-                          }}
-                          className={cn(
-                            "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono transition-colors cursor-pointer",
-                            selectedTag === tag
-                              ? "bg-accent-500 text-white font-semibold"
-                              : "bg-base-200/80 text-base-600 hover:bg-base-200 hover:text-base-900",
-                          )}
-                          title={`Filter by tag #${tag}`}
-                        >
-                          <span>#{tag}</span>
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3 min-h-[24px]">
+                      {project.tags.map((tag) => {
+                        const isSelected = selectedTag?.toLowerCase() === tag.toLowerCase();
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTag(isSelected ? null : tag);
+                            }}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium transition-colors cursor-pointer",
+                              isSelected
+                                ? "bg-accent-500 text-white font-semibold shadow-xs"
+                                : "border border-base-250/60 bg-base-150/70 text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900",
+                            )}
+                            title={`Filter by tag #${tag}`}
+                          >
+                            <span className={isSelected ? "text-white/80" : "text-base-400"}>#</span>
+                            <span>{tag}</span>
+                          </button>
+                        );
+                      })}
                       {project.tags.length === 0 && (
                         <button
                           type="button"
@@ -781,10 +885,10 @@ export function Dashboard() {
                             setCustomCategoryInput("");
                             setNewTagInput("");
                           }}
-                          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono text-base-400 opacity-0 group-hover:opacity-100 hover:text-base-700 hover:bg-base-200 transition-all cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-md border border-dashed border-base-300 px-2 py-0.5 text-[10px] text-base-400 opacity-0 group-hover:opacity-100 hover:border-accent-500 hover:text-accent-500 hover:bg-accent-500/10 transition-all cursor-pointer"
                         >
-                          <Plus size={9} />
-                          <span>tag</span>
+                          <Plus size={10} />
+                          <span>Add tags</span>
                         </button>
                       )}
                     </div>
@@ -823,11 +927,11 @@ export function Dashboard() {
             <div className="flex flex-col overflow-hidden rounded-xl border border-base-200 bg-base-100/60">
               <div className="flex h-9 items-center border-b border-base-200 bg-base-150/60 px-4 text-[11px] font-semibold uppercase tracking-wider text-base-500">
                 <span className="flex-1">Name</span>
-                <span className="w-32 text-left">Category</span>
+                <span className="w-36 text-left">Category</span>
                 <span className="w-48 text-left">Tags</span>
                 <span className="w-36 text-left">Last Modified</span>
                 <span className="w-20 text-right">Size</span>
-                <span className="w-10 text-right"></span>
+                <span className="w-16 text-right"></span>
               </div>
               <div className="divide-y divide-base-200">
                 {filteredAndSorted.map((project) => (
@@ -845,7 +949,7 @@ export function Dashboard() {
                         {project.name}
                       </span>
                     </span>
-                    <span className="w-32 shrink-0">
+                    <span className="w-36 shrink-0">
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -854,14 +958,20 @@ export function Dashboard() {
                           );
                         }}
                         className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.2 text-[10.5px] font-medium transition-colors hover:opacity-80 cursor-pointer",
-                          getCategoryStyle(project.category),
+                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-2xs",
+                          getCategoryTheme(project.category).pill,
                         )}
                       >
-                        {project.category}
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            getCategoryTheme(project.category).dot,
+                          )}
+                        />
+                        <span>{project.category}</span>
                       </span>
                     </span>
-                    <span className="w-48 shrink-0 flex flex-wrap items-center gap-1 overflow-hidden pr-2">
+                    <span className="w-48 shrink-0 flex flex-wrap items-center gap-1.5 overflow-hidden pr-2">
                       {project.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
@@ -869,13 +979,14 @@ export function Dashboard() {
                             e.stopPropagation();
                             setSelectedTag(selectedTag === tag ? null : tag);
                           }}
-                          className="rounded bg-base-200 px-1.5 py-0.2 font-mono text-[9.5px] text-base-600 hover:bg-base-300 hover:text-base-900 cursor-pointer"
+                          className="inline-flex items-center gap-0.5 rounded-md border border-base-250/70 bg-base-150/80 px-1.5 py-0.2 text-[10px] font-medium text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900 cursor-pointer"
                         >
-                          #{tag}
+                          <span className="text-base-400">#</span>
+                          <span>{tag}</span>
                         </span>
                       ))}
                       {project.tags.length > 3 && (
-                        <span className="text-[10px] text-base-400">
+                        <span className="text-[10px] font-medium text-base-400">
                           +{project.tags.length - 3}
                         </span>
                       )}
@@ -886,7 +997,7 @@ export function Dashboard() {
                     <span className="w-20 shrink-0 text-right font-mono text-[11px] text-base-500">
                       {formatSize(project.size)}
                     </span>
-                    <span className="w-10 shrink-0 text-right">
+                    <span className="w-16 shrink-0 flex items-center justify-end gap-1">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -900,10 +1011,21 @@ export function Dashboard() {
                           setCustomCategoryInput("");
                           setNewTagInput("");
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:text-base-800 transition-opacity cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-base-200 hover:text-base-800 rounded-md transition-all cursor-pointer"
                         title="Edit category and tags"
                       >
                         <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingProject(project);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-red-500/15 hover:text-red-600 rounded-md transition-all cursor-pointer"
+                        title="Delete project"
+                      >
+                        <Trash2 size={12} />
                       </button>
                     </span>
                   </div>
@@ -963,27 +1085,37 @@ export function Dashboard() {
             </div>
 
             {/* Category selection */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="font-semibold text-base-700">Category</label>
               <div className="flex flex-wrap gap-1.5">
-                {DEFAULT_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => {
-                      setEditingMeta({ ...editingMeta, category: cat });
-                      setCustomCategoryInput("");
-                    }}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
-                      editingMeta.category === cat && !customCategoryInput
-                        ? "bg-accent-500 text-white border-accent-600 shadow-xs"
-                        : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
-                    )}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                {DEFAULT_CATEGORIES.map((cat) => {
+                  const theme = getCategoryTheme(cat);
+                  const isChosen = editingMeta.category === cat && !customCategoryInput;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        setEditingMeta({ ...editingMeta, category: cat });
+                        setCustomCategoryInput("");
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all cursor-pointer",
+                        isChosen
+                          ? theme.activePill
+                          : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          isChosen ? "bg-white" : theme.dot,
+                        )}
+                      />
+                      <span>{cat}</span>
+                    </button>
+                  );
+                })}
               </div>
               <input
                 value={customCategoryInput}
@@ -995,20 +1127,21 @@ export function Dashboard() {
                   });
                 }}
                 placeholder="Or enter custom category…"
-                className="mt-1 h-7 rounded-lg border border-base-300 bg-base-50 px-2.5 text-[11.5px] outline-none focus:border-accent-500"
+                className="mt-1 h-8 rounded-lg border border-base-300 bg-base-50 px-3 text-[12px] outline-none focus:border-accent-500 transition-colors"
               />
             </div>
 
             {/* Tags editing */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="font-semibold text-base-700">Tags</label>
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[32px] rounded-lg border border-base-250 bg-base-50 p-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] rounded-lg border border-base-250 bg-base-50 p-2">
                 {editingMeta.tags.map((tag, idx) => (
                   <span
                     key={tag}
-                    className="flex items-center gap-1 rounded bg-base-200 px-2 py-0.5 font-mono text-[10.5px] text-base-700"
+                    className="inline-flex items-center gap-1 rounded-md border border-base-250 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-700 shadow-2xs"
                   >
-                    #{tag}
+                    <span className="text-base-400">#</span>
+                    <span>{tag}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1016,9 +1149,9 @@ export function Dashboard() {
                         next.splice(idx, 1);
                         setEditingMeta({ ...editingMeta, tags: next });
                       }}
-                      className="text-base-400 hover:text-base-800 cursor-pointer"
+                      className="ml-0.5 text-base-400 hover:text-base-800 cursor-pointer"
                     >
-                      <X size={10} />
+                      <X size={11} />
                     </button>
                   </span>
                 ))}
@@ -1043,10 +1176,10 @@ export function Dashboard() {
                       ? "Type tag & press Enter…"
                       : "Add tag…"
                   }
-                  className="flex-1 min-w-[120px] bg-transparent px-1 font-mono text-[11px] outline-none placeholder:text-base-400"
+                  className="flex-1 min-w-[120px] bg-transparent px-1 text-[11.5px] outline-none placeholder:text-base-400"
                 />
               </div>
-              <span className="text-[10px] text-base-400">
+              <span className="text-[10.5px] text-base-400">
                 Press Enter or comma to add tags
               </span>
             </div>
@@ -1058,6 +1191,41 @@ export function Dashboard() {
               </Button>
               <Button variant="primary" onClick={saveEditedMeta}>
                 Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Project Confirmation Modal */}
+      <Modal
+        open={deletingProject !== null}
+        onClose={() => !deleting && setDeletingProject(null)}
+        title="Delete project"
+        width="w-[400px]"
+      >
+        {deletingProject && (
+          <div className="flex flex-col gap-4 text-[12.5px]">
+            <p className="text-base-600">
+              Are you sure you want to delete{" "}
+              <strong className="text-base-900 font-semibold">{deletingProject.name}</strong>?
+              This will permanently delete the project file from your workspace.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="ghost"
+                onClick={() => setDeletingProject(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleting}
+                onClick={() => void handleDeleteProject(deletingProject)}
+              >
+                <Trash2 size={13} />
+                {deleting ? "Deleting…" : "Delete project"}
               </Button>
             </div>
           </div>
@@ -1082,9 +1250,6 @@ function EmptyState({
 }) {
   return (
     <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-base-300 bg-base-100/30 p-10 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-base-250 bg-base-100 text-accent-500 shadow-sm">
-        <Box size={24} strokeWidth={1.75} />
-      </div>
       <div className="flex flex-col gap-1 max-w-sm">
         <span className="text-[14px] font-semibold text-base-900">
           {loading

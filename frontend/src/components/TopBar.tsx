@@ -318,7 +318,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
       />
 
       {/* Right actions */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex h-full items-center gap-1.5">
         {view === "dashboard" ? (
           <>
             {overview?.active && (
@@ -386,7 +386,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
         {effectiveStyle !== "macos" && (
           <>
             <div className="h-4 w-px bg-base-200 mx-1" />
-            <WindowControls variant={effectiveStyle} />
+            <WindowControls variant={effectiveStyle} className="h-full self-stretch" />
           </>
         )}
       </div>
