@@ -26,7 +26,7 @@ export function UpdateDialog() {
     setBusy(true);
     useArcStore
       .getState()
-      .setStatusMessage("Downloading update — arc restarts once it is installed");
+      .setStatusMessage("Downloading update, arc restarts once it is installed");
     ipc
       .installUpdate()
       .catch((error) => {

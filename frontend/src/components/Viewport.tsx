@@ -109,8 +109,8 @@ interface ViewportRefs {
   palette: ViewPalette;
   marquee: MarqueeState | null;
   marqueeEl: HTMLDivElement | null;
-  /** Screen position of an in-flight right-button press (pan-drag suppression). */
-  contextPress: { x: number; y: number } | null;
+  /** Screen position and timestamp of an in-flight right-button press (time-sensitive click vs pan drag). */
+  contextPress: { x: number; y: number; time?: number } | null;
   /** Overlay objects grouped by tag; each new object replaces the old one. */
   previews: Map<string, THREE.Object3D>;
   /** Hovered/selected face & edge highlight overlays. */
@@ -339,7 +339,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.09;
-  controls.screenSpacePanning = false;
+  controls.screenSpacePanning = true;
   controls.mouseButtons = {
     LEFT: -1 as unknown as THREE.MOUSE,
     MIDDLE: THREE.MOUSE.ROTATE,
@@ -388,7 +388,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
 
   const measureEl = document.createElement("div");
   measureEl.className =
-    "pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-md border border-base-400 bg-base-50/95 px-2 py-1 font-mono text-[11px] leading-none text-accent-500 shadow-md";
+    "pointer-events-none absolute z-40 -translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-lg border border-accent-500/40 bg-neutral-900/95 text-neutral-100 backdrop-blur-md px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide shadow-xl flex items-center gap-1.5";
   measureEl.style.display = "none";
   host.appendChild(measureEl);
 
@@ -614,21 +614,36 @@ function slerpDir(from: THREE.Vector3, to: THREE.Vector3, k: number): THREE.Vect
   return out.normalize();
 }
 
-/** Fly the camera to look straight at the given world plane normal. */
+/** Fly the camera to look straight at the given world plane normal, centered on the workplane or selection. */
 function focusPlane(ref: ViewportRefs, normal: THREE.Vector3): void {
   const dirTo = normal.clone().normalize();
   if (Math.abs(dirTo.y) > 0.9999) {
     // Keep OrbitControls happy: nudge along +Z/-Z so +X stays horizontal (right).
     dirTo.set(0, dirTo.y > 0 ? 1 : -1, dirTo.y > 0 ? 0.0008 : -0.0008).normalize();
   }
-  const current = ref.camera.position.clone().sub(ref.controls.target);
-  if (current.lengthSq() < 1e-8) return;
+  const st = useArcStore.getState();
+  let targetTo = ref.controls.target.clone();
+  if (st.sketchMode) {
+    targetTo.set(...st.sketchPlaneOrigin);
+  } else if (st.scene && st.scene.selection.length > 0) {
+    const primaryId = st.scene.selection[st.scene.selection.length - 1];
+    const obj = ref.objects.get(primaryId);
+    if (obj) {
+      const b = new THREE.Box3().setFromObject(obj);
+      if (!b.isEmpty()) targetTo = b.getCenter(new THREE.Vector3());
+    }
+  }
+
+  const radius = Math.max(120, ref.camera.position.distanceTo(targetTo));
+  const posTo = targetTo.clone().addScaledVector(dirTo, radius);
+
   ref.viewAnim = {
-    dirFrom: current.normalize(),
-    dirTo,
-    radius: Math.max(120, ref.camera.position.distanceTo(ref.controls.target)),
     start: performance.now(),
     duration: 360,
+    posFrom: ref.camera.position.clone(),
+    posTo,
+    targetFrom: ref.controls.target.clone(),
+    targetTo,
   };
 }
 
@@ -638,6 +653,8 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   ref.palette = themeToPalette(palette);
   ref.sceneRoot.background = ref.palette.bg;
   ref.sceneRoot.fog = new THREE.Fog(palette.bg, 40000, 200000);
+  ref.lineMaterial.color.copy(ref.palette.line);
+  ref.lineMaterial.depthTest = false;
   const index = ref.sceneRoot.children.indexOf(ref.gridNode);
   const wasVisible = ref.gridNode.visible;
   const prevPos = ref.gridNode.position.clone();
@@ -786,7 +803,8 @@ function syncSceneToThree(ref: ViewportRefs): void {
       const o = new THREE.Vector3(...state.sketchPlaneOrigin);
       const basis = computePlaneBasis(n, o);
       ref.gridNode.quaternion.copy(basis.quat);
-      ref.gridNode.position.copy(basis.origin);
+      // Elevate grid slightly along normal (+0.03) so it never z-fights with solid face triangles
+      ref.gridNode.position.copy(basis.origin).addScaledVector(basis.normal, 0.03);
     } else {
       ref.gridNode.quaternion.identity();
       ref.gridNode.position.set(0, 0, 0);
@@ -1113,6 +1131,7 @@ function buildClosedSketchFill(lineData: number[], entityId: string, color: THRE
     polygonOffsetUnits: -1,
   });
   const fillMesh = new THREE.Mesh(geo, mat);
+  fillMesh.renderOrder = 400;
   fillMesh.userData.isProfileFill = true;
   fillMesh.userData.entityId = entityId;
   return fillMesh;
@@ -1140,7 +1159,10 @@ function makeEntityObject(ref: ViewportRefs, entity: EntityData): THREE.Object3D
       obj = segs;
     } else {
       const material = ref.lineMaterial.clone();
+      material.color.copy(ref.palette.line);
+      material.depthTest = false;
       obj = new THREE.LineSegments(geometry, material);
+      obj.renderOrder = 500;
       if (entity.category === "sketch") {
         const fill = buildClosedSketchFill(lineData, entity.id, new THREE.Color(0xc8ccd4));
         if (fill) obj.add(fill);
@@ -1402,6 +1424,18 @@ function onContextMenu(ref: ViewportRefs, event: MouseEvent): void {
   const press = ref.contextPress;
   ref.contextPress = null;
   if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 6) return;
+
+  const store = useArcStore.getState();
+  const handler = handlerFor(store.tool);
+
+  // Time-sensitive right-click (<350ms): if currently drafting, right-click acts as Enter (CADCraft/AutoCAD/SolveSpace style)!
+  const elapsed = press?.time ? performance.now() - press.time : 0;
+  if (elapsed < 350 && (store.drafting || handler?.hasActivity?.(ref.ctx))) {
+    const handled = handler?.onEnter?.(ref.ctx);
+    syncDrafting(ref);
+    if (handled) return;
+  }
+
   const scene = useArcStore.getState().scene;
   const docId = activeDoc();
   if (!scene || !docId) {
@@ -1680,12 +1714,16 @@ function pickFaceAt(
     const tags = entity.triFaceIds;
     if (!tags || tags.length === 0) continue;
     const tri = hit.faceIndex ?? -1;
-    if (tri < 0 || tri >= tags.length) continue;
+    if (tri < 0) continue;
+    const positions = entity.triPositions;
+    const stride = positions && tags.length === Math.floor(positions.length / 3) ? 3 : 1;
+    const tagIndex = tri * stride;
+    if (tagIndex >= tags.length) continue;
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
     const worldN = hit.face.normal.clone().applyNormalMatrix(normalMatrix).normalize();
     return {
       entityId: entity.id,
-      faceIndex: tags[tri],
+      faceIndex: tags[tagIndex],
       distance: hit.distance,
       point: [hit.point.x, hit.point.y, hit.point.z],
       normal: [worldN.x, worldN.y, worldN.z],
@@ -1793,11 +1831,19 @@ function moveMarquee(ref: ViewportRefs, event: PointerEvent): void {
   const hostRect = ref.host.getBoundingClientRect();
   const x = event.clientX - hostRect.left;
   const y = event.clientY - hostRect.top;
+  const isCrossing = x < marquee.x0; // Right-to-Left drag = Crossing selection
   el.style.display = "block";
   el.style.left = `${Math.min(marquee.x0, x)}px`;
   el.style.top = `${Math.min(marquee.y0, y)}px`;
   el.style.width = `${Math.abs(x - marquee.x0)}px`;
   el.style.height = `${Math.abs(y - marquee.y0)}px`;
+  if (isCrossing) {
+    el.style.border = "1px dashed #10b981";
+    el.style.backgroundColor = "rgba(16, 185, 129, 0.16)";
+  } else {
+    el.style.border = "1px solid #3b82f6";
+    el.style.backgroundColor = "rgba(59, 130, 246, 0.16)";
+  }
 }
 
 function cancelMarquee(ref: ViewportRefs): void {
@@ -1820,10 +1866,13 @@ function finishMarquee(ref: ViewportRefs, event: PointerEvent): void {
   }
   if (el === null) return;
   const hostRect = ref.host.getBoundingClientRect();
-  const x1 = Math.min(marquee.x0, event.clientX - hostRect.left);
-  const y1 = Math.min(marquee.y0, event.clientY - hostRect.top);
-  const x2 = Math.max(marquee.x0, event.clientX - hostRect.left);
-  const y2 = Math.max(marquee.y0, event.clientY - hostRect.top);
+  const rawEndX = event.clientX - hostRect.left;
+  const rawEndY = event.clientY - hostRect.top;
+  const isCrossing = rawEndX < marquee.x0;
+  const x1 = Math.min(marquee.x0, rawEndX);
+  const y1 = Math.min(marquee.y0, rawEndY);
+  const x2 = Math.max(marquee.x0, rawEndX);
+  const y2 = Math.max(marquee.y0, rawEndY);
 
   // Tiny drag: plain click in empty space keeps the existing deselect behavior.
   if (x2 - x1 < 4 && y2 - y1 < 4) {
@@ -1864,7 +1913,14 @@ function finishMarquee(ref: ViewportRefs, event: PointerEvent): void {
       if (sx > maxX) maxX = sx;
       if (sy > maxY) maxY = sy;
     }
-    if (maxX < x1 || minX > x2 || maxY < y1 || minY > y2) continue;
+    // CAD selection semantics:
+    // Crossing (Right-to-Left): any intersection selects
+    // Window (Left-to-Right): must be strictly enclosed inside
+    if (isCrossing) {
+      if (maxX < x1 || minX > x2 || maxY < y1 || minY > y2) continue;
+    } else {
+      if (minX < x1 || maxX > x2 || minY < y1 || maxY > y2) continue;
+    }
     if (!ids.includes(entityId)) ids.push(entityId);
   }
   void ipc.setSelection(activeDoc(), ids, ids[ids.length - 1] ?? null);
@@ -1879,7 +1935,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
   const down = (event: PointerEvent) => {
     ref.viewAnim = null;
     if (event.button === 2) {
-      ref.contextPress = { x: event.clientX, y: event.clientY };
+      ref.contextPress = { x: event.clientX, y: event.clientY, time: performance.now() };
     }
     if (event.button !== 0) return;
     // Check the 3D ViewCube gizmo first so clicks/drags on it navigate the camera.
@@ -2083,8 +2139,9 @@ function attachHandlers(ref: ViewportRefs): () => void {
       } else {
         ref.controls.dollyOut(1 / zoomFactor);
       }
-      const shiftScale = (1 - 1 / zoomFactor) * 0.7;
-      const shift = hit.sub(ref.controls.target).multiplyScalar(shiftScale);
+      // True zoom-to-cursor: shift camera and target along ray to hit so hovered point stays fixed
+      const factor = 1 - 1 / zoomFactor;
+      const shift = hit.sub(ref.camera.position).multiplyScalar(factor);
       ref.controls.target.add(shift);
       ref.camera.position.add(shift);
       ref.controls.update();
@@ -2094,7 +2151,6 @@ function attachHandlers(ref: ViewportRefs): () => void {
 
   const wheel = (event: WheelEvent) => {
     ref.viewAnim = null;
-    const store = useArcStore.getState();
 
     // 1) Trackpad pinch-to-zoom (or Ctrl + Wheel): Smooth zoom to cursor!
     if (event.ctrlKey || event.metaKey) {
@@ -2105,18 +2161,7 @@ function attachHandlers(ref: ViewportRefs): () => void {
       return;
     }
 
-    // 2) Sketch mode: Two-finger swipe ALWAYS smoothly pans the sketch plane!
-    if (store.sketchMode) {
-      event.preventDefault();
-      event.stopPropagation();
-      const panSpeed = 0.75;
-      ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
-      ref.controls.update();
-      ref.needsRender = true;
-      return;
-    }
-
-    // 3) Shift + Two-finger swipe in 3D: Smoothly orbit around target!
+    // 2) Shift + Wheel in 3D: Smoothly orbit around target!
     if (event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
@@ -2128,13 +2173,12 @@ function attachHandlers(ref: ViewportRefs): () => void {
       return;
     }
 
-    // 4) Two-finger swipe on trackpad in 3D:
-    // When using a trackpad, deltaMode is 0 and lateral deltaX is present or deltas are fractional.
-    const isTrackpad =
-      event.deltaMode === 0 &&
-      (Math.abs(event.deltaX) > 0.5 || !Number.isInteger(event.deltaY) || Math.abs(event.deltaY) < 50);
+    // 3) True two-finger trackpad panning (horizontal scrolling or non-integer trackpad ticks)
+    const isHorizontalPan = Math.abs(event.deltaX) > 1.5;
+    const isFractionalDelta = !Number.isInteger(event.deltaY) && Math.abs(event.deltaY) > 0;
+    const isTrackpadPan = event.deltaMode === 0 && (isHorizontalPan || isFractionalDelta);
 
-    if (isTrackpad && (Math.abs(event.deltaX) > 0.5 || Math.abs(event.deltaY) < 50)) {
+    if (isTrackpadPan) {
       event.preventDefault();
       event.stopPropagation();
       const panSpeed = 0.75;
@@ -2144,14 +2188,11 @@ function attachHandlers(ref: ViewportRefs): () => void {
       return;
     }
 
-    // 5) Standard physical mouse wheel: Smooth zoom toward cursor (Figma/Shapr3D style)!
-    if (!isTrackpad && !event.shiftKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      const zoomFactor = event.deltaY < 0 ? 1.15 : 0.87;
-      zoomToCursor(event, zoomFactor);
-      return;
-    }
+    // 4) Standard physical mouse wheel (both in 2D sketch mode and in 3D): ALWAYS zoom to cursor!
+    event.preventDefault();
+    event.stopPropagation();
+    const zoomFactor = event.deltaY < 0 ? 1.15 : 0.87;
+    zoomToCursor(event, zoomFactor);
   };
 
   const draftCancel = () => {
@@ -2360,14 +2401,17 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
 
     planePoint(event, height) {
       const st = useArcStore.getState();
-      if (height === undefined && st.sketchMode) {
+      if (st.sketchMode) {
         const n = new THREE.Vector3(...st.sketchPlaneNormal).normalize();
         const o = new THREE.Vector3(...st.sketchPlaneOrigin);
+        if (height !== undefined) {
+          o.addScaledVector(n, height - st.sketchPlaneHeight);
+        }
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, o);
         const out = new THREE.Vector3();
         return rayAt(ref, ndcPoint(event)).intersectPlane(plane, out);
       }
-      const h = height ?? (st.sketchMode ? st.sketchPlaneHeight : 0);
+      const h = height ?? 0;
       return pointOnHorizontalPlane(rayAt(ref, ndcPoint(event)), h);
     },
     rayAt(event) {
@@ -2410,12 +2454,23 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           )
         : null;
 
+      const hostRect = ref.host.getBoundingClientRect();
+      const camDistance = ref.camera.position.distanceTo(world);
+      const cam = ref.camera as THREE.PerspectiveCamera;
+      const fov = typeof cam.fov === "number" ? cam.fov : 50;
+      const unitsPerPx =
+        (2 * Math.tan(THREE.MathUtils.degToRad(fov / 2)) * camDistance) /
+        Math.max(100, hostRect.height);
+      // CAD standard 18-20 screen pixels snap aperture
+      const endpointTolerance = Math.max(gridSize * 0.4, 20 * unitsPerPx);
+      const tolerance = endpointTolerance * 0.55;
+
       const showSnapMarker = (pt: THREE.Vector3 | null, kind?: SnapKind) => {
         if (!pt || !kind || kind === "grid") {
           ref.ctx.clearPreview("snap-marker");
           return;
         }
-        const radius = Math.max(0.65, ref.camera.position.distanceTo(pt) * 0.009);
+        const radius = Math.max(0.65, 10 * unitsPerPx);
         const color =
           kind === "midpoint"
             ? 0x10b981
@@ -2530,7 +2585,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
           marker.rotation.x = -Math.PI / 2;
           marker.position.set(pt.x, pt.y + 0.06, pt.z);
         }
-        marker.renderOrder = 999;
+        marker.renderOrder = 9999;
         ref.ctx.setPreview(marker, "snap-marker");
       };
 
@@ -2560,9 +2615,6 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         return { point: world.clone(), kind: "grid" };
       }
 
-      const camDistance = ref.camera.position.distanceTo(world);
-      const tolerance = Math.max(gridSize * 0.3, camDistance * 0.004);
-
       if (basis) {
         // --- ADVANCED CAD SNAPPING ENGINE (CADCraft / SolveSpace / Shapr3D) ---
         const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(basis.normal, basis.origin);
@@ -2571,18 +2623,30 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         let uCoord = delta.dot(basis.u);
         let vCoord = delta.dot(basis.v);
 
-        // 1. Check Sketch Plane Origin (0,0)
-        if (Math.hypot(uCoord, vCoord) <= tolerance) {
-          showSnapMarker(basis.origin, "origin");
-          setGuideLine(null, null);
-          return { point: basis.origin.clone(), kind: "origin" };
-        }
-
-        // 2. Check Geometry features: endpoints, midpoints, circle centers, quadrants, intersections
-        const endpointTolerance = tolerance * 2.2;
         let bestPt: THREE.Vector3 | null = null;
         let bestKind: SnapKind = "endpoint";
         let bestDist = endpointTolerance;
+
+        // Check active in-progress chain points (allows easy closing of loops & snapping to chain vertices)
+        if (opts?.extraPoints && opts.extraPoints.length > 0) {
+          for (const ep of opts.extraPoints) {
+            const d = ep.distanceTo(ptOnPlane);
+            if (d <= endpointTolerance && d < bestDist) {
+              bestDist = d;
+              bestPt = ep.clone();
+              bestKind = "endpoint";
+            }
+          }
+        }
+
+        // 1. Check Sketch Plane Origin (0,0)
+        if (Math.hypot(uCoord, vCoord) <= tolerance && Math.hypot(uCoord, vCoord) < bestDist) {
+          bestDist = Math.hypot(uCoord, vCoord);
+          bestPt = basis.origin.clone();
+          bestKind = "origin";
+        }
+
+        // 2. Check Geometry features: endpoints, midpoints, circle centers, quadrants, intersections
         const scene = useArcStore.getState().scene;
         const guidePoints: { u: number; v: number; pt: THREE.Vector3 }[] = [];
 
@@ -2594,7 +2658,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
         }
         const planeSegments: PlaneSeg[] = [];
 
-        if (scene && snapEnabled) {
+        if (scene) {
           const vA = new THREE.Vector3();
           const vB = new THREE.Vector3();
           const mid = new THREE.Vector3();
@@ -2873,12 +2937,11 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
       }
 
       // Check sketch & solid vertices, midpoints, and centers BEFORE axis lines!
-      const endpointTolerance = tolerance * 2.2;
       let best: THREE.Vector3 | null = null;
       let bestKind: SnapKind = "endpoint";
       let bestDist = endpointTolerance;
       const scene = useArcStore.getState().scene;
-      if (scene && snapEnabled) {
+      if (scene) {
         const vA = new THREE.Vector3();
         const vB = new THREE.Vector3();
         const mid = new THREE.Vector3();

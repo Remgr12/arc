@@ -2,7 +2,7 @@
 //!
 //! The module supports the standard K-factor bend math used by fabricators
 //! (see [`bend_allowance`], [`bend_deduction`]) and can unfold a *linear
-//! chain* part — a strip of rectangular flats joined end-to-end by bends —
+//! chain* part - a strip of rectangular flats joined end-to-end by bends -
 //! into its flat pattern.
 //!
 //! # Chain limitation

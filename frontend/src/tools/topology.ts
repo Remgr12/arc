@@ -49,11 +49,13 @@ export function deriveFaces(entity: EntityData): FaceGroup[] {
   const normals = entity.triNormals;
   if (!tags || !positions || tags.length === 0) return [];
 
-  const triCount = Math.min(positions.length / 9, tags.length);
+  const triCount = Math.floor(positions.length / 9);
+  // Backend mesh buffer pushes 3 entries per triangle into tri_face_ids (one per vertex)
+  const stride = tags.length === Math.floor(positions.length / 3) ? 3 : 1;
   // Per-tag: triangle count, normal histogram.
   const groups = new Map<number, { count: number; norms: Map<string, number> }>();
   for (let tri = 0; tri < triCount; tri++) {
-    const tag = tags[tri];
+    const tag = tags[tri * stride];
     let g = groups.get(tag);
     if (!g) {
       g = { count: 0, norms: new Map() };
@@ -113,25 +115,38 @@ export function facePlaneInfo(
   if (faceIndex !== null && entity.triFaceIds && entity.triPositions) {
     const tags = entity.triFaceIds;
     const positions = entity.triPositions;
-    const tris = Math.min(positions.length / 9, tags.length);
+    const normals = entity.triNormals;
+    const triCount = Math.floor(positions.length / 9);
+    const stride = tags.length === Math.floor(positions.length / 3) ? 3 : 1;
     let cx = 0;
     let cy = 0;
     let cz = 0;
     let count = 0;
-    for (let tri = 0; tri < tris; tri++) {
-      if (tags[tri] !== faceIndex) continue;
+    let normX = 0;
+    let normY = 0;
+    let normZ = 0;
+    for (let tri = 0; tri < triCount; tri++) {
+      if (tags[tri * stride] !== faceIndex) continue;
       const o = tri * 9;
       cx += positions[o] + positions[o + 3] + positions[o + 6];
       cy += positions[o + 1] + positions[o + 4] + positions[o + 7];
       cz += positions[o + 2] + positions[o + 5] + positions[o + 8];
       count += 3;
+      if (normals && o + 8 < normals.length) {
+        normX += normals[o] + normals[o + 3] + normals[o + 6];
+        normY += normals[o + 1] + normals[o + 4] + normals[o + 7];
+        normZ += normals[o + 2] + normals[o + 5] + normals[o + 8];
+      }
     }
     if (count > 0) {
       const worldOrigin = new THREE.Vector3(cx / count, cy / count, cz / count).applyMatrix4(mat);
-      const group = deriveFaces(entity).find((f) => f.index === faceIndex);
-      const localN = group
-        ? new THREE.Vector3(...group.normal)
-        : new THREE.Vector3(0, 1, 0);
+      let localN: THREE.Vector3;
+      if (Math.hypot(normX, normY, normZ) > 1e-4) {
+        localN = new THREE.Vector3(normX, normY, normZ).normalize();
+      } else {
+        const group = deriveFaces(entity).find((f) => f.index === faceIndex);
+        localN = group ? new THREE.Vector3(...group.normal) : new THREE.Vector3(0, 1, 0);
+      }
       const worldN = localN.applyNormalMatrix(normalMat).normalize();
       const nArr: [number, number, number] = [worldN.x, worldN.y, worldN.z];
       const oArr: [number, number, number] = [worldOrigin.x, worldOrigin.y, worldOrigin.z];
@@ -145,10 +160,41 @@ export function facePlaneInfo(
     }
   }
 
+  // Fallback when faceIndex is null or mesh has no tags:
+  // Detect top-most horizontal surface of the entity
+  if (entity.triPositions && entity.triPositions.length >= 9) {
+    const posArr = entity.triPositions;
+    let maxY = -Infinity;
+    let sumX = 0;
+    let sumZ = 0;
+    let topCount = 0;
+    for (let i = 0; i < posArr.length; i += 3) {
+      if (posArr[i + 1] > maxY) maxY = posArr[i + 1];
+    }
+    for (let i = 0; i < posArr.length; i += 3) {
+      if (Math.abs(posArr[i + 1] - maxY) < 1e-3) {
+        sumX += posArr[i];
+        sumZ += posArr[i + 2];
+        topCount++;
+      }
+    }
+    if (topCount > 0) {
+      const topOrigin = new THREE.Vector3(sumX / topCount, maxY, sumZ / topCount).applyMatrix4(mat);
+      const topNormal = new THREE.Vector3(0, 1, 0).applyNormalMatrix(normalMat).normalize();
+      return {
+        origin: [topOrigin.x, topOrigin.y, topOrigin.z],
+        normal: [topNormal.x, topNormal.y, topNormal.z],
+        height: topOrigin.y,
+        label: `Top Face (Y = ${Math.round(topOrigin.y * 100) / 100})`,
+      };
+    }
+  }
+
   const py = entity.transform.position[1] ?? 0;
   const geom = entity.geometry as Record<string, unknown>;
   const h = typeof geom.height === "number" ? geom.height : 0;
-  const elev = entity.kind === "box" || entity.kind === "extrude" ? py + h / 2 : py + h;
+  // Primitives are extruded upwards from py, so the top is py + h (never inside the body)
+  const elev = py + h;
   return {
     origin: [pos.x, elev, pos.z],
     normal: [0, 1, 0],
@@ -166,9 +212,10 @@ export function faceOverlayGeometry(
   const positions = entity.triPositions;
   if (!tags || !positions || entity.triPositions?.length === 0) return null;
   const out: number[] = [];
-  const tris = Math.min(positions.length / 9, tags.length);
-  for (let tri = 0; tri < tris; tri++) {
-    if (tags[tri] !== faceIndex) continue;
+  const triCount = Math.floor(positions.length / 9);
+  const stride = tags.length === Math.floor(positions.length / 3) ? 3 : 1;
+  for (let tri = 0; tri < triCount; tri++) {
+    if (tags[tri * stride] !== faceIndex) continue;
     const o = tri * 9;
     out.push(
       positions[o], positions[o + 1], positions[o + 2],
@@ -272,4 +319,105 @@ export function pickEdgeScreen(
     }
   }
   return bestSeg >= 0 && bestPoint ? { segIndex: bestSeg, point: bestPoint, distance: bestPx } : null;
+}
+
+/**
+ * Extract the 2D planar polygon boundary of a solid face (in basis UV coordinates).
+ * Used for generalized direct push-pull on arbitrary B-rep & boolean solids.
+ */
+export function faceBoundaryPolygon(
+  entity: EntityData,
+  faceIndex: number,
+  basis: { origin: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; normal: THREE.Vector3 },
+): [number, number][] | null {
+  const tags = entity.triFaceIds;
+  const positions = entity.triPositions;
+  if (!tags || !positions || positions.length < 9) return null;
+
+  const triCount = Math.floor(positions.length / 9);
+  const stride = tags.length === Math.floor(positions.length / 3) ? 3 : 1;
+
+  // Track directed boundary edges: key -> count & [p1, p2]
+  const edgeCount = new Map<string, { p1: THREE.Vector3; p2: THREE.Vector3; count: number }>();
+  const pos = new THREE.Vector3(...entity.transform.position);
+  const quat = new THREE.Quaternion(...entity.transform.rotation);
+  const scl = new THREE.Vector3(...entity.transform.scale);
+  const mat = new THREE.Matrix4().compose(pos, quat, scl);
+
+  const hashPt = (v: THREE.Vector3) =>
+    `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+
+  for (let tri = 0; tri < triCount; tri++) {
+    if (tags[tri * stride] !== faceIndex) continue;
+    const o = tri * 9;
+    const p0 = new THREE.Vector3(positions[o], positions[o + 1], positions[o + 2]).applyMatrix4(mat);
+    const p1 = new THREE.Vector3(positions[o + 3], positions[o + 4], positions[o + 5]).applyMatrix4(mat);
+    const p2 = new THREE.Vector3(positions[o + 6], positions[o + 7], positions[o + 8]).applyMatrix4(mat);
+
+    const triEdges: [THREE.Vector3, THREE.Vector3][] = [
+      [p0, p1],
+      [p1, p2],
+      [p2, p0],
+    ];
+
+    for (const [a, b] of triEdges) {
+      const hA = hashPt(a);
+      const hB = hashPt(b);
+      const key = hA < hB ? `${hA}-${hB}` : `${hB}-${hA}`;
+      const existing = edgeCount.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        edgeCount.set(key, { p1: a, p2: b, count: 1 });
+      }
+    }
+  }
+
+  // Boundary edges belong to exactly one triangle in this face
+  const boundary: { p1: THREE.Vector3; p2: THREE.Vector3 }[] = [];
+  for (const entry of edgeCount.values()) {
+    if (entry.count === 1) {
+      boundary.push({ p1: entry.p1, p2: entry.p2 });
+    }
+  }
+
+  if (boundary.length < 3) return null;
+
+  // Chain boundary edges into an ordered loop
+  const loop: THREE.Vector3[] = [boundary[0].p1, boundary[0].p2];
+  const used = new Set<number>([0]);
+
+  while (loop.length < boundary.length + 1) {
+    const cur = loop[loop.length - 1];
+    let found = false;
+    for (let i = 0; i < boundary.length; i++) {
+      if (used.has(i)) continue;
+      const b = boundary[i];
+      if (b.p1.distanceTo(cur) < 1e-3) {
+        loop.push(b.p2);
+        used.add(i);
+        found = true;
+        break;
+      } else if (b.p2.distanceTo(cur) < 1e-3) {
+        loop.push(b.p1);
+        used.add(i);
+        found = true;
+        break;
+      }
+    }
+    if (!found) break;
+  }
+
+  // Remove duplicate closure point if present
+  if (loop.length > 3 && loop[0].distanceTo(loop[loop.length - 1]) < 1e-3) {
+    loop.pop();
+  }
+
+  if (loop.length < 3) return null;
+
+  // Project loop to 2D plane UV
+  return loop.map((p) => {
+    const rel = p.clone().sub(basis.origin);
+    return [rel.dot(basis.u), -rel.dot(basis.v)] as [number, number];
+  });
 }

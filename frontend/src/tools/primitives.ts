@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { ToolContext, ToolHandler } from "./types";
+import { evalMathExpr } from "./sketch";
+import { useArcStore } from "../lib/store";
 
 // ---------------------------------------------------------------------------
 // Primitive creation tools. Click-click (or drag) sets the footprint; box,
@@ -94,7 +96,7 @@ function pointAtTypedSimple(
   const parts = typed
     .trim()
     .split(/[\s,x×]+/i)
-    .map((s) => Number.parseFloat(s))
+    .map((s) => evalMathExpr(s) ?? Number.parseFloat(s))
     .filter((n) => Number.isFinite(n) && n > 0);
   if (parts.length === 0) return null;
   if (id === "plane") {
@@ -123,7 +125,15 @@ function makeSimpleTool(
 ): ToolHandler {
   let state = fresh();
   const place = (built: Built, ctx: ToolContext) => {
-    void ctx.createEntity(built.geometry as never, built.position);
+    const st = useArcStore.getState();
+    const rot = st.sketchMode && Math.abs(st.sketchPlaneNormal[1] - 1) > 1e-3
+      ? (() => {
+          const n = new THREE.Vector3(...st.sketchPlaneNormal).normalize();
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+          return [q.x, q.y, q.z, q.w] as [number, number, number, number];
+        })()
+      : undefined;
+    void ctx.createEntity(built.geometry as never, built.position, undefined, rot);
     ctx.setStatus("Placed");
   };
   const refreshTypedPreview = (ctx: ToolContext) => {
@@ -209,7 +219,7 @@ function makeSimpleTool(
     },
     onKey(event, ctx) {
       if (!state.anchor) return false;
-      if (/^[0-9.]$/.test(event.key)) {
+      if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
         state.typed += event.key;
         refreshTypedPreview(ctx);
         return true;
@@ -340,7 +350,7 @@ function secondFromTypedFootprint(
   const parts = typed
     .trim()
     .split(/[\s,x×]+/i)
-    .map((s) => Number.parseFloat(s))
+    .map((s) => evalMathExpr(s) ?? Number.parseFloat(s))
     .filter((n) => Number.isFinite(n) && n > 0);
   if (parts.length === 0) return null;
   if (id === "box") {
@@ -366,9 +376,19 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
 
   const commitAt = (a: THREE.Vector3, b: THREE.Vector3, h: number, ctx: ToolContext): void => {
     const fp = spec.footprint(a, b, ctx);
+    const st = useArcStore.getState();
+    const rot = st.sketchMode && Math.abs(st.sketchPlaneNormal[1] - 1) > 1e-3
+      ? (() => {
+          const n = new THREE.Vector3(...st.sketchPlaneNormal).normalize();
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+          return [q.x, q.y, q.z, q.w] as [number, number, number, number];
+        })()
+      : undefined;
     void ctx.createEntity(
       spec.geometry(fp, h) as never,
       spec.position(a, b, fp, h),
+      undefined,
+      rot,
     );
     ctx.setStatus("Placed");
     state = reset(ctx);
@@ -483,7 +503,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
     },
     onKey(event, ctx) {
       if (!state.anchor) return false;
-      if (/^[0-9.]$/.test(event.key)) {
+      if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
         state.typed += event.key;
         previewFor(ctx);
         return true;

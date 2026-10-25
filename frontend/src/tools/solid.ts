@@ -2,8 +2,10 @@ import * as THREE from "three";
 import type { EntityData, ToolId } from "../lib/types";
 import type { ToolContext, ToolHandler } from "./types";
 import { chainFromEntity, resampleLoop, computePlaneBasis, type Chain } from "./geometry2d";
+import { evalMathExpr } from "./sketch";
 import { useArcStore } from "../lib/store";
 import { ipc } from "../lib/ipc";
+import { featureHistory } from "../lib/featureHistory";
 
 // ---------------------------------------------------------------------------
 // Solid modeling tools in the Shapr3D style: pick a sketch profile, then
@@ -184,6 +186,7 @@ interface ExtrudeDraft {
   lastScreen: { x: number; y: number } | undefined;
   mesh: THREE.Mesh;
   wire: THREE.LineSegments;
+  sketchEntityId?: string;
 }
 
 let ext: ExtrudeDraft | null = null;
@@ -336,6 +339,7 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
     lastScreen: undefined,
     mesh,
     wire,
+    sketchEntityId: chain.entityId,
   };
   updateExtrudePreview(ext, ctx);
   ctx.setStatus("Drag outward to add or inward into a solid to Cut · click or type H + Enter");
@@ -354,11 +358,10 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
     return [rel.dot(d.u), -rel.dot(d.v)] as [number, number];
   });
 
-  // Add slight overshoot on entry face when boolean-cutting to prevent coplanar skin artifacts
-  const overshoot = isCutting ? 0.1 : 0;
+  // Add overshoot on boundary faces when boolean-cutting to prevent coplanar face degeneration in truck_shapeops
+  const overshoot = isCutting ? 0.4 : 0;
   const finalH = absH + overshoot;
-  const offsetAlongNormal =
-    rawH >= 0 ? (absH - overshoot * 0.5) / 2 : -(absH - overshoot * 0.5) / 2;
+  const offsetAlongNormal = rawH >= 0 ? absH / 2 : -(absH / 2);
   const center = d.centroid.clone().addScaledVector(d.normal, offsetAlongNormal);
   const pos: [number, number, number] = [center.x, center.y, center.z];
   const rot: [number, number, number, number] = [d.quat.x, d.quat.y, d.quat.z, d.quat.w];
@@ -372,6 +375,22 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
       d.isHorizontal ? undefined : rot,
     );
     if (!createdId) return;
+    const finalSolidId = isCutting && targetId ? targetId : createdId;
+    featureHistory.register({
+      id: finalSolidId,
+      name: isCutting ? `Cut Pocket ${formatNum(absH)}` : `Extrude ${formatNum(absH)}`,
+      operation: isCutting ? "extrude_cut" : "extrude",
+      sketchEntityId: d.sketchEntityId,
+      targetSolidId: targetId ?? undefined,
+      parameters: {
+        height: absH,
+        normal: [d.normal.x, d.normal.y, d.normal.z],
+        centroid: [d.centroid.x, d.centroid.y, d.centroid.z],
+        isHorizontal: d.isHorizontal,
+        rotationQuat: [d.quat.x, d.quat.y, d.quat.z, d.quat.w],
+      },
+      createdAt: Date.now(),
+    });
     if (isCutting && targetId && docId) {
       try {
         const res = await ipc.csgApply(docId, "difference", targetId, createdId);
@@ -381,8 +400,8 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
         await ipc.setSelection(docId, [res.id], res.id);
         ctx.setStatus(`Extrude-Cut ${formatNum(absH)} ${ctx.settings.unitLabel}`);
         return;
-      } catch {
-        // Fallback: keep extruded body if boolean fails
+      } catch (err) {
+        ctx.setStatus(`Extrude-cut failed (${String(err)}) · kept extruded body`);
       }
     }
     ctx.setStatus(`Extruded H ${formatNum(absH)} ${ctx.settings.unitLabel} · pick another closed profile`);
@@ -474,7 +493,7 @@ export const extrudeTool: ToolHandler = {
     }
     d.lastScreen = ctx.screenPoint(event);
     d.forceCut = event.shiftKey;
-    const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
+    const parsed = evalMathExpr(d.typed) ?? (d.typed ? Number.parseFloat(d.typed) : Number.NaN);
     d.height =
       Number.isFinite(parsed) && Math.abs(parsed) > 0
         ? parsed
@@ -484,13 +503,13 @@ export const extrudeTool: ToolHandler = {
   onKey(event, ctx) {
     const d = ext;
     if (!d) return false;
-    if (/^[0-9.-]$/.test(event.key)) {
-      if (event.key === "-" && d.typed.length > 0) {
+    if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
+      if (event.key === "-" && d.typed.length > 0 && !d.typed.endsWith(" ") && !d.typed.endsWith("(")) {
         d.typed = d.typed.startsWith("-") ? d.typed.slice(1) : `-${d.typed}`;
       } else {
         d.typed += event.key;
       }
-      const parsed = Number.parseFloat(d.typed);
+      const parsed = evalMathExpr(d.typed) ?? Number.parseFloat(d.typed);
       if (Number.isFinite(parsed) && Math.abs(parsed) > 0) d.height = parsed;
       updateExtrudePreview(d, ctx);
       return true;
@@ -501,7 +520,7 @@ export const extrudeTool: ToolHandler = {
     const d = ext;
     if (d && d.typed.length > 0) {
       d.typed = d.typed.slice(0, -1);
-      const parsed = Number.parseFloat(d.typed);
+      const parsed = evalMathExpr(d.typed) ?? Number.parseFloat(d.typed);
       if (Number.isFinite(parsed) && Math.abs(parsed) > 0) d.height = parsed;
       updateExtrudePreview(d, ctx);
     }
@@ -509,7 +528,7 @@ export const extrudeTool: ToolHandler = {
   onEnter(ctx) {
     const d = ext;
     if (!d) return false;
-    const parsed = d.typed ? Number.parseFloat(d.typed) : Number.NaN;
+    const parsed = evalMathExpr(d.typed) ?? (d.typed ? Number.parseFloat(d.typed) : Number.NaN);
     const h = Number.isFinite(parsed) && Math.abs(parsed) > 0 ? parsed : d.height;
     commitExtrudeHeight(h, ctx);
     return true;

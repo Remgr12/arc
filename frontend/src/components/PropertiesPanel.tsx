@@ -1,7 +1,10 @@
+import { useState } from "react";
 import * as THREE from "three";
-import { Trash2 } from "lucide-react";
+import { Box, History, Link2, PencilRuler, RefreshCw, Sliders, Trash2 } from "lucide-react";
 import { ipc } from "../lib/ipc";
 import { useArcStore } from "../lib/store";
+import { featureHistory } from "../lib/featureHistory";
+import { assemblyManager } from "../lib/assembly";
 import type { EntityData, Geometry, SceneData } from "../lib/types";
 import { cn, NumField, Row, SelectField, TextField } from "./ui";
 
@@ -71,43 +74,382 @@ function AxisFields({
   );
 }
 
-/** Right panel: properties of the primary selected entity. */
+/** Right panel: properties of the primary selected entity, plus Feature Tree and Assembly Mates. */
 export function PropertiesPanel() {
+  const [tab, setTab] = useState<"props" | "features" | "assembly">("props");
   const overview = useArcStore((s) => s.overview) as any;
   const scene = useArcStore((s) => s.scene) as any;
   const docId = overview?.active ?? "";
   const entity = scene?.entities.find((e: { id: string; primary?: string }) => e.id === scene.primary) ?? null;
 
-  if (!entity) {
-    return (
-      <div className="flex h-full min-h-0 flex-col bg-base-50">
-        <PanelHeader title="Properties" />
-        <div className="flex flex-1 items-center justify-center px-3">
-          <p className="text-[12px] text-base-500">No selection</p>
-        </div>
-      </div>
-    );
-  }
+  const featureCount = featureHistory.list().length;
+  const mateCount = assemblyManager.list().length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-base-50">
-      <PanelHeader title="Properties" hint={entity.kind} />
+      {/* Tab Switcher Header */}
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/90 px-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setTab("props")}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] transition-colors",
+              tab === "props"
+                ? "bg-base-200 text-base-900 font-semibold"
+                : "text-base-600 hover:bg-base-100 hover:text-base-800",
+            )}
+          >
+            <Sliders size={12} strokeWidth={2} />
+            <span>Inspector</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("features")}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] transition-colors",
+              tab === "features"
+                ? "bg-base-200 text-base-900 font-semibold"
+                : "text-base-600 hover:bg-base-100 hover:text-base-800",
+            )}
+          >
+            <History size={12} strokeWidth={2} />
+            <span>History</span>
+            {featureCount > 0 && (
+              <span className="rounded-full bg-accent-500/15 px-1 font-mono text-[9px] font-bold text-accent-600">
+                {featureCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("assembly")}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] transition-colors",
+              tab === "assembly"
+                ? "bg-base-200 text-base-900 font-semibold"
+                : "text-base-600 hover:bg-base-100 hover:text-base-800",
+            )}
+          >
+            <Link2 size={12} strokeWidth={2} />
+            <span>Assembly</span>
+            {mateCount > 0 && (
+              <span className="rounded-full bg-accent-500/15 px-1 font-mono text-[9px] font-bold text-accent-600">
+                {mateCount}
+              </span>
+            )}
+          </button>
+        </div>
+        {tab === "props" && entity && (
+          <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{entity.kind}</span>
+        )}
+      </div>
+
+      {/* Tab Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-3.5">
-        <EntityForm docId={docId} entity={entity} scene={scene} />
+        {tab === "props" && (
+          entity ? (
+            <EntityForm docId={docId} entity={entity} scene={scene} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Box size={28} className="text-base-300 mb-2" />
+              <p className="text-[12px] font-medium text-base-600">No selection</p>
+              <p className="text-[11px] text-base-400 mt-0.5">Select a solid or sketch in the viewport</p>
+            </div>
+          )
+        )}
+        {tab === "features" && <FeaturesTab docId={docId} />}
+        {tab === "assembly" && <AssemblyTab docId={docId} />}
       </div>
     </div>
   );
 }
 
-function PanelHeader({ title, hint }: { title: string; hint?: string }) {
+function FeaturesTab({ docId }: { docId: string }) {
+  const scene = useArcStore((s) => s.scene);
+  const [, setVersion] = useState(0);
+  const features = featureHistory.list();
+
+  const handleEditSketch = (sketchId?: string) => {
+    if (!sketchId || !scene) return;
+    const sketchEntity = scene.entities.find((e) => e.id === sketchId);
+    if (!sketchEntity) return;
+
+    const rot = sketchEntity.transform.rotation;
+    const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
+    const normalVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+    useArcStore.getState().enterSketchMode({
+      origin: sketchEntity.transform.position,
+      normal: [normalVec.x, normalVec.y, normalVec.z],
+      label: `Edit ${sketchEntity.name || "Sketch"}`,
+      tool: "line",
+    });
+    window.dispatchEvent(
+      new CustomEvent("arc-focus-plane", {
+        detail: { normal: [normalVec.x, normalVec.y, normalVec.z] },
+      }),
+    );
+  };
+
+  if (features.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 px-2 text-center">
+        <History size={30} className="text-base-300 mb-2" />
+        <span className="text-[12px] font-semibold text-base-700">No Parametric Features</span>
+        <p className="text-[11px] text-base-500 mt-1">
+          Extrude or cut any 2D sketch to build a parametric feature tree. Downstream solids update automatically when sketches change!
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between border-b border-base-200 bg-base-100/80 px-3.5">
-      <span className="text-[12px] font-semibold text-base-800">{title}</span>
-      {hint && (
-        <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{hint}</span>
-      )}
+    <div className="flex flex-col gap-2.5 pt-3">
+      {features.map((feat) => {
+        const sketchEntity = feat.sketchEntityId ? scene?.entities.find((e) => e.id === feat.sketchEntityId) : null;
+        return (
+          <div key={feat.id} className="flex flex-col gap-2 rounded-xl border border-base-200 bg-base-100 p-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Box size={13} className="text-accent-500 shrink-0" />
+                <span className="text-[12px] font-semibold text-base-800 truncate">{feat.name}</span>
+              </div>
+              <span className="rounded bg-accent-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-600">
+                {feat.operation}
+              </span>
+            </div>
+
+            {sketchEntity && (
+              <div className="flex items-center justify-between text-[11px] text-base-600">
+                <span className="flex items-center gap-1 truncate">
+                  <PencilRuler size={11} className="text-base-400 shrink-0" />
+                  Driven by: <strong className="text-base-800 truncate">{sketchEntity.name || "Sketch"}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleEditSketch(sketchEntity.id)}
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-accent-600 hover:bg-accent-500/10 transition-colors"
+                >
+                  Edit Sketch
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-base-200/50 pt-2 text-[11px]">
+              <span className="text-base-500">Height:</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  step={1}
+                  min={0.5}
+                  value={feat.parameters.height}
+                  onChange={(e) => {
+                    const next = Number.parseFloat(e.target.value);
+                    if (Number.isFinite(next) && next > 0) {
+                      void featureHistory.updateFeatureHeight(docId, feat.id, next).then(() => setVersion((v) => v + 1));
+                    }
+                  }}
+                  className="h-5 w-14 rounded border border-base-300 bg-base-50 px-1 text-center font-mono text-[11px] text-base-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (feat.sketchEntityId) {
+                      void featureHistory.regenerate(feat.sketchEntityId, docId).then(() => setVersion((v) => v + 1));
+                    }
+                  }}
+                  className="flex h-5 items-center gap-1 rounded bg-base-200 px-1.5 text-[10.5px] font-medium text-base-700 hover:bg-base-300 transition-colors"
+                >
+                  <RefreshCw size={10} />
+                  <span>Regen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function AssemblyTab({ docId }: { docId: string }) {
+  const scene = useArcStore((s) => s.scene);
+  const [, setVersion] = useState(0);
+  const mates = assemblyManager.list();
+
+  if (mates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 px-2 text-center">
+        <Link2 size={30} className="text-base-300 mb-2" />
+        <span className="text-[12px] font-semibold text-base-700">No Assembly Mates</span>
+        <p className="text-[11px] text-base-500 mt-1">
+          Select 2 solid parts in the viewport and click Mate, Flush, or Concentric to align and snap them together.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 pt-3">
+      {mates.map((m) => {
+        const eA = scene?.entities.find((e) => e.id === m.entityAId);
+        const eB = scene?.entities.find((e) => e.id === m.entityBId);
+        return (
+          <div key={m.id} className="flex flex-col gap-2 rounded-xl border border-base-200 bg-base-100 p-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Link2 size={12} className="text-accent-500 shrink-0" />
+                <span className="text-[12px] font-semibold text-base-800 truncate">{m.name}</span>
+              </div>
+              <span className="rounded bg-accent-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-600">
+                {m.type}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-0.5 text-[11px] text-base-600">
+              <span className="truncate">Ref (fixed): <strong className="text-base-800">{eA?.name || "Part A"}</strong></span>
+              <span className="truncate">Moving: <strong className="text-base-800">{eB?.name || "Part B"}</strong></span>
+              {typeof m.offsetDistance === "number" && m.offsetDistance !== 0 && (
+                <span>Offset: <strong className="font-mono text-base-800">{m.offsetDistance}</strong></span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-base-200/50 pt-2 text-[11px]">
+              <button
+                type="button"
+                onClick={() => {
+                  void assemblyManager.reapplyMate(docId, m.id).then(() => setVersion((v) => v + 1));
+                }}
+                className="flex items-center gap-1 rounded bg-base-200 px-2 py-0.5 text-[10.5px] font-medium text-base-700 hover:bg-base-300 transition-colors"
+              >
+                <RefreshCw size={10} />
+                <span>Re-align</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  assemblyManager.remove(m.id);
+                  setVersion((v) => v + 1);
+                }}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] text-danger-500 hover:bg-danger-50 transition-colors"
+              >
+                <Trash2 size={10} />
+                <span>Remove</span>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ParametricFeatureCard({
+  docId,
+  entity,
+  scene,
+}: {
+  docId: string;
+  entity: EntityData;
+  scene: SceneData | null;
+}) {
+  const feat = featureHistory.get(entity.id);
+  const downstream = featureHistory.getDownstreamFeatures(entity.id);
+
+  if (!feat && downstream.length === 0) return null;
+
+  const handleEditSketch = (sketchId: string) => {
+    if (!scene) return;
+    const sketchEntity = scene.entities.find((e) => e.id === sketchId);
+    if (!sketchEntity) return;
+
+    const rot = sketchEntity.transform.rotation;
+    const q = new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3]);
+    const normalVec = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+    useArcStore.getState().enterSketchMode({
+      origin: sketchEntity.transform.position,
+      normal: [normalVec.x, normalVec.y, normalVec.z],
+      label: `Edit ${sketchEntity.name || "Sketch"}`,
+      tool: "line",
+    });
+    window.dispatchEvent(
+      new CustomEvent("arc-focus-plane", {
+        detail: { normal: [normalVec.x, normalVec.y, normalVec.z] },
+      }),
+    );
+  };
+
+  if (feat) {
+    const driving = feat.sketchEntityId ? scene?.entities.find((e) => e.id === feat.sketchEntityId) : null;
+    return (
+      <Section title="Parametric Feature" className="mt-4 border-t border-base-200/60 pt-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-accent-500/20 bg-accent-500/5 p-2.5">
+          <div className="flex items-center justify-between text-[11.5px]">
+            <span className="font-semibold text-accent-700">{feat.name}</span>
+            <span className="rounded bg-accent-500/15 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-700">
+              {feat.operation}
+            </span>
+          </div>
+          {driving && (
+            <div className="flex items-center justify-between text-[11px] text-base-600">
+              <span>Driving: <strong className="text-base-800">{driving.name || "Sketch"}</strong></span>
+              <button
+                type="button"
+                onClick={() => handleEditSketch(driving.id)}
+                className="font-semibold text-accent-600 hover:underline"
+              >
+                Edit Sketch
+              </button>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-base-500">Extrusion Height:</span>
+            <input
+              type="number"
+              step={1}
+              min={0.5}
+              value={feat.parameters.height}
+              onChange={(e) => {
+                const next = Number.parseFloat(e.target.value);
+                if (Number.isFinite(next) && next > 0) {
+                  void featureHistory.updateFeatureHeight(docId, feat.id, next);
+                }
+              }}
+              className="h-5 w-14 rounded border border-base-300 bg-base-100 px-1 text-center font-mono text-[11px] text-base-800"
+            />
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  if (downstream.length > 0) {
+    return (
+      <Section title="Downstream Solids" className="mt-4 border-t border-base-200/60 pt-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-base-300 bg-base-100 p-2.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-base-600">Drives <strong>{downstream.length}</strong> solid{downstream.length > 1 ? "s" : ""}:</span>
+            <button
+              type="button"
+              onClick={() => void featureHistory.regenerate(entity.id, docId)}
+              className="flex items-center gap-1 rounded bg-accent-500/10 px-2 py-0.5 font-semibold text-[10.5px] text-accent-600 hover:bg-accent-500/20 transition-colors"
+            >
+              <RefreshCw size={10} /> Regen All
+            </button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {downstream.map((d) => (
+              <span key={d.id} className="font-mono text-[10.5px] text-base-700">
+                • {d.name} ({d.operation})
+              </span>
+            ))}
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  return null;
 }
 
 function EntityForm({
@@ -219,6 +561,8 @@ function EntityForm({
       >
         <GeometryForm docId={docId} entity={entity} />
       </Section>
+
+      <ParametricFeatureCard docId={docId} entity={entity} scene={scene} />
 
       <div className="mt-5 border-t border-base-200/60 pt-3 pb-1 transition-all duration-300">
         <button

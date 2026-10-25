@@ -10,8 +10,8 @@
 //! |--------|--------|--------|
 //! | STL binary + ASCII | [`parse_stl`] | [`export_stl_binary`], [`export_stl_ascii`] |
 //! | Wavefront OBJ | [`parse_obj`] | [`export_obj`] |
-//! | DXF (ENTITIES section) | [`parse_dxf`] | — |
-//! | glTF 2.0 (JSON) | — | [`export_gltf`] |
+//! | DXF (ENTITIES section) | [`parse_dxf`] | - |
+//! | glTF 2.0 (JSON) | - | [`export_gltf`] |
 
 use std::collections::HashMap;
 use std::path::Path;

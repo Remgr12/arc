@@ -73,7 +73,12 @@ export interface ToolContext {
   /** Snap to grid, sketch endpoints, origin, axes, intersections, perpendiculars, quadrants, and polar tracking. */
   snap(
     world: THREE.Vector3,
-    opts?: { grid?: boolean; anchor?: THREE.Vector3 | null; allowPolar?: boolean },
+    opts?: {
+      grid?: boolean;
+      anchor?: THREE.Vector3 | null;
+      allowPolar?: boolean;
+      extraPoints?: THREE.Vector3[];
+    },
   ): SnapResult;
   snapGrid(v: THREE.Vector3): THREE.Vector3;
   /** Snap a scalar dimension (length, width, height, radius) to the active dimension increment (e.g. 1 cm or 2 cm). */

@@ -167,32 +167,44 @@ export function installKeybinds(): () => void {
         st.setCommandLineOpen(false);
         return;
       }
+      // 1. If currently mid-draft/drawing, cancel the active draft first
       if (st.drafting) {
         window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
         st.setDrafting(false);
-        if (!st.sketchMode) {
-          st.setTool("select");
-          st.setSelectionRef(null);
-        }
         return;
       }
+      // 2. If a non-select tool is active, revert tool to select without dropping the sketch plane
+      if (st.tool !== "select") {
+        window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
+        st.setTool("select");
+        st.setDrafting(false);
+        st.setStatusMessage("Select");
+        return;
+      }
+      // 3. If any entity/face/edge is selected, clear selection
+      if (st.selFace || st.selEdge || (st.scene && st.scene.selection.length > 0)) {
+        st.setSelectionRef(null);
+        void actions.clearSelection();
+        st.setStatusMessage("Selection cleared");
+        return;
+      }
+      // 4. Finally, if in sketch mode with nothing active/selected, exit sketch mode
       if (st.sketchMode) {
         window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
         st.exitSketchMode();
         return;
       }
-      if (st.tool !== "select") {
-        window.dispatchEvent(new CustomEvent("arc-draft-cancel"));
-        st.setTool("select");
-        st.setDrafting(false);
-        st.setSelectionRef(null);
-        return;
-      }
-      if (st.selFace || st.selEdge || (st.scene && st.scene.selection.length > 0)) {
-        st.setSelectionRef(null);
-        void actions.clearSelection();
-        return;
-      }
+      return;
+    }
+
+    // SolveSpace 'W' hotkey: align camera normal to active workplane / sketch plane
+    if ((e.key === "w" || e.key === "W") && !e.ctrlKey && !e.metaKey && !e.altKey && !isInputFocused()) {
+      e.preventDefault();
+      const n = st.sketchMode ? st.sketchPlaneNormal : [0, 1, 0];
+      window.dispatchEvent(
+        new CustomEvent("arc-focus-plane", { detail: { normal: n } }),
+      );
+      st.setStatusMessage("View aligned normal to workplane");
       return;
     }
 

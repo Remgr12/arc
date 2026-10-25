@@ -135,7 +135,7 @@ pub fn solid_to_buffer(solid: &truck_modeling::Solid, tol: f64) -> crate::core::
 ///
 /// Winding is preserved (truck tessellators emit outward faces); triangle
 /// normals are recomputed from the geometry for stable shading. Face tags are
-/// per polygon face — use [`solid_to_buffer`] for B-rep face identity.
+/// per polygon face - use [`solid_to_buffer`] for B-rep face identity.
 #[allow(dead_code)]
 pub fn polygon_to_buffer(mesh: &PolygonMesh) -> crate::core::mesh::MeshBuffer {
     let mut mb = crate::core::mesh::MeshBuilder::new();

@@ -30,6 +30,22 @@ function freshState(): ClickState {
   };
 }
 
+/** Safely evaluate math expressions like "25.4 * 2" or "100 / 4 + 5" for in-place dimension entry. */
+export function evalMathExpr(input: string): number | null {
+  const clean = input.trim().replace(/,/g, ".");
+  if (!clean) return null;
+  if (!/^[\d\s+\-*/().]+$/.test(clean)) return null;
+  try {
+    const val = Function(`"use strict"; return (${clean});`)();
+    if (typeof val === "number" && Number.isFinite(val) && !Number.isNaN(val)) {
+      return val;
+    }
+  } catch {
+    // incomplete expression while typing
+  }
+  return null;
+}
+
 function activePlaneBasis(overrideOrigin?: THREE.Vector3): PlaneBasis {
   const st = useArcStore.getState();
   const nArr = st.sketchMode ? st.sketchPlaneNormal : ([0, 1, 0] as [number, number, number]);
@@ -165,17 +181,8 @@ function snapToSketchVertex(
   chainPoints: THREE.Vector3[] = [],
   anchor?: THREE.Vector3 | null,
 ): THREE.Vector3 {
-  const tol = Math.max(1.2, ctx.settings.gridSize * 0.65);
-  // Prioritize closing the current in-progress chain back to an earlier vertex
-  for (const pt of chainPoints) {
-    const d = raw.distanceTo(pt);
-    if (d < tol) {
-      return pt.clone();
-    }
-  }
-
-  // Use the full CAD precision snapping engine (endpoints, midpoints, centers, quadrants, intersections, perpendicular, polar tracking)
-  return ctx.snap(raw, { anchor }).point;
+  // Use the full CAD precision snapping engine with active chain vertices prioritized
+  return ctx.snap(raw, { anchor, extraPoints: chainPoints }).point;
 }
 
 /**
@@ -316,7 +323,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     if (points.length === 0) return;
     const from = points[points.length - 1];
     let target = state.lastCursor ?? from;
-    const parsed = state.typed ? Number.parseFloat(state.typed) : Number.NaN;
+    const parsed = evalMathExpr(state.typed) ?? (state.typed ? Number.parseFloat(state.typed) : Number.NaN);
     if (Number.isFinite(parsed) && parsed > 0) {
       target = pointAlongDirection(from, state.lastCursor, parsed);
     }
@@ -334,8 +341,10 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     const constraintTag = isHoriz ? " [H]" : isVert ? " [V]" : "";
 
     const label = state.typed
-      ? `L: ${state.typed}| ${u}${constraintTag} · [Enter]`
-      : `${lenLabel(from, target)} ${u}${constraintTag} · ${angleLabel(from, target)}`;
+      ? (Number.isFinite(parsed) && parsed > 0 && String(parsed) !== state.typed.trim()
+          ? `L: ${state.typed} = ${formatNum(parsed)} ${u}${constraintTag} · [Enter]`
+          : `L: ${state.typed}| ${u}${constraintTag} · [Enter]`)
+      : `L: ${lenLabel(from, target)} ${u}${constraintTag}   ∠ ${angleLabel(from, target)}`;
     ctx.showMeasure(label, state.lastScreen);
   };
 
@@ -446,7 +455,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       }
       const from = points[points.length - 1];
       let target = ortho(from, snapped, event.shiftKey);
-      const parsed = state.typed ? Number.parseFloat(state.typed) : Number.NaN;
+      const parsed = evalMathExpr(state.typed) ?? (state.typed ? Number.parseFloat(state.typed) : Number.NaN);
       if (Number.isFinite(parsed) && parsed > 0) {
         target = pointAlongDirection(from, target, parsed);
       }
@@ -464,7 +473,12 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       }
       if (points.length === 0) {
         state.lastCursor = cursor;
-        ctx.showMeasure(null);
+        const basis = activePlaneBasis();
+        const delta = cursor.clone().sub(basis.origin);
+        const u = delta.dot(basis.u);
+        const v = delta.dot(basis.v);
+        const uLabel = ctx.settings.unitLabel;
+        ctx.showMeasure(`X: ${formatNum(u)}  Y: ${formatNum(v)} ${uLabel}`, state.lastScreen);
         return;
       }
       state.lastCursor = ortho(from!, cursor, event.shiftKey);
@@ -486,7 +500,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       }
       const from = points[points.length - 1];
       let target = ortho(from, snapToSketchVertex(raw, ctx, points, from), event.shiftKey);
-      const parsed = state.typed ? Number.parseFloat(state.typed) : Number.NaN;
+      const parsed = evalMathExpr(state.typed) ?? (state.typed ? Number.parseFloat(state.typed) : Number.NaN);
       if (Number.isFinite(parsed) && parsed > 0) {
         target = pointAlongDirection(from, target, parsed);
       }
@@ -502,7 +516,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     },
     onKey(event, ctx) {
       if (points.length === 0) return false;
-      if (/^[0-9.]$/.test(event.key)) {
+      if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
         state.typed += event.key;
         updateLinePreview(ctx);
         return true;
@@ -511,7 +525,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     },
     onEnter(ctx) {
       if (points.length > 0 && state.typed) {
-        const parsed = Number.parseFloat(state.typed);
+        const parsed = evalMathExpr(state.typed) ?? Number.parseFloat(state.typed);
         if (Number.isFinite(parsed) && parsed > 0) {
           const from = points[points.length - 1];
           const target = pointAlongDirection(from, state.lastCursor, parsed);
@@ -603,7 +617,7 @@ function rectTypedEnd(
   const parts = typed
     .trim()
     .split(/[\s,x×]+/i)
-    .map((s) => Number.parseFloat(s))
+    .map((s) => evalMathExpr(s) ?? Number.parseFloat(s))
     .filter((n) => Number.isFinite(n) && n > 0);
   if (parts.length === 0) return null;
   const w = parts[0];
@@ -719,7 +733,9 @@ export const rectangleTool: ToolHandler = {
     rect.lastCursor = ctx.snap(raw, { anchor: rect.anchor }).point;
     rect.lastScreen = ctx.screenPoint(event);
     if (!rect.anchor) {
-      ctx.showMeasure(null);
+      const basis = activePlaneBasis();
+      const delta = rect.lastCursor.clone().sub(basis.origin);
+      ctx.showMeasure(`X: ${formatNum(delta.dot(basis.u))}  Y: ${formatNum(delta.dot(basis.v))} ${ctx.settings.unitLabel}`, rect.lastScreen);
       return;
     }
     updateRectPreview(ctx, event.shiftKey);
@@ -737,7 +753,7 @@ export const rectangleTool: ToolHandler = {
   },
   onKey(event, ctx) {
     if (!rect.anchor) return false;
-    if (/^[0-9.]$/.test(event.key)) {
+    if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
       rect.typed += event.key;
       updateRectPreview(ctx, event.shiftKey);
       return true;
@@ -777,7 +793,7 @@ function resetCircle(ctx: ToolContext): void {
 }
 
 function circleRadius(c: THREE.Vector3, edge: THREE.Vector3 | null, typed: string, ctx: ToolContext): number {
-  const parsed = typed ? Number.parseFloat(typed) : Number.NaN;
+  const parsed = evalMathExpr(typed) ?? (typed ? Number.parseFloat(typed) : Number.NaN);
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
   if (!edge) return 0;
   return Math.max(0.5, ctx.snapDim(distXZ(c, edge)));
@@ -789,7 +805,9 @@ function updateCirclePreview(ctx: ToolContext): void {
   ctx.setPreview(previewRing(circ.anchor, r, ctx), "draft");
   const u = ctx.settings.unitLabel;
   ctx.showMeasure(
-    circ.typed ? `R ${circ.typed}| ${u}` : `R ${formatNum(r)} ${u}`,
+    circ.typed
+      ? `R ${circ.typed}| ${u}`
+      : `R: ${formatNum(r)} ${u}   Dia: ${formatNum(r * 2)} ${u}`,
     circ.lastScreen,
   );
 }
@@ -843,7 +861,9 @@ export const circleTool: ToolHandler = {
     circ.lastCursor = ctx.snap(raw, { anchor: circ.anchor }).point;
     circ.lastScreen = ctx.screenPoint(event);
     if (!circ.anchor) {
-      ctx.showMeasure(null);
+      const basis = activePlaneBasis();
+      const delta = circ.lastCursor.clone().sub(basis.origin);
+      ctx.showMeasure(`Center X: ${formatNum(delta.dot(basis.u))}  Y: ${formatNum(delta.dot(basis.v))} ${ctx.settings.unitLabel}`, circ.lastScreen);
       return;
     }
     updateCirclePreview(ctx);
@@ -861,7 +881,7 @@ export const circleTool: ToolHandler = {
   },
   onKey(event, ctx) {
     if (!circ.anchor) return false;
-    if (/^[0-9.]$/.test(event.key)) {
+    if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
       circ.typed += event.key;
       updateCirclePreview(ctx);
       return true;
@@ -1083,7 +1103,9 @@ export const polygonTool: ToolHandler = {
     poly.lastCursor = ctx.snap(raw).point;
     poly.lastScreen = ctx.screenPoint(event);
     if (!poly.anchor) {
-      ctx.showMeasure(null);
+      const basis = activePlaneBasis();
+      const delta = poly.lastCursor.clone().sub(basis.origin);
+      ctx.showMeasure(`Center X: ${formatNum(delta.dot(basis.u))}  Y: ${formatNum(delta.dot(basis.v))} ${ctx.settings.unitLabel}`, poly.lastScreen);
       return;
     }
     updatePolyPreview(ctx);
@@ -1113,7 +1135,7 @@ export const polygonTool: ToolHandler = {
       return true;
     }
     if (!poly.anchor) return false;
-    if (/^[0-9.]$/.test(event.key)) {
+    if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
       poly.typed += event.key;
       updatePolyPreview(ctx);
       return true;

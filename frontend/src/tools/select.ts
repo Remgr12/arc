@@ -2,7 +2,6 @@ import * as THREE from "three";
 import type { ToolContext, ToolHandler } from "./types";
 import { useArcStore } from "../lib/store";
 import type { RefObject } from "../lib/types";
-import { faceEditable } from "./faceTools";
 import { facePlaneInfo } from "./topology";
 
 // ---------------------------------------------------------------------------
@@ -57,14 +56,6 @@ export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
       event,
       ctx,
     );
-    const entity = ctx.entityById(edge.entityId);
-    if (
-      !event.shiftKey &&
-      entity &&
-      (faceEditable(entity.kind) || entity.category === "solid" || entity.kind === "solid_fillet" || entity.kind === "csg")
-    ) {
-      useArcStore.getState().setTool("fillet-edge");
-    }
     return;
   }
   const face = ctx.pickFace(event);
@@ -81,10 +72,6 @@ export function selectUnderCursor(event: PointerEvent, ctx: ToolContext): void {
       event,
       ctx,
     );
-    const entity = ctx.entityById(face.entityId);
-    if (!event.shiftKey && entity && faceEditable(entity.kind)) {
-      useArcStore.getState().setTool("extrude-face");
-    }
     return;
   }
   const id = ctx.pickEntity(event);
@@ -146,7 +133,7 @@ export const selectTool: ToolHandler = {
     const face = ctx.pickFace(event);
     if (face) {
       const entity = ctx.entityById(face.entityId);
-      if (entity && faceEditable(entity.kind)) {
+      if (entity) {
         const info = facePlaneInfo(entity, face.faceIndex);
         useArcStore.getState().enterSketchMode({
           height: info.height,
@@ -187,5 +174,5 @@ export const selectTool: ToolHandler = {
     }
     return false;
   },
-  hint: () => "Select · click face for push-pull · double-click face/sketch to sketch on plane · Shift toggles",
+  hint: () => "Select · click to pick face/edge/body · double-click face to sketch · Shift toggles",
 };

@@ -92,6 +92,50 @@ const COMMANDS: CommandDef[] = [
   },
   { name: "settings", desc: "Open settings dialog", run: () => { actions.openSettings(); return { message: "Opened Settings", ok: true, close: true }; } },
   {
+    name: "workplane",
+    desc: "Align view normal to workplane (W)",
+    run: () => {
+      const st = useArcStore.getState();
+      const n = st.sketchMode ? st.sketchPlaneNormal : [0, 1, 0];
+      window.dispatchEvent(new CustomEvent("arc-focus-plane", { detail: { normal: n } }));
+      return { message: "Aligned to workplane", ok: true, close: true };
+    },
+  },
+  {
+    name: "w",
+    desc: "Align view normal to workplane",
+    run: () => {
+      const st = useArcStore.getState();
+      const n = st.sketchMode ? st.sketchPlaneNormal : [0, 1, 0];
+      window.dispatchEvent(new CustomEvent("arc-focus-plane", { detail: { normal: n } }));
+      return { message: "Aligned to workplane", ok: true, close: true };
+    },
+  },
+  {
+    name: "ortho",
+    desc: "Focus top orthogonal view",
+    run: () => {
+      window.dispatchEvent(new CustomEvent("arc-standard-view", { detail: { view: "top" } }));
+      return { message: "Top Ortho View", ok: true, close: true };
+    },
+  },
+  {
+    name: "iso",
+    desc: "Focus isometric 3D view",
+    run: () => {
+      window.dispatchEvent(new CustomEvent("arc-standard-view", { detail: { view: "iso" } }));
+      return { message: "Isometric View", ok: true, close: true };
+    },
+  },
+  {
+    name: "fit",
+    desc: "Zoom to fit (F)",
+    run: () => {
+      actions.fitView();
+      return { message: "Fit to view", ok: true, close: true };
+    },
+  },
+  {
     name: "fast",
     desc: "Toggle Fast performance mode",
     run: () => {

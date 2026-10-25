@@ -2,13 +2,13 @@
 //! CAD kernel) integrated into arc's parametric payload model.
 //!
 //! Module layout:
-//! - [`meshgen`]  — payload (`crate::core::entity::Geometry`) ->
+//! - [`meshgen`]  - payload (`crate::core::entity::Geometry`) ->
 //!   `MeshBuffer` evaluation, backed by truck shape tessellation
-//! - [`shapes`]   — payload -> truck `Solid` construction
-//! - [`csg`]      — truck-shapeops booleans on constructed solids
-//! - [`nurbs`]    — payload <-> truck NURBS marshalling
-//! - [`convert`]  — cgmath <-> arc conversions, mesh buffer mapping
-//! - [`step`]     — STEP import/export through `truck-stepio`
+//! - [`shapes`]   - payload -> truck `Solid` construction
+//! - [`csg`]      - truck-shapeops booleans on constructed solids
+//! - [`nurbs`]    - payload <-> truck NURBS marshalling
+//! - [`convert`]  - cgmath <-> arc conversions, mesh buffer mapping
+//! - [`step`]     - STEP import/export through `truck-stepio`
 //!
 //! Everything geometric at runtime flows through truck: there is no
 //! other kernel in the application.

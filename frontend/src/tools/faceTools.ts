@@ -1,12 +1,15 @@
 import * as THREE from "three";
 import type { ToolHandler, ToolContext } from "./types";
 import { useArcStore } from "../lib/store";
-import { deriveFaces, edgeOverlayGeometry, faceOverlayGeometry } from "./topology";
+import { deriveFaces, edgeOverlayGeometry, faceOverlayGeometry, facePlaneInfo, faceBoundaryPolygon } from "./topology";
+import { computePlaneBasis } from "./geometry2d";
+import { ipc } from "../lib/ipc";
 import type { EntityData, Geometry } from "../lib/types";
 import { uiCapture } from "../lib/uiCapture";
+import { evalMathExpr } from "./sketch";
 
 // ---------------------------------------------------------------------------
-// Face tools: Extrude Face / Offset Face (prisms first — box, extrude,
+// Face tools: Extrude Face / Offset Face (prisms first: box, extrude,
 // cylinder, cone via geometry param updates + re-center transform) and
 // Fillet Edge (solid_fillet payload through the vendored truck backend).
 //
@@ -68,14 +71,22 @@ const FILLET_KINDS = new Set([
   "csg",
 ]);
 
-export function faceEditable(kind: string): boolean {
-  return BOX_KINDS.has(kind) || EXTRUDE_KINDS.has(kind) || CYL_KINDS.has(kind);
+export function faceEditable(_kind: string): boolean {
+  return true; // All planar solid faces are directly push-pullable
 }
 
 /** Map the entity + face into the geometry param it controls. */
 export function faceParam(entity: EntityData, faceIndex: number): Param | null {
   const group = deriveFaces(entity).find((f) => f.index === faceIndex);
-  if (!group) return null;
+  if (!group) {
+    const info = facePlaneInfo(entity, faceIndex);
+    return {
+      kind: "none",
+      axis: new THREE.Vector3(...info.normal),
+      recenters: false,
+      label: "Push-Pull Face",
+    };
+  }
   const [nx, ny, nz] = group.normal;
   const axisFor = (x: number, y: number, z: number): THREE.Vector3 =>
     new THREE.Vector3(x, y, z).normalize();
@@ -122,7 +133,13 @@ export function faceParam(entity: EntityData, faceIndex: number): Param | null {
   if (CYL_KINDS.has(entity.kind)) {
     return { kind: "radius", axis: axisFor(nx, 0, nz), recenters: false, label: "Radius" };
   }
-  return null;
+  const info = facePlaneInfo(entity, faceIndex);
+  return {
+    kind: "none",
+    axis: new THREE.Vector3(...info.normal),
+    recenters: false,
+    label: "Push-Pull Face",
+  };
 }
 
 function geomNumber(entity: EntityData, key: ParamKey): number {
@@ -394,6 +411,57 @@ function restoreLiveDragPreview(ctx: ToolContext, drag: DragState): void {
   ctx.requestRender();
 }
 
+export async function commitDirectFacePushPull(
+  ctx: ToolContext,
+  entityId: string,
+  faceIndex: number,
+  delta: number,
+): Promise<void> {
+  const entity = ctx.entityById(entityId);
+  const docId = ctx.docId();
+  if (!entity || !docId || Math.abs(delta) < 0.05) return;
+
+  const info = facePlaneInfo(entity, faceIndex);
+  const normal = new THREE.Vector3(...info.normal);
+  const origin = new THREE.Vector3(...info.origin);
+  const basis = computePlaneBasis(normal, origin);
+
+  const polygon = faceBoundaryPolygon(entity, faceIndex, basis);
+  if (!polygon || polygon.length < 3) {
+    ctx.setStatus("Could not extract face loop for direct push-pull");
+    return;
+  }
+
+  const absH = Math.abs(delta);
+  const isCut = delta < 0;
+  const overshoot = isCut ? 0.4 : 0;
+  const height = absH + overshoot;
+
+  const offset = isCut ? -absH / 2 : absH / 2;
+  const center = origin.clone().addScaledVector(normal, offset);
+  const pos: [number, number, number] = [center.x, center.y, center.z];
+  const rot: [number, number, number, number] = [basis.quat.x, basis.quat.y, basis.quat.z, basis.quat.w];
+
+  try {
+    const extrudeId = await ctx.createEntity(
+      { type: "extrude", polygon, height },
+      pos,
+      undefined,
+      basis.isHorizontal ? undefined : rot,
+    );
+    if (!extrudeId) return;
+
+    const op = isCut ? "difference" : "union";
+    const res = await ipc.csgApply(docId, op, entityId, extrudeId);
+    const scene = await ipc.getScene(docId);
+    useArcStore.getState().setScene(scene);
+    await ipc.setSelection(docId, [res.id], res.id);
+    useArcStore.getState().setStatusMessage(`Direct ${isCut ? "Pocket" : "Boss"} ${Math.round(absH * 10) / 10} ${ctx.settings.unitLabel}`);
+  } catch (err) {
+    useArcStore.getState().setStatusMessage(`Direct push-pull: ${String(err)}`);
+  }
+}
+
 export function commitValue(
   ctx: ToolContext,
   entityId: string,
@@ -402,7 +470,14 @@ export function commitValue(
   delta: number,
 ): void {
   const entity = ctx.entityById(entityId);
-  if (!entity || param.kind === "none") return;
+  if (!entity) return;
+  if (param.kind === "none") {
+    const store = useArcStore.getState();
+    if (store.selFace && store.selFace.entityId === entityId) {
+      void commitDirectFacePushPull(ctx, entityId, store.selFace.face, delta);
+    }
+    return;
+  }
   const clamped = Math.max(MIN_PARAM, value);
   void ctx.updateGeometry(entityId, geomWith(entity, param.kind, clamped));
   if (param.recenters && Math.abs(delta) > 1e-9) {
@@ -566,11 +641,12 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       if (!gizmo) return true;
       const mouseScreen = ctx.screenPoint(event);
       const param = faceParam(entity, fresh.selFace.face);
-      if (!param || param.kind === "none") {
-        ctx.setStatus(`${label} · this face has no size parameter to drag`);
+      if (!param) {
+        ctx.setStatus(`${label} · select a planar face to push-pull`);
         return true;
       }
-      const startValue = paramValue(entity, param);
+      const isDirect = param.kind === "none";
+      const startValue = isDirect ? 0 : paramValue(entity, param);
       const obj = ctx.objectFor(entity.id);
       obj?.updateMatrixWorld();
       const geometry = screenAxisGeometry(
@@ -631,10 +707,15 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
       if (!entity || !store.selFace) return false;
       const param = faceParam(entity, store.selFace.face);
-      if (!param || param.kind === "none") return false;
-      if (/^[0-9.]$/.test(event.key)) {
+      if (!param) return false;
+      if (/^[0-9.+\-*/\s()]$/.test(event.key)) {
         tool.typed += event.key;
-        ctx.showMeasure(`${param.label}: ${tool.typed}| ${ctx.settings.unitLabel}`);
+        const parsed = evalMathExpr(tool.typed) ?? Number.parseFloat(tool.typed);
+        ctx.showMeasure(
+          Number.isFinite(parsed) && String(parsed) !== tool.typed.trim()
+            ? `${param.label}: ${tool.typed} = ${Math.round(parsed * 100) / 100} ${ctx.settings.unitLabel}`
+            : `${param.label}: ${tool.typed}| ${ctx.settings.unitLabel}`,
+        );
         return true;
       }
       return false;
@@ -652,14 +733,18 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
     },
     onEnter(ctx) {
       if (!tool.typed) return false;
-      const parsed = Number.parseFloat(tool.typed);
+      const parsed = evalMathExpr(tool.typed) ?? Number.parseFloat(tool.typed);
       tool.typed = "";
       ctx.showMeasure(null);
       const store = useArcStore.getState();
       const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
-      if (!entity || !store.selFace || !Number.isFinite(parsed) || parsed < MIN_PARAM) return false;
+      if (!entity || !store.selFace || !Number.isFinite(parsed) || Math.abs(parsed) < 0.05) return false;
       const param = faceParam(entity, store.selFace.face);
-      if (!param || param.kind === "none") return false;
+      if (!param) return false;
+      if (param.kind === "none") {
+        void commitDirectFacePushPull(ctx, entity.id, store.selFace.face, parsed);
+        return true;
+      }
       const current = paramValue(entity, param);
       commitValue(ctx, entity.id, param, parsed, parsed - current);
       return true;

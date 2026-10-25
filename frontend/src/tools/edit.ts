@@ -385,7 +385,7 @@ function trimPlan(chain: Chain, cursor: THREE.Vector3, others: ChainRef[]): Trim
     return { removed, remaining };
   }
   // No two-sided bracket: the clicked piece may still run to a chain end
-  // (e.g. a T-stop with a single crossing) — trim from the crossing outward.
+  // (e.g. a T-stop with a single crossing) - trim from the crossing outward.
   if (!chain.closed && hits.length === 1) {
     const h = hits[0].u;
     if (u < h - 1e-3) {

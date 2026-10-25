@@ -309,7 +309,7 @@ pub fn save_document_impl(
         }
     };
     if let Some(parent) = std::path::Path::new(&final_path).parent() {
-        // Typed workspace folders may not exist yet — make saving self-healing.
+        // Typed workspace folders may not exist yet - make saving self-healing.
         let _ = std::fs::create_dir_all(parent);
     }
     std::fs::write(&final_path, json).map_err(|e| format!("write failed: {e}"))?;
@@ -825,7 +825,7 @@ fn thumbnail_path(project_path: &std::path::Path) -> Option<std::path::PathBuf> 
 }
 
 /// Store a base64 data-URL PNG captured from the viewport, beside the
-/// saved document. Best effort from the UI side — errors surface as strings.
+/// saved document. Best effort from the UI side - errors surface as strings.
 #[tauri::command]
 pub fn save_project_thumbnail(
     state: State<'_, SharedState>,

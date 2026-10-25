@@ -1179,7 +1179,7 @@ function SidebarFooterButton({
 }
 
 function formatDate(modified: number): string {
-  if (!modified) return "—";
+  if (!modified) return "-";
   const date = new Date(modified * 1000);
   const diff = (Date.now() - date.getTime()) / 1000;
   if (diff < 60) return "just now";

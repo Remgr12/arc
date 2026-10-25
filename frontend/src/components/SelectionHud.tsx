@@ -19,6 +19,9 @@ import {
   Slice,
   Sparkles,
   Square,
+  Link2,
+  Target,
+  Equal,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { ipc } from "../lib/ipc";
@@ -26,6 +29,8 @@ import { actions } from "../lib/actions";
 import { faceEditable, faceParam } from "../tools/faceTools";
 import { armExtrudeSelectedSketch } from "../tools/solid";
 import { facePlaneInfo } from "../tools/topology";
+import { assemblyManager } from "../lib/assembly";
+import { constraintManager } from "../tools/constraints2d";
 import type { EntityData, Geometry } from "../lib/types";
 import { cn } from "./ui";
 import * as THREE from "three";
@@ -378,6 +383,10 @@ export function SelectionHud() {
     dy: number;
     dz: number;
     canBoolean: boolean;
+    canMate: boolean;
+    canSketchConstraint: boolean;
+    e1: EntityData;
+    e2: EntityData;
   } | null = null;
 
   if (scene.selection.length >= 2) {
@@ -390,10 +399,22 @@ export function SelectionHud() {
       const dx = Math.abs(p2.x - p1.x);
       const dy = Math.abs(p2.y - p1.y);
       const dz = Math.abs(p2.z - p1.z);
-      const canBoolean =
-        (e1.category === "solid" || e1.category === "primitive" || e1.kind === "csg") &&
-        (e2.category === "solid" || e2.category === "primitive" || e2.kind === "csg");
-      multiInfo = { dist: round2(d), dx: round2(dx), dy: round2(dy), dz: round2(dz), canBoolean };
+      const isSolid1 = e1.category === "solid" || e1.category === "primitive" || e1.kind === "csg";
+      const isSolid2 = e2.category === "solid" || e2.category === "primitive" || e2.kind === "csg";
+      const canBoolean = isSolid1 && isSolid2;
+      const canMate = isSolid1 && isSolid2;
+      const canSketchConstraint = e1.category === "sketch" && e2.category === "sketch";
+      multiInfo = {
+        dist: round2(d),
+        dx: round2(dx),
+        dy: round2(dy),
+        dz: round2(dz),
+        canBoolean,
+        canMate,
+        canSketchConstraint,
+        e1,
+        e2,
+      };
     }
   }
 
@@ -462,6 +483,81 @@ export function SelectionHud() {
               >
                 <Layers size={12} strokeWidth={2} />
                 <span>Intersect</span>
+              </button>
+            </>
+          )}
+
+          {multiInfo.canMate && (
+            <>
+              <span className="h-3 w-px bg-base-300" />
+              <button
+                type="button"
+                onClick={() => {
+                  const selFaceA = selKind === "face" && selFace?.entityId === multiInfo!.e1.id ? selFace.face : null;
+                  const selFaceB = selKind === "face" && selFace?.entityId === multiInfo!.e2.id ? selFace.face : null;
+                  void assemblyManager.applyMate(docId, "coincident", multiInfo!.e1, multiInfo!.e2, selFaceA, selFaceB);
+                }}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-600 hover:bg-accent-500/15 transition-colors"
+              >
+                <Link2 size={12} strokeWidth={2} />
+                <span>Mate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const selFaceA = selKind === "face" && selFace?.entityId === multiInfo!.e1.id ? selFace.face : null;
+                  const selFaceB = selKind === "face" && selFace?.entityId === multiInfo!.e2.id ? selFace.face : null;
+                  void assemblyManager.applyMate(docId, "flush", multiInfo!.e1, multiInfo!.e2, selFaceA, selFaceB);
+                }}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <span>Flush</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void assemblyManager.applyMate(docId, "concentric", multiInfo!.e1, multiInfo!.e2);
+                }}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Target size={12} strokeWidth={2} />
+                <span>Concentric</span>
+              </button>
+            </>
+          )}
+
+          {multiInfo.canSketchConstraint && (
+            <>
+              <span className="h-3 w-px bg-base-300" />
+              <button
+                type="button"
+                onClick={() => void constraintManager.applyCoincident(docId, multiInfo!.e1, multiInfo!.e2)}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-600 hover:bg-accent-500/15 transition-colors"
+              >
+                <Link2 size={12} strokeWidth={2} />
+                <span>Coincident</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void constraintManager.applyEqualLength(docId, multiInfo!.e1, multiInfo!.e2)}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <Equal size={12} strokeWidth={2} />
+                <span>Equal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void constraintManager.applyParallel(docId, multiInfo!.e1, multiInfo!.e2)}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <span>Parallel</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void constraintManager.applyPerpendicular(docId, multiInfo!.e1, multiInfo!.e2)}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-base-700 hover:bg-base-200 transition-colors"
+              >
+                <span>Perp</span>
               </button>
             </>
           )}
@@ -901,21 +997,11 @@ export function SelectionHud() {
               </button>
 
               {/* SolveSpace-style rapid geometric constraints with Lucide icons */}
-              {(entity.kind === "line" || entity.kind === "line_curve") && (
+              {(entity.kind === "line" || entity.kind === "line_curve" || entity.kind === "polyline_curve") && (
                 <>
                   <button
                     type="button"
-                    title="Horizontal (H)"
-                    onClick={() => {
-                      const g = entity.geometry as Record<string, unknown>;
-                      const end = (g.end as [number, number, number]) ?? [10, 0, 0];
-                      const len = Math.hypot(end[0], end[1], end[2]) || 10;
-                      const sign = end[0] < 0 ? -1 : 1;
-                      void ipc.updateGeometry(docId, entity.id, {
-                        ...g,
-                        end: [sign * len, 0, 0],
-                      } as unknown as Geometry);
-                    }}
+                    onClick={() => void constraintManager.applyHorizontal(docId, entity)}
                     className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
                   >
                     <MoveHorizontal size={13} strokeWidth={2} />
@@ -923,17 +1009,7 @@ export function SelectionHud() {
                   </button>
                   <button
                     type="button"
-                    title="Vertical (V)"
-                    onClick={() => {
-                      const g = entity.geometry as Record<string, unknown>;
-                      const end = (g.end as [number, number, number]) ?? [0, 0, 10];
-                      const len = Math.hypot(end[0], end[1], end[2]) || 10;
-                      const sign = end[2] < 0 ? -1 : 1;
-                      void ipc.updateGeometry(docId, entity.id, {
-                        ...g,
-                        end: [0, 0, sign * len],
-                      } as unknown as Geometry);
-                    }}
+                    onClick={() => void constraintManager.applyVertical(docId, entity)}
                     className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
                   >
                     <MoveVertical size={13} strokeWidth={2} />
@@ -944,16 +1020,7 @@ export function SelectionHud() {
               {(entity.kind === "rectangle" || entity.kind === "rectangle_curve") && (
                 <button
                   type="button"
-                  title="Square"
-                  onClick={() => {
-                    const g = entity.geometry as Record<string, unknown>;
-                    const w = typeof g.width === "number" ? g.width : 10;
-                    void ipc.updateGeometry(docId, entity.id, {
-                      ...g,
-                      width: w,
-                      depth: w,
-                    } as unknown as Geometry);
-                  }}
+                  onClick={() => void constraintManager.applySquare(docId, entity)}
                   className="flex h-7 items-center gap-1.5 rounded-md bg-base-200/90 px-2 font-mono text-[11px] font-semibold text-base-700 hover:bg-accent-500 hover:text-white transition-colors"
                 >
                   <Square size={13} strokeWidth={2} />

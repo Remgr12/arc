@@ -52,7 +52,7 @@
       <h1>arc</h1>
       <p class="tag">
         A <strong>3D modeling app</strong> for design, architecture, and interiors.
-        Rust geometry kernel, native on Windows, macOS, and Linux — free and open-source.
+        Rust geometry kernel, native on Windows, macOS, and Linux - free and open-source.
       </p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/Remgr12/arc/releases">
@@ -81,7 +81,7 @@
         <h2>One toolset, no spring-loaded distractions</h2>
         <p class="sect">Sketch on the ground plane, spin profiles into solids, and place them like building parts. Walls snap, dimensions draw themselves, and every step of the way back is kept.</p>
         <div class="caps">
-          <div class="row"><span class="k">primitives</span><span class="d">Box, sphere, cylinder, cone, torus, plane — parametric and editable in place.</span></div>
+          <div class="row"><span class="k">primitives</span><span class="d">Box, sphere, cylinder, cone, torus, plane: parametric and editable in place.</span></div>
           <div class="row"><span class="k">sketch tools</span><span class="d">Circle, line, polyline, rectangle, dimension, and wall drawing with grid snapping.</span></div>
           <div class="row"><span class="k">solids</span><span class="d">Extrude, revolve, sweep, and loft two-dimensional profiles into watertight solids.</span></div>
           <div class="row"><span class="k">architecture</span><span class="d">Walls, stairs, slabs, roofs, columns, beams, doors, and windows as real parts.</span></div>
@@ -128,7 +128,7 @@
       <div class="wrap">
         <span class="eyebrow">Plugins</span>
         <h2>Extend with Lua</h2>
-        <p class="sect">Drop a Lua file into the plugin directory. It fires on <span class="mono">start</span>, <span class="mono">new</span>, <span class="mono">open</span>, and <span class="mono">save</span>, and talks to the document through the <span class="mono">arc</span> API — entities, transforms, raycasting, history.</p>
+        <p class="sect">Drop a Lua file into the plugin directory. It fires on <span class="mono">start</span>, <span class="mono">new</span>, <span class="mono">open</span>, and <span class="mono">save</span>, and talks to the document through the <span class="mono">arc</span> API: entities, transforms, raycasting, history.</p>
         <pre class="code"><code><span class="fn">arc</span>.on(<span class="k">"new"</span>, <span class="k">function</span>()
   <span class="k">local</span> id = <span class="fn">arc</span>.add_entity({ type = <span class="k">"box"</span>, width = 60, depth = 40, height = 20 }, <span class="k">"Plugin box"</span>)
   <span class="fn">arc</span>.log(<span class="k">"created "</span> .. <span class="fn">tostring</span>(id))
