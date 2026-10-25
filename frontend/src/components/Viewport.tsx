@@ -101,6 +101,8 @@ interface ViewportRefs {
   lastSketchHeight: number;
   lastSketchPlaneKey: string;
   lastGridSize: number;
+  lastGridStep: number;
+  altOrbit: { lastX: number; lastY: number } | null;
   lastLowSpecMode: boolean;
   lastCursorAt: number;
   spawningObjects: Set<THREE.Object3D>;
@@ -171,8 +173,7 @@ function themeToPalette(p: ViewportPalette): ViewPalette {
   };
 }
 
-function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
-  const step = Math.max(0.5, Math.min(100, gridSize || 2));
+function makeGrid(p: ViewportPalette, step = 2): THREE.Group {
   const majorCells = 40;
   const majorStep = step * 5;
   const extent = majorStep * majorCells;
@@ -180,6 +181,7 @@ function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
   const majorDivs = majorCells;
 
   const group = new THREE.Group();
+  group.name = "adaptive-grid";
   const minorColor = new THREE.Color(p.gridLine);
   const majorColor = new THREE.Color(p.grid).lerp(new THREE.Color(p.accent500), 0.2);
   const centerColor = new THREE.Color(p.accent500);
@@ -200,6 +202,62 @@ function makeGrid(p: ViewportPalette, gridSize = 2): THREE.Group {
   group.add(minor);
   group.add(major);
   return group;
+}
+
+/**
+ * Computes an adaptive grid step (1-2-5 series) based on the camera distance to target.
+ *
+ * For a perspective camera with vertical FOV `fov` at distance `dist`,
+ * visible height at the target is:
+ *   h = 2 * dist * Math.tan((fov * Math.PI) / 360)
+ * We target around 18-24 minor grid cells across the screen height,
+ * choosing step from {..., 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, ...}
+ */
+function computeAdaptiveGridStep(dist: number, fov: number): number {
+  if (dist <= 0 || !Number.isFinite(dist)) return 2;
+  const visibleHeight = 2 * dist * Math.tan(((fov || 50) * Math.PI) / 360);
+  const rawStep = visibleHeight / 22;
+  if (rawStep <= 0 || !Number.isFinite(rawStep)) return 2;
+
+  const exponent = Math.floor(Math.log10(rawStep));
+  const fraction = rawStep / Math.pow(10, exponent);
+
+  let stepMultiplier = 1;
+  if (fraction < 1.7) {
+    stepMultiplier = 1;
+  } else if (fraction < 3.8) {
+    stepMultiplier = 2;
+  } else if (fraction < 7.5) {
+    stepMultiplier = 5;
+  } else {
+    stepMultiplier = 10;
+  }
+
+  const step = stepMultiplier * Math.pow(10, exponent);
+  return Math.round(step * 10000) / 10000;
+}
+
+function updateAdaptiveGrid(ref: ViewportRefs, step: number): void {
+  ref.lastGridStep = step;
+  useArcStore.getState().setAdaptiveGridSize(step);
+
+  const palette = viewportPalette(useThemeStore.getState().active());
+  const wasVisible = ref.gridNode.visible;
+  const prevPos = ref.gridNode.position.clone();
+  const prevQuat = ref.gridNode.quaternion.clone();
+
+  const index = ref.sceneRoot.children.indexOf(ref.gridNode);
+  ref.sceneRoot.remove(ref.gridNode);
+  disposeObject(ref.gridNode);
+
+  const next = makeGrid(palette, step);
+  next.visible = wasVisible;
+  next.position.copy(prevPos);
+  next.quaternion.copy(prevQuat);
+  if (index >= 0) ref.sceneRoot.children.splice(index, 0, next);
+  else ref.sceneRoot.add(next);
+  ref.gridNode = next;
+  ref.needsRender = true;
 }
 
 /**
@@ -405,7 +463,10 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   if (raycaster.params.Line) (raycaster.params.Line as { threshold: number }).threshold = 10;
 
   const initialGridSize = useArcStore.getState().settings?.grid_size ?? 2;
-  const gridNode = makeGrid(palette, initialGridSize);
+  const initialDist = camera.position.distanceTo(controls.target);
+  const initialGridStep = computeAdaptiveGridStep(initialDist, camera.fov);
+  useArcStore.getState().setAdaptiveGridSize(initialGridStep);
+  const gridNode = makeGrid(palette, initialGridStep);
   sceneRoot.add(gridNode);
 
   const ref: ViewportRefs = {
@@ -444,6 +505,8 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     lastSketchHeight: 0,
     lastSketchPlaneKey: "",
     lastGridSize: initialGridSize,
+    lastGridStep: initialGridStep,
+    altOrbit: null,
     lastLowSpecMode: false,
     lastCursorAt: 0,
     spawningObjects: new Set(),
@@ -544,6 +607,27 @@ function startLoop(ref: ViewportRefs): () => void {
       }
       if (t >= 1) ref.viewAnim = null;
       ref.needsRender = true;
+    }
+
+    // Adaptive ground grid spacing & infinite scrolling
+    const dist = ref.camera.position.distanceTo(ref.controls.target);
+    const adaptiveStep = computeAdaptiveGridStep(dist, ref.camera.fov);
+    if (adaptiveStep !== ref.lastGridStep) {
+      updateAdaptiveGrid(ref, adaptiveStep);
+    }
+
+    if (!useArcStore.getState().sketchMode && ref.gridNode.visible) {
+      const majorStep = (ref.lastGridStep || 2) * 5;
+      const snapX = Math.floor(ref.controls.target.x / majorStep) * majorStep;
+      const snapZ = Math.floor(ref.controls.target.z / majorStep) * majorStep;
+      if (
+        Math.abs(ref.gridNode.position.x - snapX) > 0.001 ||
+        Math.abs(ref.gridNode.position.z - snapZ) > 0.001
+      ) {
+        ref.gridNode.position.x = snapX;
+        ref.gridNode.position.z = snapZ;
+        ref.needsRender = true;
+      }
     }
 
     // Animate any newly-spawned entities.
@@ -673,7 +757,7 @@ function applyTheme(ref: ViewportRefs, palette: ViewportPalette): void {
   const prevQuat = ref.gridNode.quaternion.clone();
   ref.sceneRoot.remove(ref.gridNode);
   disposeObject(ref.gridNode);
-  const next = makeGrid(palette, ref.lastGridSize);
+  const next = makeGrid(palette, ref.lastGridStep || ref.lastGridSize);
   next.visible = wasVisible;
   next.position.copy(prevPos);
   next.quaternion.copy(prevQuat);
@@ -777,20 +861,9 @@ function syncSceneToThree(ref: ViewportRefs): void {
   updateOverlays(ref);
 
   const settings = state.settings;
-  const isCreatingOrSketching =
-    state.sketchMode ||
-    state.drafting ||
-    (state.tool !== "select" &&
-      state.tool !== "move" &&
-      state.tool !== "rotate" &&
-      state.tool !== "scale" &&
-      state.tool !== "extrude-face" &&
-      state.tool !== "offset-face" &&
-      state.tool !== "fillet-edge");
-  // Shapr3D behavior: no grid in normal 3D view; grid appears when sketching or creating!
-  const gridVis = (settings?.show_grid ?? true) && isCreatingOrSketching;
+  const gridVis = (settings?.show_grid ?? true) || state.sketchMode;
   const axesVis = settings?.show_axes ?? true;
-  const gridSize = settings?.grid_size ?? 2;
+  const gridSize = ref.lastGridStep || settings?.grid_size || 2;
   const gridSizeChanged = gridSize !== ref.lastGridSize;
   if (gridSizeChanged) {
     ref.lastGridSize = gridSize;
@@ -819,7 +892,10 @@ function syncSceneToThree(ref: ViewportRefs): void {
       ref.gridNode.position.copy(basis.origin).addScaledVector(basis.normal, 0.03);
     } else {
       ref.gridNode.quaternion.identity();
-      ref.gridNode.position.set(0, 0, 0);
+      const majorStep = (ref.lastGridStep || 2) * 5;
+      const snapX = Math.floor(ref.controls.target.x / majorStep) * majorStep;
+      const snapZ = Math.floor(ref.controls.target.z / majorStep) * majorStep;
+      ref.gridNode.position.set(snapX, 0, snapZ);
     }
     ref.lastSketchMode = state.sketchMode;
     ref.lastSketchHeight = state.sketchPlaneHeight;
@@ -954,7 +1030,7 @@ function updateGizmoAttachment(ref: ViewportRefs): void {
   const state = useArcStore.getState();
   const settings = state.settings;
   const snapEnabled = settings?.snap_enabled ?? true;
-  const gridSize = settings?.grid_size ?? 1;
+  const gridSize = ref.lastGridStep || settings?.grid_size || 1;
   ref.tc.setTranslationSnap(snapEnabled ? gridSize : null);
   ref.tc.setRotationSnap(snapEnabled ? THREE.MathUtils.degToRad(15) : null);
   ref.tc.setScaleSnap(snapEnabled ? 0.1 : null);
@@ -1962,6 +2038,16 @@ function attachHandlers(ref: ViewportRefs): () => void {
     if (event.button === 2) {
       ref.contextPress = { x: event.clientX, y: event.clientY, time: performance.now() };
     }
+    // Trackpad navigation: Alt + Left Drag orbits the camera in 3D
+    if (event.button === 0 && event.altKey) {
+      ref.altOrbit = { lastX: event.clientX, lastY: event.clientY };
+      try {
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
     if (event.button !== 0) return;
     // Check the 3D ViewCube gizmo first so clicks/drags on it navigate the camera.
     const w = ref.host.clientWidth;
@@ -1983,6 +2069,17 @@ function attachHandlers(ref: ViewportRefs): () => void {
     }
   };
   const move = (event: PointerEvent) => {
+    if (ref.altOrbit) {
+      const dx = event.clientX - ref.altOrbit.lastX;
+      const dy = event.clientY - ref.altOrbit.lastY;
+      ref.altOrbit.lastX = event.clientX;
+      ref.altOrbit.lastY = event.clientY;
+      ref.controls.rotateLeft(-dx * 0.005);
+      ref.controls.rotateUp(-dy * 0.005);
+      ref.controls.update();
+      ref.needsRender = true;
+      return;
+    }
     const store = useArcStore.getState();
     const w = ref.host.clientWidth;
     const h = ref.host.clientHeight;
@@ -2115,6 +2212,15 @@ function attachHandlers(ref: ViewportRefs): () => void {
     syncDrafting(ref);
   };
   const up = (event: PointerEvent) => {
+    if (ref.altOrbit) {
+      ref.altOrbit = null;
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
     const w = ref.host.clientWidth;
     const h = ref.host.clientHeight;
     if (ref.gizmo.onPointerUp(event, w, h)) {
@@ -2129,6 +2235,14 @@ function attachHandlers(ref: ViewportRefs): () => void {
     syncDrafting(ref);
   };
   const cancel = (event: PointerEvent) => {
+    if (ref.altOrbit) {
+      ref.altOrbit = null;
+      try {
+        (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+    }
     if (ref.marquee) {
       try {
         (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
@@ -2150,10 +2264,15 @@ function attachHandlers(ref: ViewportRefs): () => void {
   };
   const ctx_ = (event: MouseEvent) => onContextMenu(ref, event);
 
-  const zoomToCursor = (event: WheelEvent, zoomFactor: number) => {
+  const zoomToCursor = (clientX: number, clientY: number, zoomFactor: number) => {
+    if (zoomFactor <= 0 || !Number.isFinite(zoomFactor)) return;
+    const dist = ref.camera.position.distanceTo(ref.controls.target);
+    const nextDist = dist / zoomFactor;
+    if (nextDist < 1 || nextDist > 150000) return;
+
     const rect = ref.host.getBoundingClientRect();
-    const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     const ray = new THREE.Ray();
     ray.origin.copy(ref.camera.position);
@@ -2169,16 +2288,17 @@ function attachHandlers(ref: ViewportRefs): () => void {
     const hit = new THREE.Vector3();
 
     if (ray.intersectPlane(plane, hit)) {
-      if (zoomFactor > 1) {
-        ref.controls.dollyIn(zoomFactor);
-      } else {
-        ref.controls.dollyOut(1 / zoomFactor);
-      }
-      // True zoom-to-cursor: shift camera and target along ray to hit so hovered point stays fixed
       const factor = 1 - 1 / zoomFactor;
-      const shift = hit.sub(ref.camera.position).multiplyScalar(factor);
-      ref.controls.target.add(shift);
-      ref.camera.position.add(shift);
+      const camShift = hit.clone().sub(ref.camera.position).multiplyScalar(factor);
+      const targetShift = hit.clone().sub(ref.controls.target).multiplyScalar(factor);
+      ref.camera.position.add(camShift);
+      ref.controls.target.add(targetShift);
+      ref.controls.update();
+      ref.needsRender = true;
+    } else {
+      const factor = 1 - 1 / zoomFactor;
+      const camShift = ref.controls.target.clone().sub(ref.camera.position).multiplyScalar(factor);
+      ref.camera.position.add(camShift);
       ref.controls.update();
       ref.needsRender = true;
     }
@@ -2187,20 +2307,31 @@ function attachHandlers(ref: ViewportRefs): () => void {
   const wheel = (event: WheelEvent) => {
     ref.viewAnim = null;
 
-    // 1) Trackpad pinch-to-zoom (or Ctrl + Wheel): Smooth zoom to cursor!
+    // 1) Trackpad pinch-to-zoom (or Ctrl/Cmd + Wheel): Smooth zoom to cursor
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
       event.stopPropagation();
-      const zoomFactor = Math.exp(-event.deltaY * 0.006);
-      zoomToCursor(event, zoomFactor);
+      const zoomFactor = Math.exp(-event.deltaY * 0.008);
+      zoomToCursor(event.clientX, event.clientY, zoomFactor);
       return;
     }
 
-    // 2) Shift + Wheel in 3D: Smoothly orbit around target!
+    // 2) Shift + Wheel / Trackpad Scroll: Pan viewport
     if (event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
-      const rotSpeed = 0.004;
+      const panSpeed = 0.65;
+      ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
+      ref.controls.update();
+      ref.needsRender = true;
+      return;
+    }
+
+    // 3) Alt + Wheel / Trackpad Scroll: Orbit viewport
+    if (event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const rotSpeed = 0.005;
       ref.controls.rotateLeft(-event.deltaX * rotSpeed);
       ref.controls.rotateUp(-event.deltaY * rotSpeed);
       ref.controls.update();
@@ -2208,26 +2339,24 @@ function attachHandlers(ref: ViewportRefs): () => void {
       return;
     }
 
-    // 3) True two-finger trackpad panning (horizontal scrolling or non-integer trackpad ticks)
-    const isHorizontalPan = Math.abs(event.deltaX) > 1.5;
-    const isFractionalDelta = !Number.isInteger(event.deltaY) && Math.abs(event.deltaY) > 0;
-    const isTrackpadPan = event.deltaMode === 0 && (isHorizontalPan || isFractionalDelta);
-
-    if (isTrackpadPan) {
+    // 4) Pure horizontal swipe on trackpad: Pan horizontally
+    if (Math.abs(event.deltaX) > Math.abs(event.deltaY) * 2.5 && Math.abs(event.deltaX) > 2) {
       event.preventDefault();
       event.stopPropagation();
-      const panSpeed = 0.75;
-      ref.controls.pan(-event.deltaX * panSpeed, -event.deltaY * panSpeed);
+      ref.controls.pan(-event.deltaX * 0.65, 0);
       ref.controls.update();
       ref.needsRender = true;
       return;
     }
 
-    // 4) Standard physical mouse wheel (both in 2D sketch mode and in 3D): ALWAYS zoom to cursor!
+    // 5) Two-finger vertical scroll or mouse wheel: Zoom to cursor
     event.preventDefault();
     event.stopPropagation();
-    const zoomFactor = event.deltaY < 0 ? 1.15 : 0.87;
-    zoomToCursor(event, zoomFactor);
+    const isTrackpad = event.deltaMode === 0 || !Number.isInteger(event.deltaY);
+    const zoomFactor = isTrackpad
+      ? Math.exp(-event.deltaY * 0.0035)
+      : event.deltaY < 0 ? 1.15 : 0.87;
+    zoomToCursor(event.clientX, event.clientY, zoomFactor);
   };
 
   const draftCancel = () => {
@@ -2327,6 +2456,27 @@ function attachHandlers(ref: ViewportRefs): () => void {
     }
   };
 
+  let gestureInitialScale = 1;
+  const gestureStart = (event: Event) => {
+    event.preventDefault();
+    gestureInitialScale = 1;
+  };
+  const gestureChange = (event: Event) => {
+    event.preventDefault();
+    const ge = event as Event & { scale?: number; clientX?: number; clientY?: number };
+    if (typeof ge.scale === "number" && Number.isFinite(ge.scale) && ge.scale > 0) {
+      const factor = ge.scale / gestureInitialScale;
+      gestureInitialScale = ge.scale;
+      const cx = typeof ge.clientX === "number" ? ge.clientX : ref.host.clientWidth / 2;
+      const cy = typeof ge.clientY === "number" ? ge.clientY : ref.host.clientHeight / 2;
+      zoomToCursor(cx, cy, factor);
+    }
+  };
+  const gestureEnd = (event: Event) => {
+    event.preventDefault();
+    gestureInitialScale = 1;
+  };
+
   el.addEventListener("pointerdown", down);
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
@@ -2334,6 +2484,9 @@ function attachHandlers(ref: ViewportRefs): () => void {
   el.addEventListener("pointerleave", leave);
   el.addEventListener("dblclick", dbl);
   el.addEventListener("wheel", wheel, { passive: false, capture: true });
+  el.addEventListener("gesturestart", gestureStart, { passive: false });
+  el.addEventListener("gesturechange", gestureChange, { passive: false });
+  el.addEventListener("gestureend", gestureEnd, { passive: false });
   el.addEventListener("contextmenu", ctx_);
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("arc-draft-cancel", draftCancel);
@@ -2373,6 +2526,9 @@ function attachHandlers(ref: ViewportRefs): () => void {
     el.removeEventListener("pointerleave", leave);
     el.removeEventListener("dblclick", dbl);
     el.removeEventListener("wheel", wheel, { capture: true } as EventListenerOptions);
+    el.removeEventListener("gesturestart", gestureStart);
+    el.removeEventListener("gesturechange", gestureChange);
+    el.removeEventListener("gestureend", gestureEnd);
     el.removeEventListener("contextmenu", ctx_);
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("arc-draft-cancel", draftCancel);
@@ -2406,7 +2562,7 @@ function makeToolContext(ref: ViewportRefs): ToolContext {
     const settings = st.settings;
     const isImperial = settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
     return {
-      gridSize: settings?.grid_size ?? 2,
+      gridSize: ref.lastGridStep || settings?.grid_size || 2,
       snapEnabled: settings?.snap_enabled ?? true,
       dimSnapStep: st.dimSnapStep ?? 1,
       unitLabel: isImperial ? "in" : "cm",

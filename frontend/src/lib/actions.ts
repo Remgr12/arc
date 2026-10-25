@@ -114,7 +114,14 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     }
     folder = folder.replace(/[\\/]+$/, "");
     const doc = await ipc.newDocument(name);
-    await ipc.saveDocument(doc.id, `${folder}/${name}.arc`);
+    const filePath = `${folder}/${name}.arc`;
+    await ipc.saveDocument(doc.id, filePath);
+    useArcStore.getState().addProjectToCache(folder, {
+      name,
+      path: filePath,
+      modified: Math.floor(Date.now() / 1000),
+      size: 0,
+    });
     const overview = await ipc.getState();
     useArcStore.getState().setOverview(overview);
     if (overview.active) {

@@ -116,7 +116,7 @@ export function PropertiesPanel() {
             <History size={12} strokeWidth={2} />
             <span>History</span>
             {featureCount > 0 && (
-              <span className="rounded-full bg-accent-500/15 px-1 font-mono text-[9px] font-bold text-accent-600">
+              <span className="rounded-full bg-accent-500/20 px-1.5 py-0.2 min-w-[16px] text-center font-mono text-[9.5px] font-bold text-accent-400 shrink-0 leading-none">
                 {featureCount}
               </span>
             )}
@@ -134,14 +134,14 @@ export function PropertiesPanel() {
             <Link2 size={12} strokeWidth={2} />
             <span>Assembly</span>
             {mateCount > 0 && (
-              <span className="rounded-full bg-accent-500/15 px-1 font-mono text-[9px] font-bold text-accent-600">
+              <span className="rounded-full bg-accent-500/20 px-1.5 py-0.2 min-w-[16px] text-center font-mono text-[9.5px] font-bold text-accent-400 shrink-0 leading-none">
                 {mateCount}
               </span>
             )}
           </button>
         </div>
         {tab === "props" && entity && (
-          <span className="rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600">{entity.kind}</span>
+          <span className="truncate max-w-[100px] rounded bg-base-200 px-1.5 py-0.5 font-mono text-[10px] text-base-600 shrink-0">{entity.kind}</span>
         )}
       </div>
 
@@ -214,7 +214,7 @@ function FeaturesTab({ docId }: { docId: string }) {
                 <Box size={13} className="text-accent-500 shrink-0" />
                 <span className="text-[12px] font-semibold text-base-800 truncate">{feat.name}</span>
               </div>
-              <span className="rounded bg-accent-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-600">
+              <span className="rounded bg-accent-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-400 shrink-0">
                 {feat.operation}
               </span>
             </div>
@@ -228,7 +228,7 @@ function FeaturesTab({ docId }: { docId: string }) {
                 <button
                   type="button"
                   onClick={() => handleEditSketch(sketchEntity.id)}
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-accent-600 hover:bg-accent-500/10 transition-colors"
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-accent-400 hover:bg-accent-500/15 transition-colors"
                 >
                   Edit Sketch
                 </button>
@@ -301,7 +301,7 @@ function AssemblyTab({ docId }: { docId: string }) {
                 <Link2 size={12} className="text-accent-500 shrink-0" />
                 <span className="text-[12px] font-semibold text-base-800 truncate">{m.name}</span>
               </div>
-              <span className="rounded bg-accent-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-600">
+              <span className="rounded bg-accent-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent-400 shrink-0">
                 {m.type}
               </span>
             </div>
@@ -385,8 +385,8 @@ function ParametricFeatureCard({
       <Section title="Parametric Feature" className="mt-4 border-t border-base-200/60 pt-3">
         <div className="flex flex-col gap-2 rounded-lg border border-accent-500/20 bg-accent-500/5 p-2.5">
           <div className="flex items-center justify-between text-[11.5px]">
-            <span className="font-semibold text-accent-700">{feat.name}</span>
-            <span className="rounded bg-accent-500/15 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-700">
+            <span className="font-semibold text-accent-400">{feat.name}</span>
+            <span className="rounded bg-accent-500/20 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-400 shrink-0">
               {feat.operation}
             </span>
           </div>
@@ -396,7 +396,7 @@ function ParametricFeatureCard({
               <button
                 type="button"
                 onClick={() => handleEditSketch(driving.id)}
-                className="font-semibold text-accent-600 hover:underline"
+                className="font-semibold text-accent-400 hover:underline"
               >
                 Edit Sketch
               </button>
@@ -432,7 +432,7 @@ function ParametricFeatureCard({
             <button
               type="button"
               onClick={() => void featureHistory.regenerate(entity.id, docId)}
-              className="flex items-center gap-1 rounded bg-accent-500/10 px-2 py-0.5 font-semibold text-[10.5px] text-accent-600 hover:bg-accent-500/20 transition-colors"
+              className="flex items-center gap-1 rounded bg-accent-500/15 px-2 py-0.5 font-semibold text-[10.5px] text-accent-400 hover:bg-accent-500/25 transition-colors"
             >
               <RefreshCw size={10} /> Regen All
             </button>

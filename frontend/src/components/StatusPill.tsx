@@ -26,7 +26,7 @@ export function StatusPill() {
       >
         <span
           className={cn(
-            "h-1.5 w-1.5 rounded-full",
+            "h-1.5 w-1.5 shrink-0 rounded-full",
             selKind === "face" || selKind === "edge"
               ? "bg-accent-500"
               : pending
@@ -38,12 +38,12 @@ export function StatusPill() {
           {statusMessage}
         </span>
         {selectionCount > 0 && (
-          <span className="rounded-full bg-accent-500/10 px-2 py-0.5 text-[11px] font-medium text-accent-600">
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-accent-500/15 px-2 py-0.5 text-[11px] font-medium text-accent-400">
             {selectionCount} {selKind === "entity" ? "item" : selKind}
             {selectionCount === 1 ? "" : "s"}
           </span>
         )}
-        <span className="font-mono text-[11px] tabular-nums text-base-500" title="Cursor position">
+        <span className="shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums text-base-500" title="Cursor position">
           {fmt(cursorWorld[0])} · {fmt(cursorWorld[2])}
         </span>
       </div>

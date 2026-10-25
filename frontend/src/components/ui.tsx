@@ -81,7 +81,7 @@ export function IconButton({
       className={cn(
         "inline-flex items-center justify-center rounded-lg text-base-600 transition-all duration-150 hover:bg-base-200 hover:text-base-800 active:scale-[0.95] disabled:pointer-events-none disabled:opacity-30",
         dim,
-        active && "bg-accent-500/12 text-accent-600",
+        active && "bg-accent-500/15 text-accent-400",
         className,
       )}
     >

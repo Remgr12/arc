@@ -54,43 +54,43 @@ interface CategoryTheme {
 
 const CATEGORY_THEMES: Record<string, CategoryTheme> = {
   Mechanical: {
-    dot: "bg-blue-500",
-    pill: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25 hover:bg-blue-500/15",
-    activePill: "bg-blue-500 text-white border-blue-600 shadow-sm",
+    dot: "bg-blue-400",
+    pill: "bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25",
+    activePill: "bg-blue-500 text-white border-blue-400 shadow-sm",
   },
   Architecture: {
-    dot: "bg-amber-500",
-    pill: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:bg-amber-500/15",
-    activePill: "bg-amber-500 text-white border-amber-600 shadow-sm",
+    dot: "bg-amber-400",
+    pill: "bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25",
+    activePill: "bg-amber-500 text-white border-amber-400 shadow-sm",
   },
   "3D Printing": {
-    dot: "bg-emerald-500",
-    pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/15",
-    activePill: "bg-emerald-500 text-white border-emerald-600 shadow-sm",
+    dot: "bg-emerald-400",
+    pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25",
+    activePill: "bg-emerald-500 text-white border-emerald-400 shadow-sm",
   },
   Electronics: {
-    dot: "bg-purple-500",
-    pill: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25 hover:bg-purple-500/15",
-    activePill: "bg-purple-500 text-white border-purple-600 shadow-sm",
+    dot: "bg-purple-400",
+    pill: "bg-purple-500/15 text-purple-400 border-purple-500/30 hover:bg-purple-500/25",
+    activePill: "bg-purple-500 text-white border-purple-400 shadow-sm",
   },
   Drafts: {
     dot: "bg-base-400",
-    pill: "bg-base-200/80 text-base-700 dark:text-base-300 border-base-300 hover:bg-base-200",
-    activePill: "bg-base-700 text-white border-base-800 shadow-sm",
+    pill: "bg-base-200/90 text-base-700 border-base-300 hover:bg-base-300 hover:text-base-900",
+    activePill: "bg-base-300 text-base-900 border-base-400 shadow-sm",
   },
   General: {
-    dot: "bg-accent-500",
-    pill: "bg-accent-500/10 text-accent-600 dark:text-accent-400 border-accent-500/25 hover:bg-accent-500/15",
-    activePill: "bg-accent-500 text-white border-accent-600 shadow-sm",
+    dot: "bg-accent-400",
+    pill: "bg-accent-500/15 text-accent-400 border-accent-500/30 hover:bg-accent-500/25",
+    activePill: "bg-accent-500 text-base-950 font-semibold border-accent-400 shadow-sm",
   },
 };
 
 function getCategoryTheme(cat: string): CategoryTheme {
   return (
     CATEGORY_THEMES[cat] ?? {
-      dot: "bg-accent-500",
-      pill: "bg-accent-500/10 text-accent-600 dark:text-accent-400 border-accent-500/25 hover:bg-accent-500/15",
-      activePill: "bg-accent-500 text-white border-accent-600 shadow-sm",
+      dot: "bg-accent-400",
+      pill: "bg-accent-500/15 text-accent-400 border-accent-500/30 hover:bg-accent-500/25",
+      activePill: "bg-accent-500 text-base-950 font-semibold border-accent-400 shadow-sm",
     }
   );
 }
@@ -114,13 +114,19 @@ function saveMetaMap(map: Record<string, ProjectMeta>): void {
 
 export function Dashboard() {
   const folder = useArcStore((s) => s.workspaceFolder);
+  const projectsCache = useArcStore((s) => s.projectsCache);
   const overview = useArcStore((s) => s.overview);
   const openDocuments = useMemo(
     () => (overview?.documents ?? []).filter((d) => d.path),
     [overview],
   );
 
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const cachedProjects = useMemo(() => {
+    if (!folder) return [];
+    return projectsCache[folder] ?? [];
+  }, [folder, projectsCache]);
+
+  const [projects, setProjects] = useState<ProjectSummary[]>(() => cachedProjects);
   const [metaMap, setMetaMap] = useState<Record<string, ProjectMeta>>(() => loadMetaMap());
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
@@ -133,6 +139,13 @@ export function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Sync with cached projects if available and state is empty
+  useEffect(() => {
+    if (cachedProjects.length > 0 && projects.length === 0) {
+      setProjects(cachedProjects);
+    }
+  }, [cachedProjects, projects.length]);
 
   // Editing category and tags for a project
   const [editingMeta, setEditingMeta] = useState<{
@@ -151,6 +164,8 @@ export function Dashboard() {
     try {
       setDeleting(true);
       await ipc.deleteProject(p.path);
+      useArcStore.getState().removeProjectFromCache(p.path);
+      setProjects((prev) => prev.filter((item) => item.path !== p.path));
       setMetaMap((prev) => {
         const next = { ...prev };
         delete next[p.path];
@@ -158,7 +173,6 @@ export function Dashboard() {
         return next;
       });
       setDeletingProject(null);
-      refresh();
     } catch (err) {
       console.error("Failed to delete project:", err);
     } finally {
@@ -172,16 +186,20 @@ export function Dashboard() {
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    const hasCached = (useArcStore.getState().projectsCache[folder]?.length ?? 0) > 0;
+    if (!hasCached) {
+      setLoading(true);
+    }
     ipc
       .listProjects(folder)
       .then((list) => {
         if (cancelled) return;
         const sorted = [...list].sort((a, b) => b.modified - a.modified);
         setProjects(sorted);
+        useArcStore.getState().setProjectsCache(folder, sorted);
       })
       .catch(() => {
-        if (!cancelled) setProjects([]);
+        if (!cancelled && !hasCached) setProjects([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -449,12 +467,12 @@ export function Dashboard() {
                       : "text-base-600 hover:bg-base-200/60 hover:text-base-900",
                   )}
                 >
-                  <span className="flex items-center gap-2 min-w-0">
+                  <span className="flex items-center gap-2 min-w-0 mr-1">
                     <span className={cn("h-2 w-2 shrink-0 rounded-full transition-transform group-hover:scale-110", theme.dot)} />
                     <span className="truncate">{cat}</span>
                   </span>
                   <span className={cn(
-                    "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                    "rounded-full px-1.5 py-0.2 text-[10px] font-mono shrink-0",
                     isSelected ? "bg-base-300 text-base-900 font-semibold" : "bg-base-200 text-base-500"
                   )}>
                     {count}
@@ -490,15 +508,15 @@ export function Dashboard() {
                       type="button"
                       onClick={() => setSelectedTag(isSelected ? null : tag)}
                       className={cn(
-                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                        "inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
                         isSelected
                           ? "bg-accent-500 text-white shadow-xs"
-                          : "border border-base-250/70 bg-base-100 text-base-600 hover:border-base-300 hover:bg-base-200/80 hover:text-base-900",
+                          : "border border-base-300 bg-base-100 text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900",
                       )}
                     >
-                      <span className={isSelected ? "text-white/80" : "text-base-400"}>#</span>
-                      <span>{tag}</span>
-                      <span className={cn("ml-0.5 text-[9.5px]", isSelected ? "text-white/70" : "text-base-400")}>
+                      <span className={cn("shrink-0", isSelected ? "text-white/80" : "text-base-400")}>#</span>
+                      <span className="truncate">{tag}</span>
+                      <span className={cn("ml-0.5 text-[9.5px] shrink-0", isSelected ? "text-white/70" : "text-base-400")}>
                         {count}
                       </span>
                     </button>
@@ -595,12 +613,12 @@ export function Dashboard() {
 
             {/* Active category chip */}
             {selectedCategory && (
-              <span className="flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-600">
-                <span>{selectedCategory}</span>
+              <span className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-400">
+                <span className="truncate">{selectedCategory}</span>
                 <button
                   type="button"
                   onClick={() => setSelectedCategory(null)}
-                  className="hover:text-accent-800 cursor-pointer"
+                  className="shrink-0 hover:text-accent-300 cursor-pointer"
                   title="Clear category filter"
                 >
                   <X size={10} />
@@ -610,12 +628,13 @@ export function Dashboard() {
 
             {/* Active tag chip */}
             {selectedTag && (
-              <span className="flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-600 font-mono">
-                <span>#{selectedTag}</span>
+              <span className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-400 font-mono">
+                <span className="shrink-0">#</span>
+                <span className="truncate">{selectedTag}</span>
                 <button
                   type="button"
                   onClick={() => setSelectedTag(null)}
-                  className="hover:text-accent-800 cursor-pointer"
+                  className="shrink-0 hover:text-accent-300 cursor-pointer"
                   title="Clear tag filter"
                 >
                   <X size={10} />
@@ -686,7 +705,7 @@ export function Dashboard() {
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
                   viewMode === "grid"
-                    ? "bg-base-250 text-base-900 shadow-xs"
+                    ? "bg-base-200 text-base-900 shadow-xs"
                     : "text-base-500 hover:text-base-800",
                 )}
               >
@@ -699,7 +718,7 @@ export function Dashboard() {
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
                   viewMode === "list"
-                    ? "bg-base-250 text-base-900 shadow-xs"
+                    ? "bg-base-200 text-base-900 shadow-xs"
                     : "text-base-500 hover:text-base-800",
                 )}
               >
@@ -788,18 +807,18 @@ export function Dashboard() {
                           );
                         }}
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all cursor-pointer shadow-2xs",
+                          "inline-flex max-w-[150px] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all cursor-pointer shadow-xs",
                           getCategoryTheme(project.category).pill,
                         )}
                         title={`Filter by category ${project.category}`}
                       >
                         <span
                           className={cn(
-                            "h-1.5 w-1.5 rounded-full",
+                            "h-1.5 w-1.5 shrink-0 rounded-full",
                             getCategoryTheme(project.category).dot,
                           )}
                         />
-                        <span>{project.category}</span>
+                        <span className="truncate">{project.category}</span>
                       </button>
 
                       <div className="flex items-center gap-0.5">
@@ -859,15 +878,15 @@ export function Dashboard() {
                               setSelectedTag(isSelected ? null : tag);
                             }}
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium transition-colors cursor-pointer",
+                              "inline-flex max-w-[150px] items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium transition-colors cursor-pointer",
                               isSelected
                                 ? "bg-accent-500 text-white font-semibold shadow-xs"
-                                : "border border-base-250/60 bg-base-150/70 text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900",
+                                : "border border-base-300 bg-base-150/70 text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900",
                             )}
                             title={`Filter by tag #${tag}`}
                           >
-                            <span className={isSelected ? "text-white/80" : "text-base-400"}>#</span>
-                            <span>{tag}</span>
+                            <span className={cn("shrink-0", isSelected ? "text-white/80" : "text-base-400")}>#</span>
+                            <span className="truncate">{tag}</span>
                           </button>
                         );
                       })}
@@ -949,7 +968,7 @@ export function Dashboard() {
                         {project.name}
                       </span>
                     </span>
-                    <span className="w-36 shrink-0">
+                    <span className="w-36 shrink-0 min-w-0 pr-2">
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
@@ -958,17 +977,18 @@ export function Dashboard() {
                           );
                         }}
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-2xs",
+                          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-xs",
                           getCategoryTheme(project.category).pill,
                         )}
+                        title={`Filter by category ${project.category}`}
                       >
                         <span
                           className={cn(
-                            "h-1.5 w-1.5 rounded-full",
+                            "h-1.5 w-1.5 shrink-0 rounded-full",
                             getCategoryTheme(project.category).dot,
                           )}
                         />
-                        <span>{project.category}</span>
+                        <span className="truncate">{project.category}</span>
                       </span>
                     </span>
                     <span className="w-48 shrink-0 flex flex-wrap items-center gap-1.5 overflow-hidden pr-2">
@@ -979,14 +999,15 @@ export function Dashboard() {
                             e.stopPropagation();
                             setSelectedTag(selectedTag === tag ? null : tag);
                           }}
-                          className="inline-flex items-center gap-0.5 rounded-md border border-base-250/70 bg-base-150/80 px-1.5 py-0.2 text-[10px] font-medium text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900 cursor-pointer"
+                          className="inline-flex max-w-[120px] items-center gap-0.5 rounded-md border border-base-300 bg-base-150/80 px-1.5 py-0.2 text-[10px] font-medium text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900 cursor-pointer"
+                          title={`Filter by tag #${tag}`}
                         >
-                          <span className="text-base-400">#</span>
-                          <span>{tag}</span>
+                          <span className="text-base-400 shrink-0">#</span>
+                          <span className="truncate">{tag}</span>
                         </span>
                       ))}
                       {project.tags.length > 3 && (
-                        <span className="text-[10px] font-medium text-base-400">
+                        <span className="text-[10px] font-medium text-base-400 shrink-0">
                           +{project.tags.length - 3}
                         </span>
                       )}
@@ -1100,7 +1121,7 @@ export function Dashboard() {
                         setCustomCategoryInput("");
                       }}
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all cursor-pointer",
+                        "inline-flex max-w-[160px] items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all cursor-pointer",
                         isChosen
                           ? theme.activePill
                           : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
@@ -1108,11 +1129,11 @@ export function Dashboard() {
                     >
                       <span
                         className={cn(
-                          "h-1.5 w-1.5 rounded-full",
+                          "h-1.5 w-1.5 shrink-0 rounded-full",
                           isChosen ? "bg-white" : theme.dot,
                         )}
                       />
-                      <span>{cat}</span>
+                      <span className="truncate">{cat}</span>
                     </button>
                   );
                 })}
@@ -1134,14 +1155,14 @@ export function Dashboard() {
             {/* Tags editing */}
             <div className="flex flex-col gap-2">
               <label className="font-semibold text-base-700">Tags</label>
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] rounded-lg border border-base-250 bg-base-50 p-2">
+              <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] rounded-lg border border-base-300 bg-base-50 p-2">
                 {editingMeta.tags.map((tag, idx) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 rounded-md border border-base-250 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-700 shadow-2xs"
+                    className="inline-flex max-w-[180px] items-center gap-1 rounded-md border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-700 shadow-xs"
                   >
-                    <span className="text-base-400">#</span>
-                    <span>{tag}</span>
+                    <span className="text-base-400 shrink-0">#</span>
+                    <span className="truncate">{tag}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1149,7 +1170,7 @@ export function Dashboard() {
                         next.splice(idx, 1);
                         setEditingMeta({ ...editingMeta, tags: next });
                       }}
-                      className="ml-0.5 text-base-400 hover:text-base-800 cursor-pointer"
+                      className="ml-0.5 shrink-0 text-base-400 hover:text-base-800 cursor-pointer"
                     >
                       <X size={11} />
                     </button>

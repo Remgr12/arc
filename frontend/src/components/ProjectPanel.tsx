@@ -61,7 +61,7 @@ function DocumentRow({
           {doc.name}
         </span>
         {doc.dirty && (
-          <span className="shrink-0 rounded bg-accent-500/20 px-1 font-mono text-[9.5px] font-bold text-accent-500">
+          <span className="shrink-0 rounded bg-accent-500/20 px-1.5 py-0.5 font-mono text-[9.5px] font-bold text-accent-400 leading-none">
             unsaved
           </span>
         )}
@@ -343,7 +343,7 @@ export function ProjectPanel() {
               >
                 <Icon size={12} strokeWidth={1.75} className={active ? "text-accent-500" : "text-base-500"} />
                 <span>{tab.label}</span>
-                <span className="rounded bg-base-300/60 px-1 text-[10px] tabular-nums text-base-600">
+                <span className="shrink-0 rounded bg-base-300/60 px-1.5 py-0.2 text-[10px] tabular-nums text-base-600 leading-none">
                   {tab.count}
                 </span>
               </button>

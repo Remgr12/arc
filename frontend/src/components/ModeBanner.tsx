@@ -76,19 +76,19 @@ export function ModeBanner() {
       {/* Small horizontal tool indicator */}
       {(tool !== "select" || drafting || sketchMode) && (
         <div className="anim-slide-down pointer-events-auto flex items-center gap-2 rounded-full border border-base-300 bg-base-100 px-3.5 py-1.5 shadow-md">
-          <span className="text-[12px] font-semibold text-base-900">
+          <span className="text-[12px] font-semibold text-base-900 whitespace-nowrap">
             {sketchMode ? `Sketch · ${sketchPlaneLabel.split(" ")[0]}` : label}
           </span>
           {sketchMode && (
-            <div className="flex items-center gap-1.5 border-l border-base-200 pl-2 text-[11px]">
+            <div className="flex items-center gap-1.5 border-l border-base-200 pl-2 text-[11px] whitespace-nowrap">
               {sketchEntities.length === 0 ? (
-                <Compass size={13} className="text-base-400" strokeWidth={2} />
+                <Compass size={13} className="text-base-400 shrink-0" strokeWidth={2} />
               ) : isFullyDefined ? (
-                <CheckCircle2 size={13} className="text-emerald-500" strokeWidth={2.2} />
+                <CheckCircle2 size={13} className="text-emerald-400 shrink-0" strokeWidth={2.2} />
               ) : (
-                <AlertCircle size={13} className="text-amber-500" strokeWidth={2.2} />
+                <AlertCircle size={13} className="text-amber-400 shrink-0" strokeWidth={2.2} />
               )}
-              <span className="font-mono text-[10.5px] font-medium text-base-600">
+              <span className="font-mono text-[10.5px] font-medium text-base-600 truncate max-w-[200px]">
                 {dofStatusText}
               </span>
             </div>
@@ -103,7 +103,7 @@ export function ModeBanner() {
                   new CustomEvent("arc-focus-plane", { detail: { normal: n } }),
                 );
               }}
-              className="flex h-5 w-5 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
             >
               <Eye size={12} strokeWidth={2.2} />
             </button>
@@ -112,7 +112,7 @@ export function ModeBanner() {
             type="button"
             title="Exit (Esc)"
             onClick={sketchMode ? exitSketchMode : deselectTool}
-            className="flex h-5 w-5 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
           >
             <X size={12} strokeWidth={2.2} />
           </button>
@@ -122,8 +122,8 @@ export function ModeBanner() {
       {/* Compact section view slider */}
       {sectionView && (
         <div className="anim-slide-down pointer-events-auto flex items-center gap-2 rounded-full border border-base-300 bg-base-100 px-3.5 py-1.5 shadow-md">
-          <Slice size={13} className="text-[#28b5f5]" />
-          <span className="text-[11.5px] font-medium text-base-700">Section</span>
+          <Slice size={13} className="text-accent-500 shrink-0" />
+          <span className="text-[11.5px] font-medium text-base-700 whitespace-nowrap">Section</span>
           <input
             type="range"
             min={-60}
@@ -131,13 +131,13 @@ export function ModeBanner() {
             step={1}
             value={sectionOffset}
             onChange={(e) => setSectionOffset(Number(e.target.value))}
-            className="h-1.5 w-20 cursor-pointer accent-[#28b5f5]"
+            className="h-1.5 w-20 cursor-pointer accent-accent-500"
           />
           <button
             type="button"
             title="Close section view"
             onClick={() => setSectionView(false)}
-            className="flex h-5 w-5 items-center justify-center rounded-full text-base-500 hover:bg-base-200 hover:text-base-800"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-base-500 hover:bg-base-200 hover:text-base-800"
           >
             <X size={12} strokeWidth={2.2} />
           </button>

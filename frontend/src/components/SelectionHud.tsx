@@ -262,13 +262,13 @@ function DimPill({
   return (
     <div
       className={cn(
-        "flex h-7 items-center gap-1 rounded-lg border px-1.5 transition-colors",
+        "flex h-7 items-center gap-1 rounded-lg border px-1.5 transition-colors whitespace-nowrap",
         spec.isActiveFaceParam
           ? "border-accent-500 bg-accent-500/12 text-accent-500"
           : "border-base-300 bg-base-100 text-base-700",
       )}
     >
-      <span className="px-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-base-500">
+      <span className="shrink-0 px-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-base-500">
         {spec.shortLabel}
       </span>
       <button
@@ -283,6 +283,7 @@ function DimPill({
         type="text"
         inputMode="decimal"
         value={text}
+        style={{ width: `${Math.max(48, Math.min(100, (text.length + 1) * 8.5))}px` }}
         onFocus={(e) => {
           setFocused(true);
           e.currentTarget.select();
@@ -308,10 +309,10 @@ function DimPill({
             stepBy(-1);
           }
         }}
-        className="h-5 w-14 rounded bg-base-50 px-1 text-center font-mono text-[11px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
+        className="h-5 min-w-[48px] max-w-[100px] rounded bg-base-50 px-1 text-center font-mono text-[11px] font-medium tabular-nums text-base-800 outline-none focus:ring-1 focus:ring-accent-500"
       />
       {!spec.isInteger && (
-        <span className="text-[10px] font-mono text-base-500">{unitLabel}</span>
+        <span className="shrink-0 text-[10px] font-mono text-base-500">{unitLabel}</span>
       )}
       <button
         type="button"
@@ -444,14 +445,14 @@ export function SelectionHud() {
     <div className="anim-slide-up pointer-events-none absolute bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-340px)] -translate-x-1/2 flex-col items-center gap-1.5">
       {/* Multi-selection live clearance, delta, and boolean bar */}
       {multiInfo && (
-        <div className="anim-slide-up pointer-events-auto flex items-center gap-2.5 rounded-full border border-base-300 bg-base-100 px-3.5 py-1 text-[11px] shadow-md backdrop-blur-md">
-          <span className="font-semibold text-accent-600">
+        <div className="anim-slide-up pointer-events-auto flex flex-wrap items-center gap-2.5 rounded-full border border-base-300 bg-base-100 px-3.5 py-1 text-[11px] shadow-md backdrop-blur-md">
+          <span className="font-semibold text-accent-400 shrink-0">
             {scene.selection.length} Selected
           </span>
-          <span className="font-mono text-base-700">
+          <span className="font-mono text-base-700 shrink-0">
             Dist: <strong className="font-semibold">{multiInfo.dist}</strong> {unitLabel}
           </span>
-          <span className="font-mono text-base-500">
+          <span className="font-mono text-base-500 shrink-0">
             ΔX: {multiInfo.dx} · ΔY: {multiInfo.dy} · ΔZ: {multiInfo.dz}
           </span>
           {multiInfo.canBoolean && (
@@ -497,7 +498,7 @@ export function SelectionHud() {
                   const selFaceB = selKind === "face" && selFace?.entityId === multiInfo!.e2.id ? selFace.face : null;
                   void assemblyManager.applyMate(docId, "coincident", multiInfo!.e1, multiInfo!.e2, selFaceA, selFaceB);
                 }}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-600 hover:bg-accent-500/15 transition-colors"
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-400 hover:bg-accent-500/15 transition-colors"
               >
                 <Link2 size={12} strokeWidth={2} />
                 <span>Mate</span>
@@ -532,7 +533,7 @@ export function SelectionHud() {
               <button
                 type="button"
                 onClick={() => void constraintManager.applyCoincident(docId, multiInfo!.e1, multiInfo!.e2)}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-600 hover:bg-accent-500/15 transition-colors"
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold text-accent-400 hover:bg-accent-500/15 transition-colors"
               >
                 <Link2 size={12} strokeWidth={2} />
                 <span>Coincident</span>

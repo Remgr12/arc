@@ -305,9 +305,9 @@ export function TopBar({ children }: { children?: ReactNode }) {
       <div
         data-tauri-drag-region
         onDoubleClick={handleToggleMaximize}
-        className="flex h-full items-center justify-center max-w-[320px] truncate px-2 text-center text-[12px] font-medium text-base-600 select-none cursor-default"
+        className="flex h-full items-center justify-center max-w-[320px] min-w-0 px-2 text-center text-[12px] font-medium text-base-600 select-none cursor-default"
       >
-        {view === "dashboard" ? "Projects" : docTitle}
+        <span className="truncate">{view === "dashboard" ? "Projects" : docTitle}</span>
       </div>
 
       {/* Draggable spacer right of title */}

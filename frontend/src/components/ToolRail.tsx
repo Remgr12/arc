@@ -95,7 +95,7 @@ function ShaprRow({
         <span className="flex items-center gap-1.5 whitespace-nowrap text-[12px] font-semibold leading-tight">
           <span>{label}</span>
           {shortcut && (
-            <span className="rounded bg-base-200 px-1 py-0.2 font-mono text-[9.5px] font-medium text-base-500">
+            <span className="shrink-0 rounded bg-base-200 px-1.5 py-0.2 font-mono text-[9.5px] font-medium text-base-500 leading-none">
               {shortcut}
             </span>
           )}

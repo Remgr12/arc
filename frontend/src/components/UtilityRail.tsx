@@ -46,7 +46,7 @@ function RightShaprRow({
         className={cn(
           "flex h-9.5 items-center gap-2 rounded-xl border px-3 py-1.5 text-[12px] font-medium shadow-sm transition-colors",
           active
-            ? "border-[#28b5f5]/50 bg-base-100 text-[#28b5f5]"
+            ? "border-accent-500/50 bg-base-100 text-accent-500"
             : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
         )}
       >
@@ -63,7 +63,7 @@ function RightShaprRow({
         className={cn(
           "flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors",
           active
-            ? "border-[#28b5f5] bg-[#28b5f5] text-white shadow-[#28b5f5]/25"
+            ? "border-accent-500 bg-accent-500 text-white shadow-accent-500/25"
             : "border-base-300/70 bg-base-100 text-base-700 group-hover:border-base-400 group-hover:bg-base-200 group-hover:text-base-900",
         )}
       >
@@ -83,7 +83,8 @@ export function UtilityRail() {
 
   const snapOn = settings?.snap_enabled ?? true;
   const gridOn = settings?.show_grid ?? true;
-  const gridSize = settings?.grid_size ?? 1;
+  const adaptiveGridSize = useArcStore((s) => s.adaptiveGridSize);
+  const gridSize = adaptiveGridSize > 0 ? adaptiveGridSize : (settings?.grid_size ?? 1);
   const isImperial =
     settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
   const unit = isImperial ? "in" : "cm";
@@ -98,9 +99,11 @@ export function UtilityRail() {
 
   const cycleGridSize = () => {
     if (!settings) return;
-    const steps = [1, 2, 5, 10];
-    const idx = steps.indexOf(settings.grid_size);
+    const steps = [0.5, 1, 2, 5, 10];
+    const current = adaptiveGridSize > 0 ? adaptiveGridSize : settings.grid_size;
+    const idx = steps.indexOf(current);
     const nextSize = steps[(idx + 1) % steps.length];
+    useArcStore.getState().setAdaptiveGridSize(nextSize);
     void ipc
       .setSettings({ ...settings, grid_size: nextSize })
       .then((next) => useArcStore.getState().updateSettings(next))
@@ -130,7 +133,7 @@ export function UtilityRail() {
           className={cn(
             "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             snapOn
-              ? "bg-[#28b5f5]/18 text-[#28b5f5]"
+              ? "bg-accent-500/18 text-accent-500"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",
           )}
         >
@@ -142,7 +145,7 @@ export function UtilityRail() {
           type="button"
           onClick={cycleGridSize}
           title="Grid scale (click to cycle 1 / 2 / 5 / 10)"
-          className="flex h-9 w-8.5 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-[#28b5f5]/60 hover:text-[#28b5f5]"
+          className="flex h-9 w-8.5 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-accent-500/60 hover:text-accent-500"
         >
           <span className="font-mono text-[11.5px] font-bold leading-none">
             {gridSize}
@@ -159,7 +162,7 @@ export function UtilityRail() {
           className={cn(
             "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             gridOn
-              ? "bg-[#28b5f5]/18 text-[#28b5f5]"
+              ? "bg-accent-500/18 text-accent-500"
               : "text-base-500 hover:bg-base-200 hover:text-base-800",
           )}
         >
@@ -194,7 +197,7 @@ export function UtilityRail() {
                     className={cn(
                       "flex h-7 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 text-left text-[12px] font-medium capitalize transition-colors",
                       displayMode === mode
-                        ? "bg-[#28b5f5]/18 text-[#28b5f5]"
+                        ? "bg-accent-500/18 text-accent-500"
                         : "text-base-600 hover:bg-base-200 hover:text-base-800",
                     )}
                   >

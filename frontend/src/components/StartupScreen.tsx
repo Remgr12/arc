@@ -19,8 +19,10 @@ const DEFAULT_SORT: SortState = { key: "name", dir: 1 };
 export function StartupScreen() {
   const open = useArcStore((s) => s.startupOpen);
   const folder = useArcStore((s) => s.workspaceFolder);
+  const projectsCache = useArcStore((s) => s.projectsCache);
+  const cached = folder ? projectsCache[folder] : undefined;
   const settingsReady = useArcStore((s) => s.settings !== null);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projects, setProjects] = useState<ProjectSummary[]>(() => cached ?? []);
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [naming, setNaming] = useState<string | null>(null);
@@ -36,15 +38,25 @@ export function StartupScreen() {
       setProjects([]);
       return;
     }
+    const hasCached = (useArcStore.getState().projectsCache[folder]?.length ?? 0) > 0;
+    if (hasCached && projects.length === 0) {
+      setProjects(useArcStore.getState().projectsCache[folder]!);
+    }
     let cancelled = false;
-    setLoading(true);
+    if (!hasCached) {
+      setLoading(true);
+    }
     ipc
       .listProjects(folder)
       .then((list) => {
-        if (!cancelled) setProjects(list);
+        if (!cancelled) {
+          setProjects(list);
+          const sorted = [...list].sort((a, b) => b.modified - a.modified);
+          useArcStore.getState().setProjectsCache(folder, sorted);
+        }
       })
       .catch(() => {
-        if (!cancelled) setProjects([]);
+        if (!cancelled && !hasCached) setProjects([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -295,7 +307,7 @@ function SortHeader({
         onClick={onClick}
         className={cn(
           "inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-wide transition-colors",
-          active ? "text-accent-600" : "text-base-600 hover:text-base-900",
+          active ? "text-accent-400" : "text-base-600 hover:text-base-900",
         )}
       >
         {label}

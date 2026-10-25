@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ReactNode } from "react";
-import type { AppOverview, SceneData, ToolId } from "./types";
+import type { AppOverview, ProjectSummary, SceneData, ToolId } from "./types";
+import { ipc } from "./ipc";
 
 export interface ContextMenuItem {
   label: string;
@@ -28,6 +29,10 @@ interface ArcState {
   startupOpen: boolean;
   onboardingOpen: boolean;
   workspaceFolder: string | null;
+  projectsCache: Record<string, ProjectSummary[]>;
+  setProjectsCache: (folder: string, projects: ProjectSummary[]) => void;
+  addProjectToCache: (folder: string, project: ProjectSummary) => void;
+  removeProjectFromCache: (path: string) => void;
   updateNotice: any;
   updateDismissedVersion: string | null;
   hoverEntity: string | null;
@@ -107,6 +112,8 @@ interface ArcState {
   exitSketchMode: () => void;
   setPolygonSides: (sides: number) => void;
   setDimSnapStep: (step: number) => void;
+  adaptiveGridSize: number;
+  setAdaptiveGridSize: (size: number) => void;
   setLowSpecMode: (enabled: boolean) => void;
   setLeftSidebarOpen: (open: boolean) => void;
   setRightSidebarOpen: (open: boolean) => void;
@@ -148,6 +155,26 @@ function saveStoredFastMode(enabled: boolean): void {
   }
 }
 
+const PROJECTS_CACHE_KEY = "arc:projects_cache_v1";
+
+function loadStoredProjectsCache(): Record<string, ProjectSummary[]> {
+  try {
+    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function saveStoredProjectsCache(cache: Record<string, ProjectSummary[]>): void {
+  try {
+    localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+}
+
 export const useArcStore = create<ArcState>((set) => ({
   overview: null,
   scene: null,
@@ -164,6 +191,7 @@ export const useArcStore = create<ArcState>((set) => ({
   startupOpen: true,
   onboardingOpen: false,
   workspaceFolder: null,
+  projectsCache: loadStoredProjectsCache(),
   updateNotice: null,
   updateDismissedVersion: null,
   hoverEntity: null,
@@ -184,6 +212,7 @@ export const useArcStore = create<ArcState>((set) => ({
   sketchPlaneLabel: "Ground (Y = 0)",
   polygonSides: 6,
   dimSnapStep: 1,
+  adaptiveGridSize: 2,
   lowSpecMode: loadStoredFastMode(),
   leftSidebarOpen: true,
   rightSidebarOpen: true,
@@ -232,7 +261,47 @@ export const useArcStore = create<ArcState>((set) => ({
   setMaterialsOpen: (open) => set({ materialsOpen: open }),
   setStartupOpen: (open) => set({ startupOpen: open }),
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
-  setWorkspaceFolder: (folder) => set({ workspaceFolder: folder }),
+  setProjectsCache: (folder, projects) =>
+    set((st) => {
+      const next = { ...st.projectsCache, [folder]: projects };
+      saveStoredProjectsCache(next);
+      return { projectsCache: next };
+    }),
+  addProjectToCache: (folder, project) =>
+    set((st) => {
+      const existing = st.projectsCache[folder] ?? [];
+      const filtered = existing.filter((p) => p.path !== project.path);
+      const next = { ...st.projectsCache, [folder]: [project, ...filtered] };
+      saveStoredProjectsCache(next);
+      return { projectsCache: next };
+    }),
+  removeProjectFromCache: (path) =>
+    set((st) => {
+      const next: Record<string, ProjectSummary[]> = {};
+      let changed = false;
+      for (const [f, list] of Object.entries(st.projectsCache)) {
+        const filtered = list.filter((p) => p.path !== path);
+        if (filtered.length !== list.length) changed = true;
+        next[f] = filtered;
+      }
+      if (changed) {
+        saveStoredProjectsCache(next);
+        return { projectsCache: next };
+      }
+      return st;
+    }),
+  setWorkspaceFolder: (folder) => {
+    set({ workspaceFolder: folder });
+    if (folder) {
+      ipc
+        .listProjects(folder)
+        .then((list) => {
+          const sorted = [...list].sort((a, b) => b.modified - a.modified);
+          useArcStore.getState().setProjectsCache(folder, sorted);
+        })
+        .catch(() => undefined);
+    }
+  },
   setUpdateNotice: (updateNotice) => set({ updateNotice }),
   dismissUpdateNotice: (version) => set({ updateNotice: null, updateDismissedVersion: version }),
   setHoverEntity: (id) => set({ hoverEntity: id, hoverObj: null }),
@@ -321,6 +390,7 @@ export const useArcStore = create<ArcState>((set) => ({
     })),
   setPolygonSides: (sides) => set({ polygonSides: Math.max(3, Math.min(32, Math.round(sides))) }),
   setDimSnapStep: (step) => set({ dimSnapStep: Math.max(0, step) }),
+  setAdaptiveGridSize: (adaptiveGridSize) => set({ adaptiveGridSize }),
   setLowSpecMode: (lowSpecMode) => {
     saveStoredFastMode(lowSpecMode);
     set({ lowSpecMode });

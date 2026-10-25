@@ -83,7 +83,7 @@ export function Onboarding() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] transition-colors",
                   index === step
-                    ? "bg-accent-600/15 text-accent-600"
+                    ? "bg-accent-500/15 text-accent-400"
                     : index < step
                       ? "text-base-700 hover:bg-base-200"
                       : "text-base-500",
@@ -259,7 +259,7 @@ function KeybindStep() {
             className={cn(
               "flex items-center justify-between rounded-md border px-3 py-2 text-[12.5px] transition-colors",
               activeId === profile.id
-                ? "border-accent-600 bg-accent-600/10 text-accent-600"
+                ? "border-accent-500/60 bg-accent-500/10 text-accent-400"
                 : "border-base-300 bg-base-150 text-base-700 hover:border-base-400",
             )}
           >
