@@ -83,8 +83,7 @@ export function UtilityRail() {
 
   const snapOn = settings?.snap_enabled ?? true;
   const gridOn = settings?.show_grid ?? true;
-  const adaptiveGridSize = useArcStore((s) => s.adaptiveGridSize);
-  const gridSize = adaptiveGridSize > 0 ? adaptiveGridSize : (settings?.grid_size ?? 1);
+  const gridSize = settings?.grid_size ?? 1;
   const isImperial =
     settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
   const unit = isImperial ? "in" : "cm";
@@ -99,11 +98,10 @@ export function UtilityRail() {
 
   const cycleGridSize = () => {
     if (!settings) return;
-    const steps = [0.5, 1, 2, 5, 10];
-    const current = adaptiveGridSize > 0 ? adaptiveGridSize : settings.grid_size;
+    const steps = [1, 2, 5, 10];
+    const current = settings.grid_size;
     const idx = steps.indexOf(current);
-    const nextSize = steps[(idx + 1) % steps.length];
-    useArcStore.getState().setAdaptiveGridSize(nextSize);
+    const nextSize = idx >= 0 ? steps[(idx + 1) % steps.length] : 2;
     void ipc
       .setSettings({ ...settings, grid_size: nextSize })
       .then((next) => useArcStore.getState().updateSettings(next))

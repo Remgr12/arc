@@ -102,6 +102,7 @@ interface ViewportRefs {
   lastSketchPlaneKey: string;
   lastGridSize: number;
   lastGridStep: number;
+  lastBaseGrid: number;
   altOrbit: { lastX: number; lastY: number } | null;
   lastLowSpecMode: boolean;
   lastCursorAt: number;
@@ -204,30 +205,17 @@ function makeGrid(p: ViewportPalette, step = 2): THREE.Group {
   return group;
 }
 
-/**
- * Computes an adaptive grid step (1-2-5 series) based on the camera distance to target.
- *
- * For a perspective camera with vertical FOV `fov` at distance `dist`,
- * visible height at the target is:
- *   h = 2 * dist * Math.tan((fov * Math.PI) / 360)
- * We target around 18-24 minor grid cells across the screen height,
- * choosing step from {..., 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, ...}
- */
-function computeAdaptiveGridStep(dist: number, fov: number): number {
-  if (dist <= 0 || !Number.isFinite(dist)) return 2;
-  const visibleHeight = 2 * dist * Math.tan(((fov || 50) * Math.PI) / 360);
-  const rawStep = visibleHeight / 22;
-  if (rawStep <= 0 || !Number.isFinite(rawStep)) return 2;
-
-  const exponent = Math.floor(Math.log10(rawStep));
-  const fraction = rawStep / Math.pow(10, exponent);
+function snapTo125Series(val: number): number {
+  if (val <= 0 || !Number.isFinite(val)) return 2;
+  const exponent = Math.floor(Math.log10(val));
+  const fraction = val / Math.pow(10, exponent);
 
   let stepMultiplier = 1;
-  if (fraction < 1.7) {
+  if (fraction < 1.414) {
     stepMultiplier = 1;
-  } else if (fraction < 3.8) {
+  } else if (fraction < 3.162) {
     stepMultiplier = 2;
-  } else if (fraction < 7.5) {
+  } else if (fraction < 7.071) {
     stepMultiplier = 5;
   } else {
     stepMultiplier = 10;
@@ -237,8 +225,29 @@ function computeAdaptiveGridStep(dist: number, fov: number): number {
   return Math.round(step * 10000) / 10000;
 }
 
+/**
+ * Computes an adaptive grid step based on the user's base grid size (settings.grid_size)
+ * and camera zoom level (distance to orbit target).
+ *
+ * At standard viewing distance (~275 - 1100), the step equals baseGrid exactly.
+ * When zooming in close or far out, it dynamically scales along the 1-2-5 series
+ * so grid subdivisions remain clear, readable, and perfectly proportioned.
+ */
+function computeAdaptiveGridStep(baseGrid: number, dist: number, _fov?: number): number {
+  const base = baseGrid > 0 && Number.isFinite(baseGrid) ? baseGrid : 2;
+  if (dist <= 0 || !Number.isFinite(dist)) return base;
+  const ratio = dist / 550;
+  // Comfortable deadband around normal framing where the grid strictly matches the user's setting
+  if (ratio >= 0.5 && ratio <= 2.0) {
+    return base;
+  }
+  const raw = base * ratio;
+  return snapTo125Series(raw);
+}
+
 function updateAdaptiveGrid(ref: ViewportRefs, step: number): void {
   ref.lastGridStep = step;
+  ref.lastGridSize = step;
   useArcStore.getState().setAdaptiveGridSize(step);
 
   const palette = viewportPalette(useThemeStore.getState().active());
@@ -462,11 +471,12 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   const raycaster = new THREE.Raycaster();
   if (raycaster.params.Line) (raycaster.params.Line as { threshold: number }).threshold = 10;
 
-  const initialGridSize = useArcStore.getState().settings?.grid_size ?? 2;
+  const initialBaseGrid = useArcStore.getState().settings?.grid_size ?? 2;
   const initialDist = camera.position.distanceTo(controls.target);
-  const initialGridStep = computeAdaptiveGridStep(initialDist, camera.fov);
+  const initialGridStep = computeAdaptiveGridStep(initialBaseGrid, initialDist, camera.fov);
   useArcStore.getState().setAdaptiveGridSize(initialGridStep);
   const gridNode = makeGrid(palette, initialGridStep);
+  gridNode.visible = false;
   sceneRoot.add(gridNode);
 
   const ref: ViewportRefs = {
@@ -504,8 +514,9 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     lastSketchMode: false,
     lastSketchHeight: 0,
     lastSketchPlaneKey: "",
-    lastGridSize: initialGridSize,
+    lastGridSize: initialGridStep,
     lastGridStep: initialGridStep,
+    lastBaseGrid: initialBaseGrid,
     altOrbit: null,
     lastLowSpecMode: false,
     lastCursorAt: 0,
@@ -610,23 +621,26 @@ function startLoop(ref: ViewportRefs): () => void {
     }
 
     // Adaptive ground grid spacing & infinite scrolling
-    const dist = ref.camera.position.distanceTo(ref.controls.target);
-    const adaptiveStep = computeAdaptiveGridStep(dist, ref.camera.fov);
-    if (adaptiveStep !== ref.lastGridStep) {
-      updateAdaptiveGrid(ref, adaptiveStep);
-    }
+    if (ref.gridNode.visible) {
+      const dist = ref.camera.position.distanceTo(ref.controls.target);
+      const baseGrid = useArcStore.getState().settings?.grid_size ?? 2;
+      const adaptiveStep = computeAdaptiveGridStep(baseGrid, dist, ref.camera.fov);
+      if (adaptiveStep !== ref.lastGridStep) {
+        updateAdaptiveGrid(ref, adaptiveStep);
+      }
 
-    if (!useArcStore.getState().sketchMode && ref.gridNode.visible) {
-      const majorStep = (ref.lastGridStep || 2) * 5;
-      const snapX = Math.floor(ref.controls.target.x / majorStep) * majorStep;
-      const snapZ = Math.floor(ref.controls.target.z / majorStep) * majorStep;
-      if (
-        Math.abs(ref.gridNode.position.x - snapX) > 0.001 ||
-        Math.abs(ref.gridNode.position.z - snapZ) > 0.001
-      ) {
-        ref.gridNode.position.x = snapX;
-        ref.gridNode.position.z = snapZ;
-        ref.needsRender = true;
+      if (!useArcStore.getState().sketchMode) {
+        const majorStep = (ref.lastGridStep || 2) * 5;
+        const snapX = Math.floor(ref.controls.target.x / majorStep) * majorStep;
+        const snapZ = Math.floor(ref.controls.target.z / majorStep) * majorStep;
+        if (
+          Math.abs(ref.gridNode.position.x - snapX) > 0.001 ||
+          Math.abs(ref.gridNode.position.z - snapZ) > 0.001
+        ) {
+          ref.gridNode.position.x = snapX;
+          ref.gridNode.position.z = snapZ;
+          ref.needsRender = true;
+        }
       }
     }
 
@@ -861,27 +875,30 @@ function syncSceneToThree(ref: ViewportRefs): void {
   updateOverlays(ref);
 
   const settings = state.settings;
-  const gridVis = (settings?.show_grid ?? true) || state.sketchMode;
+  const isCreatingOrSketching =
+    state.sketchMode ||
+    state.drafting ||
+    (state.tool !== "select" &&
+      state.tool !== "move" &&
+      state.tool !== "rotate" &&
+      state.tool !== "scale" &&
+      state.tool !== "extrude-face" &&
+      state.tool !== "offset-face" &&
+      state.tool !== "fillet-edge");
+  // Shapr3D behavior: no grid in normal 3D view; grid appears when sketching or creating!
+  const gridVis = (settings?.show_grid ?? true) && isCreatingOrSketching;
   const axesVis = settings?.show_axes ?? true;
-  const gridSize = ref.lastGridStep || settings?.grid_size || 2;
-  const gridSizeChanged = gridSize !== ref.lastGridSize;
-  if (gridSizeChanged) {
-    ref.lastGridSize = gridSize;
-    const index = ref.sceneRoot.children.indexOf(ref.gridNode);
-    const prevPos = ref.gridNode.position.clone();
-    const prevQuat = ref.gridNode.quaternion.clone();
-    ref.sceneRoot.remove(ref.gridNode);
-    disposeObject(ref.gridNode);
-    const next = makeGrid(viewportPalette(useThemeStore.getState().active()), gridSize);
-    next.visible = gridVis;
-    next.position.copy(prevPos);
-    next.quaternion.copy(prevQuat);
-    if (index >= 0) ref.sceneRoot.children.splice(index, 0, next);
-    else ref.sceneRoot.add(next);
-    ref.gridNode = next;
-    ref.needsRender = true;
+
+  const baseGrid = settings?.grid_size ?? 2;
+  const baseGridChanged = baseGrid !== ref.lastBaseGrid;
+  if (baseGridChanged) {
+    ref.lastBaseGrid = baseGrid;
+    const dist = ref.camera.position.distanceTo(ref.controls.target);
+    const step = computeAdaptiveGridStep(baseGrid, dist, ref.camera.fov);
+    updateAdaptiveGrid(ref, step);
   }
-  if (ref.gridNode.visible !== gridVis || sketchChanged || gridSizeChanged) {
+
+  if (ref.gridNode.visible !== gridVis || sketchChanged || baseGridChanged) {
     ref.gridNode.visible = gridVis;
     if (state.sketchMode) {
       const n = new THREE.Vector3(...state.sketchPlaneNormal).normalize();

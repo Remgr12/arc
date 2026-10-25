@@ -5,7 +5,7 @@ import { cn } from "./ui";
 
 const fmt = (n: number) => Math.round(n * 10) / 10;
 const SNAP_STEPS = [1, 2, 5, 10, 0.5];
-const GRID_STEPS = [0.5, 1, 2, 5, 10];
+const GRID_STEPS = [1, 2, 5, 10];
 
 /** Toggles a boolean settings flag through the backend, mirroring SettingsDialog. */
 function toggleSetting(key: "snap_enabled" | "show_grid") {
@@ -21,10 +21,9 @@ function cycleGridSize() {
   const store = useArcStore.getState();
   const settings = store.settings;
   if (!settings) return;
-  const current = store.adaptiveGridSize > 0 ? store.adaptiveGridSize : settings.grid_size;
+  const current = settings.grid_size;
   const idx = GRID_STEPS.indexOf(current);
-  const nextGrid = GRID_STEPS[(idx + 1) % GRID_STEPS.length];
-  store.setAdaptiveGridSize(nextGrid);
+  const nextGrid = idx >= 0 ? GRID_STEPS[(idx + 1) % GRID_STEPS.length] : 2;
   void ipc
     .setSettings({ ...settings, grid_size: nextGrid })
     .then((next) => useArcStore.getState().updateSettings(next))
@@ -34,7 +33,6 @@ function cycleGridSize() {
 export function StatusBar() {
   const scene = useArcStore((s) => s.scene);
   const settings = useArcStore((s) => s.settings);
-  const adaptiveGridSize = useArcStore((s) => s.adaptiveGridSize);
   const cursorWorld = useArcStore((s) => s.cursorWorld);
   const selKind = useArcStore((s) => s.selKind);
   const sketchMode = useArcStore((s) => s.sketchMode);
@@ -48,8 +46,7 @@ export function StatusBar() {
   const isImperial =
     settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
   const unit = isImperial ? "in" : "cm";
-  const activeGrid = adaptiveGridSize > 0 ? adaptiveGridSize : (settings?.grid_size ?? 2);
-  const gridLabel = settings ? `${activeGrid} ${unit}` : null;
+  const gridLabel = settings ? `${settings.grid_size} ${unit}` : null;
 
   return (
     <footer className="no-scrollbar flex h-8 shrink-0 items-center gap-2.5 overflow-x-auto border-t border-base-200 bg-base-50 px-3.5 text-[11.5px]">
