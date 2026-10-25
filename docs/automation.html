@@ -168,6 +168,61 @@
     }
   }
 }</code></pre>
+
+        <h3>MCP Tool Reference</h3>
+        <table class="tbl">
+          <caption>Available Agent Tools in arc-mcp</caption>
+          <thead><tr><th class="keys">Tool</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="keys mono">arc_create_box</td><td>Create a 3D solid box with <span class="mono">width</span>, <span class="mono">height</span>, <span class="mono">depth</span>, and optional <span class="mono">corner_radius</span>, <span class="mono">position</span>, <span class="mono">rotation</span>, <span class="mono">color</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_cylinder</td><td>Create a 3D solid cylinder with <span class="mono">radius</span> and <span class="mono">height</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_sphere</td><td>Create a 3D solid UV sphere with <span class="mono">radius</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_cone</td><td>Create a 3D solid cone with base <span class="mono">radius</span> and <span class="mono">height</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_torus</td><td>Create a 3D solid torus with major <span class="mono">radius</span> and tube <span class="mono">tube</span> radius.</td></tr>
+            <tr><td class="keys mono">arc_create_plane</td><td>Create a rectangular 2D planar reference face in the XZ plane with <span class="mono">width</span> and <span class="mono">depth</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_extrude</td><td>Extrude a closed 2D polygon (<span class="mono">[[x, y], ...]</span>) vertically by <span class="mono">height</span> into a 3D solid.</td></tr>
+            <tr><td class="keys mono">arc_create_revolve</td><td>Revolve a 2D profile (<span class="mono">[[x, z], ...]</span>) around the central Y axis (e.g. vases, shafts, pulleys, domes).</td></tr>
+            <tr><td class="keys mono">arc_create_sweep</td><td>Sweep a circular tube of given <span class="mono">radius</span> along a 3D path polyline (<span class="mono">[[x, y, z], ...]</span>).</td></tr>
+            <tr><td class="keys mono">arc_create_loft</td><td>Loft a solid skin through multiple cross-section polygons (<span class="mono">sections</span>).</td></tr>
+            <tr><td class="keys mono">arc_create_wall</td><td>Construct an architectural wall along a 2D polyline footprint (<span class="mono">path</span>, <span class="mono">width</span>, <span class="mono">height</span>).</td></tr>
+            <tr><td class="keys mono">arc_create_stair</td><td>Construct a parametric staircase with <span class="mono">width</span>, <span class="mono">rise</span>, <span class="mono">run</span>, and step <span class="mono">count</span>.</td></tr>
+            <tr><td class="keys mono">arc_create_sketch</td><td>Create 2D or 3D wireframe sketch curves (<span class="mono">polyline</span>, <span class="mono">circle</span>, <span class="mono">rectangle</span>, or <span class="mono">line</span>).</td></tr>
+            <tr><td class="keys mono">arc_boolean</td><td>Apply CSG operations (<span class="mono">union</span>, <span class="mono">difference</span>, <span class="mono">intersection</span>) between <span class="mono">first_id</span> and <span class="mono">second_id</span>.</td></tr>
+            <tr><td class="keys mono">arc_transform</td><td>Translate, rotate (Euler angles in degrees), or scale an existing entity by ID.</td></tr>
+            <tr><td class="keys mono">arc_set_color</td><td>Assign display color (<span class="mono">#hex</span>, <span class="mono">red</span>, <span class="mono">steel</span>, or RGBA array) to an entity.</td></tr>
+            <tr><td class="keys mono">arc_delete</td><td>Delete one or more entities by ID (<span class="mono">entity_ids: [...]</span>).</td></tr>
+            <tr><td class="keys mono">arc_inspect_scene</td><td>Return a token-efficient summary of the scene (IDs, names, types, positions, colors) without dumping raw mesh vertices.</td></tr>
+            <tr><td class="keys mono">arc_clear_scene</td><td>Wipe all entities from the active document for a clean slate.</td></tr>
+            <tr><td class="keys mono">arc_export</td><td>Export the CAD scene to <span class="mono">stl</span>, <span class="mono">obj</span>, or <span class="mono">step</span>.</td></tr>
+            <tr><td class="keys mono">arc_batch</td><td>Atomic batch execution: run multiple operations in one turn with <span class="mono">$alias</span> variable cross-referencing.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>One-Turn Assembly with arc_batch</h3>
+        <p>An AI agent can construct an entire multi-part assembly with holes in a single turn:</p>
+        <pre class="code"><code>{
+  <span class="k">"operations"</span>: [
+    {
+      <span class="k">"alias"</span>: <span class="str">"base"</span>,
+      <span class="k">"tool"</span>: <span class="str">"create_box"</span>,
+      <span class="k">"args"</span>: { <span class="k">"width"</span>: 100, <span class="k">"depth"</span>: 100, <span class="k">"height"</span>: 10, <span class="k">"color"</span>: <span class="str">"steel"</span>, <span class="k">"name"</span>: <span class="str">"base_plate"</span> }
+    },
+    {
+      <span class="k">"alias"</span>: <span class="str">"hole"</span>,
+      <span class="k">"tool"</span>: <span class="str">"create_cylinder"</span>,
+      <span class="k">"args"</span>: { <span class="k">"radius"</span>: 10, <span class="k">"height"</span>: 30, <span class="k">"position"</span>: [0, 5, 0], <span class="k">"name"</span>: <span class="str">"center_hole_tool"</span> }
+    },
+    {
+      <span class="k">"tool"</span>: <span class="str">"boolean"</span>,
+      <span class="k">"args"</span>: { <span class="k">"operation"</span>: <span class="str">"difference"</span>, <span class="k">"first_id"</span>: <span class="str">"$base"</span>, <span class="k">"second_id"</span>: <span class="str">"$hole"</span> },
+      <span class="k">"alias"</span>: <span class="str">"plate_with_hole"</span>
+    },
+    {
+      <span class="k">"tool"</span>: <span class="str">"create_cylinder"</span>,
+      <span class="k">"args"</span>: { <span class="k">"radius"</span>: 6, <span class="k">"height"</span>: 50, <span class="k">"position"</span>: [0, 30, 0], <span class="k">"color"</span>: <span class="str">"#3b82f6"</span>, <span class="k">"name"</span>: <span class="str">"shaft"</span> }
+    }
+  ]
+}</code></pre>
       </section>
 
       <section class="doc" id="raw">
