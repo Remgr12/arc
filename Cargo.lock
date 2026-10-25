@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "arc-app"
-version = "0.24.0"
+version = "0.24.1"
 dependencies = [
  "anyhow",
  "base64 0.13.1",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "arc-mcp"
-version = "0.24.0"
+version = "0.24.1"
 dependencies = [
  "serde",
  "serde_json",
