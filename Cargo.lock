@@ -125,6 +125,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-mcp"
+version = "0.24.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "array-macro"
 version = "2.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

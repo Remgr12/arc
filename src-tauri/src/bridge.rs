@@ -333,6 +333,22 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
                 .unwrap_or("obj")
                 .to_string(),
         )),
+        "csg_apply" => to_json(commands::csg_apply(
+            app.clone(),
+            st(app),
+            d("document_id")?,
+            d("operation")?,
+            d("first_id")?,
+            d("second_id")?,
+        )),
+        "set_entity_material" => to_json(commands::set_entity_material(
+            app.clone(),
+            st(app),
+            d("document_id")?,
+            d("entity_id")?,
+            opt("material"),
+        )),
+        "get_material_library" => to_json(Ok(commands::get_material_library())),
         other => Err(format!("unknown command {other}")),
     }
 }

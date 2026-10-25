@@ -136,14 +136,35 @@
         <h2>MCP Stdio Client</h2>
         <p>
           The bundled <span class="mono">crates/arc-mcp</span> tool provides a standard Model Context Protocol (MCP)
-          server over stdio. This enables AI assistants (Claude Desktop, IDE agents, autonomous tools)
-          to inspect and edit the 3D scene directly.
+          server over stdio. This enables AI assistants (Antigravity CLI, Claude Desktop, Cursor, IDE agents, and autonomous CLI tools)
+          to model, inspect, and manipulate 3D scenes in Arc with zero friction.
         </p>
-        <p>Configure Claude Desktop or other MCP runners with:</p>
+
+        <h3>AI Agent Design Principles</h3>
+        <ul>
+          <li><strong>Automatic Document Resolution:</strong> Agents never need to juggle document IDs. Omitting <span class="mono">document_id</span> automatically operates on the active document or seamlessly creates a new project.</li>
+          <li><strong>Direct High-Level Primitives:</strong> Call <span class="mono">arc_create_box</span>, <span class="mono">arc_create_cylinder</span>, <span class="mono">arc_create_sphere</span>, or <span class="mono">arc_create_extrude</span> with positions, Euler angle rotations (in degrees), and human color names or hex codes in a single tool call.</li>
+          <li><strong>Constructive Solid Geometry (CSG):</strong> Apply boolean unions, differences (cutouts/holes), and intersections with <span class="mono">arc_boolean</span>.</li>
+          <li><strong>Atomic Multi-Operation Batches:</strong> The <span class="mono">arc_batch</span> tool lets agents define entire complex assemblies (e.g., 20 parts with cutouts and standoffs) in a single turn using <span class="mono">$alias</span> variable references between steps.</li>
+          <li><strong>Context-Friendly Inspection:</strong> <span class="mono">arc_inspect_scene</span> returns a clean, compact summary of scene entities without dumping megabytes of vertex floats into the LLM context window.</li>
+        </ul>
+
+        <h3>Configuration</h3>
+        <p><strong>Antigravity CLI</strong> (<span class="mono">~/.gemini/config/mcp_config.json</span>):</p>
         <pre class="code"><code>{
   <span class="k">"mcpServers"</span>: {
     <span class="k">"arc"</span>: {
       <span class="k">"command"</span>: <span class="str">"/path/to/arc/target/release/arc-mcp"</span>
+    }
+  }
+}</code></pre>
+
+        <p><strong>Claude Desktop / Workspace</strong> (<span class="mono">.mcp.json</span>):</p>
+        <pre class="code"><code>{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"arc"</span>: {
+      <span class="k">"command"</span>: <span class="str">"cargo"</span>,
+      <span class="k">"args"</span>: [<span class="str">"run"</span>, <span class="str">"--quiet"</span>, <span class="str">"--release"</span>, <span class="str">"--bin"</span>, <span class="str">"arc-mcp"</span>]
     }
   }
 }</code></pre>
