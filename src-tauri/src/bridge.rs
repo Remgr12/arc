@@ -87,8 +87,13 @@ fn serve(app: AppHandle, token: String, stream: TcpStream) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
         }
-        let Ok(msg) = serde_json::from_str::<Value>(line.trim()) else {
-            return;
+        let msg: Value = match serde_json::from_str(line.trim()) {
+            Ok(m) => m,
+            Err(_) => {
+                let _ = writeln!(writer, "{{\"ok\":false,\"error\":\"malformed json\"}}");
+                let _ = writer.flush();
+                continue;
+            }
         };
         if let Some(auth) = msg.get("auth").and_then(|a| a.as_str()) {
             let ok = auth == token;
@@ -96,14 +101,13 @@ fn serve(app: AppHandle, token: String, stream: TcpStream) {
             if writer.write_all(text.as_bytes()).is_err() {
                 return;
             }
+            let _ = writer.flush();
             if !ok {
                 return;
             }
             continue;
         }
-        let Some(id) = msg.get("id").cloned() else {
-            return;
-        };
+        let id = msg.get("id").cloned().unwrap_or(json!(null));
         let cmd = msg
             .get("cmd")
             .and_then(|c| c.as_str())
@@ -203,13 +207,99 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             d("path")?,
         )),
         "get_scene" => to_json(commands::get_scene(st(app), d("document_id")?)),
-        "create_entity" => to_json(commands::create_entity(
-            app.clone(),
-            st(app),
-            d("document_id")?,
-            val("geometry")?,
-            opt("name"),
-        )),
+        "get_entities" => to_json(commands::get_entities(st(app), d("document_id")?)),
+        "create_entity" => {
+            let doc_id = d("document_id")?;
+            let res = commands::create_entity(
+                app.clone(),
+                st(app),
+                doc_id.clone(),
+                val("geometry")?,
+                opt("name"),
+            )?;
+            let entity_id = res.id.clone();
+            if let Some(pos_val) = params.get("position") {
+                if let Ok(pos) = serde_json::from_value::<[f64; 3]>(pos_val.clone()) {
+                    let _ = commands::set_transform(
+                        app.clone(),
+                        st(app),
+                        doc_id.clone(),
+                        vec![TransformUpdate {
+                            id: entity_id.clone(),
+                            transform: crate::core::Transform::at(pos[0], pos[1], pos[2]),
+                        }],
+                        false,
+                    );
+                }
+            }
+            if let Some(color_val) = params.get("color") {
+                if let Ok(color) = serde_json::from_value::<[f64; 4]>(color_val.clone()) {
+                    let _ = commands::set_entity_props(
+                        app.clone(),
+                        st(app),
+                        doc_id.clone(),
+                        entity_id.clone(),
+                        crate::commands::EntityPropsUpdate {
+                            name: None,
+                            visible: None,
+                            locked: None,
+                            color: Some(Some(color)),
+                            layer_id: None,
+                        },
+                    );
+                }
+            }
+            to_json(Ok(res))
+        }
+        "batch_create" => {
+            let doc_id = d("document_id")?;
+            let entities = params.get("entities").and_then(|v| v.as_array()).ok_or("missing 'entities' array")?;
+            let mut created = Vec::new();
+            for ent in entities {
+                let geom = ent.get("geometry").cloned().ok_or("entity missing 'geometry'")?;
+                let name = ent.get("name").and_then(|v| v.as_str()).map(String::from);
+                let res = commands::create_entity(
+                    app.clone(),
+                    st(app),
+                    doc_id.clone(),
+                    geom,
+                    name,
+                )?;
+                if let Some(pos_val) = ent.get("position") {
+                    if let Ok(pos) = serde_json::from_value::<[f64; 3]>(pos_val.clone()) {
+                        let _ = commands::set_transform(
+                            app.clone(),
+                            st(app),
+                            doc_id.clone(),
+                            vec![TransformUpdate {
+                                id: res.id.clone(),
+                                transform: crate::core::Transform::at(pos[0], pos[1], pos[2]),
+                            }],
+                            false,
+                        );
+                    }
+                }
+                if let Some(color_val) = ent.get("color") {
+                    if let Ok(color) = serde_json::from_value::<[f64; 4]>(color_val.clone()) {
+                        let _ = commands::set_entity_props(
+                            app.clone(),
+                            st(app),
+                            doc_id.clone(),
+                            res.id.clone(),
+                            crate::commands::EntityPropsUpdate {
+                                name: None,
+                                visible: None,
+                                locked: None,
+                                color: Some(Some(color)),
+                                layer_id: None,
+                            },
+                        );
+                    }
+                }
+                created.push(res);
+            }
+            to_json(Ok(created))
+        }
         "update_geometry" => to_json(commands::update_geometry(
             app.clone(),
             st(app),

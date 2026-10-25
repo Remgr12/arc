@@ -10,6 +10,7 @@ mod bridge;
 mod commands;
 mod core;
 mod kernel;
+mod mcp;
 mod plugins;
 mod state;
 mod updater;
@@ -18,6 +19,11 @@ use crate::core::Document;
 use state::{Settings, SharedState, load_settings, save_settings};
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--mcp" || a == "mcp") {
+        mcp::run();
+        return;
+    }
     let app_state: SharedState = Arc::new(Mutex::new(state::AppState::new()));
     let plugin_state: plugins::PluginLock = Mutex::new(plugins::PluginRuntime::default());
 
@@ -138,6 +144,7 @@ fn main() {
             commands::close_document,
             commands::set_active_document,
             commands::get_scene,
+            commands::get_entities,
             commands::create_entity,
             commands::update_geometry,
             commands::delete_entities,

@@ -343,6 +343,31 @@ pub fn get_scene(
     Ok(SceneEnvelope { document_id, scene })
 }
 
+#[tauri::command]
+pub fn get_entities(
+    state: State<'_, SharedState>,
+    document_id: String,
+) -> Result<Vec<crate::core::entity::EntityData>, String> {
+    doc_ref(&state, &document_id, |d| {
+        d.entities
+            .values()
+            .map(|entity| crate::core::entity::EntityData {
+                id: entity.id.as_string(),
+                name: entity.name.clone(),
+                kind: entity.kind.type_name().to_string(),
+                category: entity.kind.category(),
+                layer: entity.layer.as_string(),
+                visible: entity.visible,
+                locked: entity.locked,
+                color: entity.color.map(|c| [c.r, c.g, c.b, c.a]),
+                transform: entity.transform,
+                geometry: entity.kind.clone(),
+                material: entity.material.clone(),
+            })
+            .collect()
+    })
+}
+
 // ------------------------------------------------------------ entities
 
 #[derive(Debug, Clone, serde::Serialize)]
