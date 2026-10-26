@@ -281,6 +281,18 @@ function ArchViewSelector() {
       >
         Elevation
       </button>
+      <button
+        type="button"
+        onClick={() => setArchViewMode("section")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+          archViewMode === "section"
+            ? "bg-base-300 text-base-900 font-semibold"
+            : "text-base-600 hover:text-base-900",
+        )}
+      >
+        Section
+      </button>
     </div>
   );
 }

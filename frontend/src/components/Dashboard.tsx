@@ -9,32 +9,36 @@ import {
   DraftingCompass,
   Folder,
   FolderOpen,
+  FolderSync,
   LayoutGrid,
   List,
   Pencil,
   Plus,
   Search,
   Settings,
-  Sliders,
-  Tag,
+  Sparkles,
   Trash2,
   Upload,
   X,
+  Zap,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
+import { commitWorkspaceFolder } from "../lib/workspace";
 import { Button, Modal, TextField, cn } from "./ui";
+import { Logo } from "./Logo";
 import type { ProjectMode, ProjectSummary } from "../lib/types";
 
 type ViewMode = "grid" | "list";
-type FilterTab = "all" | "recent";
-type SortField = "category" | "tags" | "modified" | "name" | "size";
+type FilterTab = "all" | "recent" | "cad" | "arch";
+type SortField = "modified" | "name" | "size" | "category";
 type SortDir = "asc" | "desc";
 
 interface ProjectMeta {
   category?: string;
   tags?: string[];
+  mode?: ProjectMode;
 }
 
 const META_STORAGE_KEY = "arc_project_meta_v1";
@@ -50,49 +54,49 @@ const DEFAULT_CATEGORIES = [
 
 interface CategoryTheme {
   dot: string;
-  pill: string;
-  activePill: string;
+  badge: string;
+  text: string;
 }
 
 const CATEGORY_THEMES: Record<string, CategoryTheme> = {
   Mechanical: {
-    dot: "bg-blue-400",
-    pill: "bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25",
-    activePill: "bg-blue-500 text-white border-blue-400 shadow-sm",
+    dot: "bg-sky-400",
+    badge: "bg-sky-500/10 text-sky-500 border-sky-500/25",
+    text: "text-sky-500",
   },
   Architecture: {
     dot: "bg-amber-400",
-    pill: "bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25",
-    activePill: "bg-amber-500 text-white border-amber-400 shadow-sm",
+    badge: "bg-amber-500/10 text-amber-500 border-amber-500/25",
+    text: "text-amber-500",
   },
   "3D Printing": {
     dot: "bg-emerald-400",
-    pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25",
-    activePill: "bg-emerald-500 text-white border-emerald-400 shadow-sm",
+    badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/25",
+    text: "text-emerald-500",
   },
   Electronics: {
     dot: "bg-purple-400",
-    pill: "bg-purple-500/15 text-purple-400 border-purple-500/30 hover:bg-purple-500/25",
-    activePill: "bg-purple-500 text-white border-purple-400 shadow-sm",
+    badge: "bg-purple-500/10 text-purple-500 border-purple-500/25",
+    text: "text-purple-500",
   },
   Drafts: {
-    dot: "bg-base-400",
-    pill: "bg-base-200/90 text-base-700 border-base-300 hover:bg-base-300 hover:text-base-900",
-    activePill: "bg-base-300 text-base-900 border-base-400 shadow-sm",
+    dot: "bg-zinc-400",
+    badge: "bg-base-200 text-base-600 border-base-300",
+    text: "text-base-600",
   },
   General: {
-    dot: "bg-accent-400",
-    pill: "bg-accent-500/15 text-accent-400 border-accent-500/30 hover:bg-accent-500/25",
-    activePill: "bg-accent-500 text-base-950 font-semibold border-accent-400 shadow-sm",
+    dot: "bg-accent-500",
+    badge: "bg-accent-500/10 text-accent-500 border-accent-500/25",
+    text: "text-accent-500",
   },
 };
 
 function getCategoryTheme(cat: string): CategoryTheme {
   return (
     CATEGORY_THEMES[cat] ?? {
-      dot: "bg-accent-400",
-      pill: "bg-accent-500/15 text-accent-400 border-accent-500/30 hover:bg-accent-500/25",
-      activePill: "bg-accent-500 text-base-950 font-semibold border-accent-400 shadow-sm",
+      dot: "bg-accent-500",
+      badge: "bg-accent-500/10 text-accent-500 border-accent-500/25",
+      text: "text-accent-500",
     }
   );
 }
@@ -118,6 +122,8 @@ export function Dashboard() {
   const folder = useArcStore((s) => s.workspaceFolder);
   const projectsCache = useArcStore((s) => s.projectsCache);
   const overview = useArcStore((s) => s.overview);
+  const lowSpecMode = useArcStore((s) => s.lowSpecMode);
+
   const openDocuments = useMemo(
     () => (overview?.documents ?? []).filter((d) => d.path),
     [overview],
@@ -236,6 +242,21 @@ export function Dashboard() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [projects, metaMap]);
 
+  // Counts by mode
+  const cadCount = useMemo(() => {
+    return projects.filter((p) => {
+      const cat = metaMap[p.path]?.category?.toLowerCase();
+      return cat !== "architecture";
+    }).length;
+  }, [projects, metaMap]);
+
+  const archCount = useMemo(() => {
+    return projects.filter((p) => {
+      const cat = metaMap[p.path]?.category?.toLowerCase();
+      return cat === "architecture";
+    }).length;
+  }, [projects, metaMap]);
+
   // Filter and sort projects
   const filteredAndSorted = useMemo(() => {
     let result = projects.map((p) => {
@@ -248,6 +269,10 @@ export function Dashboard() {
     if (tab === "recent") {
       const sevenDaysAgo = Date.now() / 1000 - 7 * 86400;
       result = result.filter((p) => p.modified >= sevenDaysAgo);
+    } else if (tab === "cad") {
+      result = result.filter((p) => p.category.toLowerCase() !== "architecture");
+    } else if (tab === "arch") {
+      result = result.filter((p) => p.category.toLowerCase() === "architecture");
     }
 
     if (selectedCategory) {
@@ -276,13 +301,6 @@ export function Dashboard() {
     result.sort((a, b) => {
       if (sortField === "category") {
         const c = a.category.localeCompare(b.category);
-        if (c !== 0) return c * factor;
-        return a.name.localeCompare(b.name);
-      }
-      if (sortField === "tags") {
-        const tA = a.tags.join(",");
-        const tB = b.tags.join(",");
-        const c = tA.localeCompare(tB);
         if (c !== 0) return c * factor;
         return a.name.localeCompare(b.name);
       }
@@ -327,15 +345,28 @@ export function Dashboard() {
     await actions.openRecent(picked as string);
   };
 
+  const changeFolder = async () => {
+    const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
+    const picked = await openDialog({
+      title: "Choose a projects folder",
+      directory: true,
+      defaultPath: folder ?? undefined,
+    });
+    if (typeof picked === "string" && picked.length > 0) {
+      await commitWorkspaceFolder(picked);
+      refresh();
+    }
+  };
+
   const createProject = async () => {
     const name = naming?.trim();
     if (!name || saving) return;
     setSaving(true);
     try {
       await actions.createWorkspaceProject(name, newProjectType);
-      const folder = useArcStore.getState().workspaceFolder;
-      if (folder) {
-        const filePath = `${folder.replace(/[\\/]+$/, "")}/${name}.arc`;
+      const curFolder = useArcStore.getState().workspaceFolder;
+      if (curFolder) {
+        const filePath = `${curFolder.replace(/[\\/]+$/, "")}/${name}.arc`;
         const cat = newProjectType === "architecture" ? "Architecture" : "Mechanical";
         const tag = newProjectType === "architecture" ? "BIM" : "CAD";
         const updated = {
@@ -366,40 +397,57 @@ export function Dashboard() {
     setEditingMeta(null);
   };
 
-  const folderName = folder ? folder.split(/[\\/]/).pop() || folder : null;
+  const folderName = folder ? folder.split(/[\\/]/).filter(Boolean).pop() || folder : null;
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-base-50 text-base-800 select-none">
-      {/* Sleek Workspace Sidebar */}
-      <aside className="flex w-[260px] shrink-0 flex-col border-r border-base-200 bg-base-50">
-        {/* Workspace Header - Clean with no logo */}
-        <div className="flex h-11 shrink-0 items-center justify-between border-b border-base-200 px-4">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold tracking-tight text-base-900">
-              Workspace
-            </span>
+      {/* Refined Minimalist Sidebar */}
+      <aside className="flex w-[268px] shrink-0 flex-col border-r border-base-200/80 bg-base-50">
+        {/* Brand Header */}
+        <div className="flex h-13 shrink-0 items-center justify-between border-b border-base-200/80 px-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-500/15 text-accent-500 shadow-xs">
+              <Logo size={16} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-[13px] leading-tight text-base-900 tracking-tight">
+                arc
+              </span>
+              <span className="text-[10px] text-base-400 leading-tight">
+                3D Studio
+              </span>
+            </div>
           </div>
-          {projects.length > 0 && (
-            <span className="rounded-full bg-base-200 px-2 py-0.5 font-mono text-[10px] font-medium text-base-600">
-              {projects.length}
+          {lowSpecMode ? (
+            <span
+              title="Fast mode active (GPU & battery optimized)"
+              className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9.5px] font-bold text-amber-500"
+            >
+              <Zap size={10} strokeWidth={2.5} />
+              FAST
+            </span>
+          ) : (
+            <span className="rounded-full bg-base-200 px-2 py-0.5 font-mono text-[9.5px] font-medium text-base-500">
+              v0.27
             </span>
           )}
         </div>
 
-        {/* Sidebar Content */}
+        {/* Sidebar Body */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
           {/* Workspace Folder Card */}
-          <section className="flex flex-col gap-1.5 rounded-xl border border-base-200 bg-base-100/50 p-3 shadow-xs">
+          <section className="flex flex-col gap-1.5 rounded-xl border border-base-200/90 bg-base-100/70 p-3 shadow-xs">
             <div className="flex items-center justify-between text-[11px] font-medium text-base-500">
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 font-semibold text-[10px] uppercase tracking-wider text-base-400">
                 <Folder size={12} className="text-accent-500" />
-                Folder
+                Workspace
               </span>
               <button
                 type="button"
-                onClick={() => useArcStore.getState().setStartupOpen(true)}
-                className="text-[11px] font-medium text-accent-500 transition-colors hover:text-accent-600 hover:underline cursor-pointer"
+                onClick={() => void changeFolder()}
+                className="flex items-center gap-1 text-[11px] font-medium text-accent-500 hover:text-accent-600 transition-colors cursor-pointer"
               >
+                <FolderSync size={11} />
                 Change
               </button>
             </div>
@@ -412,27 +460,67 @@ export function Dashboard() {
               </div>
               {folder && (
                 <div
-                  className="truncate font-mono text-[10.5px] text-base-500"
+                  className="truncate font-mono text-[10px] text-base-400"
                   title={folder}
                 >
                   {folder}
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => useArcStore.getState().setStartupOpen(true)}
-              className="mt-1 flex h-7 items-center justify-center gap-1.5 rounded-lg border border-base-300 bg-base-50 px-2 text-[11.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900 cursor-pointer"
-            >
-              <FolderOpen size={13} />
-              Browse projects
-            </button>
           </section>
 
-          {/* Navigation Filters */}
+          {/* Primary Action Buttons */}
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setNaming("")}
+              disabled={!folder}
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-3 text-[12.5px] font-medium text-white shadow-sm shadow-accent-500/25 transition-all hover:bg-accent-600 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              New Project
+            </button>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  void (async () => {
+                    if (!folder) {
+                      useArcStore.getState().setOnboardingOpen(true);
+                      return;
+                    }
+                    await actions.importFile();
+                  })()
+                }
+                className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-base-200/90 bg-base-100 px-2 text-[11.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900 cursor-pointer"
+              >
+                <Upload size={12} strokeWidth={2} />
+                Import
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void (async () => {
+                    if (!folder) {
+                      useArcStore.getState().setOnboardingOpen(true);
+                      return;
+                    }
+                    await openOther();
+                  })()
+                }
+                className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-base-200/90 bg-base-100 px-2 text-[11.5px] font-medium text-base-700 transition-colors hover:bg-base-200 hover:text-base-900 cursor-pointer"
+              >
+                <FolderOpen size={12} strokeWidth={2} />
+                Open File
+              </button>
+            </div>
+          </div>
+
+          {/* Navigation Views */}
           <section className="flex flex-col gap-0.5">
-            <SectionLabel>Filter</SectionLabel>
+            <SectionLabel>Library</SectionLabel>
             <SidebarNavButton
+              icon={<LayoutGrid size={14} />}
               active={tab === "all" && !selectedCategory && !selectedTag}
               onClick={() => {
                 setTab("all");
@@ -441,69 +529,100 @@ export function Dashboard() {
               }}
               badge={projects.length}
             >
-              All projects
+              All Projects
             </SidebarNavButton>
             <SidebarNavButton
-              active={tab === "recent"}
-              onClick={() => setTab("recent")}
+              icon={<Clock size={14} />}
+              active={tab === "recent" && !selectedCategory && !selectedTag}
+              onClick={() => {
+                setTab("recent");
+                setSelectedCategory(null);
+                setSelectedTag(null);
+              }}
             >
               Recent (7 days)
             </SidebarNavButton>
+            <SidebarNavButton
+              icon={<DraftingCompass size={14} />}
+              active={tab === "cad" && !selectedCategory && !selectedTag}
+              onClick={() => {
+                setTab("cad");
+                setSelectedCategory(null);
+                setSelectedTag(null);
+              }}
+              badge={cadCount}
+            >
+              CAD Models
+            </SidebarNavButton>
+            <SidebarNavButton
+              icon={<Building2 size={14} />}
+              active={tab === "arch" && !selectedCategory && !selectedTag}
+              onClick={() => {
+                setTab("arch");
+                setSelectedCategory(null);
+                setSelectedTag(null);
+              }}
+              badge={archCount}
+            >
+              Architecture
+            </SidebarNavButton>
           </section>
 
-          {/* Categories Navigation */}
-          <section className="flex flex-col gap-0.5">
-            <div className="flex items-center justify-between px-2 pb-1">
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
-                Categories
-              </span>
-              {selectedCategory && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory(null)}
-                  className="text-[10px] text-accent-500 hover:underline cursor-pointer"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-            {[...categoryCounts.entries()].map(([cat, count]) => {
-              const theme = getCategoryTheme(cat);
-              const isSelected = selectedCategory?.toLowerCase() === cat.toLowerCase();
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedCategory(isSelected ? null : cat)}
-                  className={cn(
-                    "group flex h-8 w-full items-center justify-between rounded-lg px-2.5 text-left text-[12px] transition-all cursor-pointer",
-                    isSelected
-                      ? "bg-base-200/90 font-medium text-base-900 shadow-xs"
-                      : "text-base-600 hover:bg-base-200/60 hover:text-base-900",
-                  )}
-                >
-                  <span className="flex items-center gap-2 min-w-0 mr-1">
-                    <span className={cn("h-2 w-2 shrink-0 rounded-full transition-transform group-hover:scale-110", theme.dot)} />
-                    <span className="truncate">{cat}</span>
-                  </span>
-                  <span className={cn(
-                    "rounded-full px-1.5 py-0.2 text-[10px] font-mono shrink-0",
-                    isSelected ? "bg-base-300 text-base-900 font-semibold" : "bg-base-200 text-base-500"
-                  )}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </section>
+          {/* Categories */}
+          {categoryCounts.size > 0 && (
+            <section className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between px-2 pb-1">
+                <SectionLabel>Categories</SectionLabel>
+                {selectedCategory && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className="text-[10px] text-accent-500 hover:underline cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              {[...categoryCounts.entries()].map(([cat, count]) => {
+                const theme = getCategoryTheme(cat);
+                const isSelected = selectedCategory?.toLowerCase() === cat.toLowerCase();
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(isSelected ? null : cat)}
+                    className={cn(
+                      "group flex h-7.5 w-full items-center justify-between rounded-lg px-2 text-left text-[11.5px] transition-all cursor-pointer",
+                      isSelected
+                        ? "bg-base-200/90 font-medium text-base-900 shadow-xs"
+                        : "text-base-600 hover:bg-base-150 hover:text-base-900",
+                    )}
+                  >
+                    <span className="flex items-center gap-2 min-w-0 mr-1">
+                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", theme.dot)} />
+                      <span className="truncate">{cat}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.2 text-[9.5px] font-mono shrink-0",
+                        isSelected
+                          ? "bg-base-300 text-base-900 font-semibold"
+                          : "bg-base-200 text-base-500",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </section>
+          )}
 
-          {/* Tags Navigation (if any tags exist) */}
+          {/* Tags */}
           {allTags.length > 0 && (
             <section className="flex flex-col gap-1">
               <div className="flex items-center justify-between px-2 pb-0.5">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
-                  Tags
-                </span>
+                <SectionLabel>Tags</SectionLabel>
                 {selectedTag && (
                   <button
                     type="button"
@@ -514,8 +633,8 @@ export function Dashboard() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 px-1">
-                {allTags.slice(0, 20).map(([tag, count]) => {
+              <div className="flex flex-wrap gap-1 px-1">
+                {allTags.slice(0, 16).map(([tag, count]) => {
                   const isSelected = selectedTag?.toLowerCase() === tag.toLowerCase();
                   return (
                     <button
@@ -523,15 +642,15 @@ export function Dashboard() {
                       type="button"
                       onClick={() => setSelectedTag(isSelected ? null : tag)}
                       className={cn(
-                        "inline-flex max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                        "inline-flex max-w-full items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors cursor-pointer",
                         isSelected
                           ? "bg-accent-500 text-white shadow-xs"
-                          : "border border-base-300 bg-base-100 text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900",
+                          : "border border-base-200/90 bg-base-100 text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900",
                       )}
                     >
                       <span className={cn("shrink-0", isSelected ? "text-white/80" : "text-base-400")}>#</span>
                       <span className="truncate">{tag}</span>
-                      <span className={cn("ml-0.5 text-[9.5px] shrink-0", isSelected ? "text-white/70" : "text-base-400")}>
+                      <span className={cn("text-[9px] shrink-0 opacity-70")}>
                         {count}
                       </span>
                     </button>
@@ -541,10 +660,10 @@ export function Dashboard() {
             </section>
           )}
 
-          {/* Open Documents in Editor */}
+          {/* Active Documents in Editor */}
           {openDocuments.length > 0 && (
-            <section className="flex flex-col gap-0.5">
-              <SectionLabel>Active in editor</SectionLabel>
+            <section className="flex flex-col gap-1">
+              <SectionLabel>Open in Editor</SectionLabel>
               {openDocuments.map((doc) => {
                 const isActive = overview?.active === doc.id;
                 return (
@@ -556,7 +675,7 @@ export function Dashboard() {
                       useArcStore.getState().setView("editor");
                     }}
                     className={cn(
-                      "group flex h-8 items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[12px] transition-colors cursor-pointer",
+                      "group flex h-7.5 items-center justify-between gap-2 rounded-lg px-2 text-left text-[11.5px] transition-colors cursor-pointer",
                       isActive
                         ? "bg-accent-500/15 font-medium text-accent-500 border border-accent-500/30"
                         : "text-base-700 hover:bg-base-200 hover:text-base-900",
@@ -585,15 +704,15 @@ export function Dashboard() {
           )}
         </div>
 
-        {/* Sidebar Footer Actions */}
-        <div className="flex flex-col gap-1 border-t border-base-200 p-3">
+        {/* Sidebar Footer */}
+        <div className="flex flex-col gap-1 border-t border-base-200/80 p-3">
           {overview?.active && (
             <button
               type="button"
               onClick={() => useArcStore.getState().setView("editor")}
-              className="flex h-8 items-center justify-center gap-2 rounded-lg bg-accent-500 font-medium text-white shadow-xs transition-all hover:bg-accent-600 active:scale-[0.98] cursor-pointer text-[12px]"
+              className="flex h-8 items-center justify-center gap-2 rounded-lg bg-accent-500 text-[12px] font-medium text-white shadow-xs transition-all hover:bg-accent-600 active:scale-[0.98] cursor-pointer"
             >
-              Return to editor
+              <span>Return to 3D View</span>
               <ArrowRight size={13} strokeWidth={2} />
             </button>
           )}
@@ -603,71 +722,76 @@ export function Dashboard() {
           >
             Settings
           </SidebarFooterButton>
-          <SidebarFooterButton
-            icon={<Sliders size={14} />}
-            onClick={() => useArcStore.getState().setOnboardingOpen(true)}
-          >
-            Set up workspace
-          </SidebarFooterButton>
         </div>
       </aside>
 
-      {/* Main Project Explorer */}
+      {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header Action Bar */}
+        {/* Top Control Bar */}
         <header
           data-tauri-drag-region
-          className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-base-200 bg-base-50/80 px-6 backdrop-blur-md"
+          className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-base-200/80 bg-base-50/90 px-6 backdrop-blur-md"
         >
-          {/* Title, Count & Active Filter Badges */}
-          <div data-tauri-drag-region className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-[15px] font-semibold text-base-900">Projects</h1>
-            <span className="rounded-md bg-base-200 px-2 py-0.5 font-mono text-[11px] font-medium text-base-600">
-              {filteredAndSorted.length}
-            </span>
+          {/* Breadcrumb & Filter Indicators */}
+          <div data-tauri-drag-region className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[15px] font-semibold text-base-900 tracking-tight">
+                {selectedCategory
+                  ? selectedCategory
+                  : selectedTag
+                    ? `#${selectedTag}`
+                    : tab === "recent"
+                      ? "Recent Projects"
+                      : tab === "cad"
+                        ? "CAD Models"
+                        : tab === "arch"
+                          ? "Architecture"
+                          : "All Projects"}
+              </h1>
+              <span className="rounded-full bg-base-200 px-2 py-0.5 font-mono text-[10.5px] font-medium text-base-600">
+                {filteredAndSorted.length}
+              </span>
+            </div>
 
-            {/* Active category chip */}
+            {/* Filter chip dismiss buttons */}
             {selectedCategory && (
-              <span className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-400">
-                <span className="truncate">{selectedCategory}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-500">
+                <span>{selectedCategory}</span>
                 <button
                   type="button"
                   onClick={() => setSelectedCategory(null)}
-                  className="shrink-0 hover:text-accent-300 cursor-pointer"
-                  title="Clear"
+                  className="hover:text-accent-600 cursor-pointer"
+                  title="Clear category filter"
                 >
-                  <X size={10} />
+                  <X size={11} />
                 </button>
               </span>
             )}
-
-            {/* Active tag chip */}
             {selectedTag && (
-              <span className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 text-[11px] font-medium text-accent-400 font-mono">
-                <span className="shrink-0">#</span>
-                <span className="truncate">{selectedTag}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-500/15 border border-accent-500/30 px-2.5 py-0.5 font-mono text-[11px] font-medium text-accent-500">
+                <span>#{selectedTag}</span>
                 <button
                   type="button"
                   onClick={() => setSelectedTag(null)}
-                  className="shrink-0 hover:text-accent-300 cursor-pointer"
-                  title="Clear"
+                  className="hover:text-accent-600 cursor-pointer"
+                  title="Clear tag filter"
                 >
-                  <X size={10} />
+                  <X size={11} />
                 </button>
               </span>
             )}
           </div>
 
-          {/* Right Toolbar Controls */}
+          {/* Toolbar Controls */}
           <div className="flex items-center gap-2.5">
             {/* Search Input */}
-            <label className="relative flex h-8 w-56 items-center gap-2 rounded-lg border border-base-300 bg-base-100/90 px-2.5 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
-              <Search size={13} className="shrink-0 text-base-500" />
+            <label className="relative flex h-8 w-60 items-center gap-2 rounded-xl border border-base-300/80 bg-base-100 px-2.5 transition-all focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/15">
+              <Search size={13} className="shrink-0 text-base-400" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, category, tags"
-                className="w-full min-w-0 bg-transparent text-[12px] text-base-800 outline-none placeholder:text-base-500"
+                placeholder="Search projects, tags..."
+                className="w-full min-w-0 bg-transparent text-[12px] text-base-800 outline-none placeholder:text-base-400"
               />
               {query && (
                 <button
@@ -681,105 +805,61 @@ export function Dashboard() {
             </label>
 
             {/* Sort Dropdown & Direction */}
-            <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
-              <span className="pl-2 text-base-400">
-                <Tag size={12} />
-              </span>
+            <div className="flex items-center rounded-xl border border-base-300/80 bg-base-100 p-0.5">
               <select
                 value={sortField}
                 onChange={(e) => setSortField(e.target.value as SortField)}
                 className="h-7 bg-transparent px-2 text-[11.5px] font-medium text-base-700 outline-none cursor-pointer"
               >
-                <option value="category">Category</option>
-                <option value="tags">Tags</option>
-                <option value="modified">Last Modified</option>
+                <option value="modified">Date Modified</option>
                 <option value="name">Name</option>
                 <option value="size">Size</option>
+                <option value="category">Category</option>
               </select>
               <button
                 type="button"
                 onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
                 title={sortDir === "asc" ? "Ascending" : "Descending"}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors cursor-pointer"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-base-500 hover:bg-base-200 hover:text-base-900 transition-colors cursor-pointer"
               >
-                {sortDir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                {sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
               </button>
             </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
+            {/* View Mode Switch */}
+            <div className="flex items-center rounded-xl border border-base-300/80 bg-base-100 p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                title="Grid"
+                title="Grid view"
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
+                  "flex h-7 w-7 items-center justify-center rounded-lg transition-colors cursor-pointer",
                   viewMode === "grid"
-                    ? "bg-base-200 text-base-900 shadow-xs"
-                    : "text-base-500 hover:text-base-800",
+                    ? "bg-base-200 text-base-900 shadow-xs font-semibold"
+                    : "text-base-400 hover:text-base-800",
                 )}
               >
-                <LayoutGrid size={14} />
+                <LayoutGrid size={13} />
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                title="List"
+                title="List view"
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
+                  "flex h-7 w-7 items-center justify-center rounded-lg transition-colors cursor-pointer",
                   viewMode === "list"
-                    ? "bg-base-200 text-base-900 shadow-xs"
-                    : "text-base-500 hover:text-base-800",
+                    ? "bg-base-200 text-base-900 shadow-xs font-semibold"
+                    : "text-base-400 hover:text-base-800",
                 )}
               >
-                <List size={14} />
+                <List size={13} />
               </button>
             </div>
-
-            <div className="h-4 w-px bg-base-300" />
-
-            {/* Actions */}
-            <Button
-              variant="ghost"
-              onClick={() => void (async () => {
-                if (!folder) {
-                  useArcStore.getState().setOnboardingOpen(true);
-                  return;
-                }
-                await openOther();
-              })()}
-            >
-              <FolderOpen size={14} />
-              Open file
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() =>
-                void (async () => {
-                  if (!folder) {
-                    useArcStore.getState().setOnboardingOpen(true);
-                    return;
-                  }
-                  await actions.importFile();
-                })()
-              }
-            >
-              <Upload size={14} />
-              Import
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!folder}
-              onClick={() => setNaming("")}
-            >
-              <Plus size={14} strokeWidth={2.2} />
-              New project
-            </Button>
           </div>
         </header>
 
         {/* Content Explorer Area */}
-        <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-6">
           {projects.length === 0 ? (
             <EmptyState
               loading={loading}
@@ -795,42 +875,232 @@ export function Dashboard() {
               })()}
             />
           ) : viewMode === "grid" ? (
-            /* Clean Compact Cards (Preview Screen removed) */
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
-              {filteredAndSorted.map((project) => (
-                <div
-                  key={project.path}
-                  className={cn(
-                    "group flex flex-col justify-between rounded-xl border border-base-200 bg-base-100/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-500/50 hover:bg-base-100 hover:shadow-lg hover:shadow-black/20",
-                    opening === project.path && "opacity-50 pointer-events-none",
-                  )}
-                >
-                  <div>
-                    {/* Top: Category Pill + Edit / Delete Actions */}
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCategory(
-                            selectedCategory === project.category ? null : project.category,
-                          );
+            /* Modern 3D Blueprint CAD Cards */
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4">
+              {filteredAndSorted.map((project) => {
+                const catTheme = getCategoryTheme(project.category);
+                const isArch = project.category.toLowerCase() === "architecture";
+                return (
+                  <div
+                    key={project.path}
+                    onClick={() => void openProject(project)}
+                    className={cn(
+                      "group relative flex flex-col overflow-hidden rounded-2xl border border-base-200/90 bg-base-100 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent-500/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer",
+                      opening === project.path && "opacity-50 pointer-events-none",
+                    )}
+                  >
+                    {/* Isometric CAD / BIM Blueprint Banner */}
+                    <div className="relative flex h-28 w-full items-center justify-center overflow-hidden border-b border-base-200/70 bg-gradient-to-b from-base-150/40 via-base-100/30 to-transparent">
+                      {/* Blueprint Grid Lines */}
+                      <div
+                        className="absolute inset-0 opacity-[0.06]"
+                        style={{
+                          backgroundImage: `radial-gradient(currentColor 1px, transparent 1px), radial-gradient(currentColor 1px, transparent 1px)`,
+                          backgroundSize: "16px 16px",
+                          backgroundPosition: "0 0, 8px 8px",
                         }}
-                        className={cn(
-                          "inline-flex max-w-[150px] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all cursor-pointer shadow-xs",
-                          getCategoryTheme(project.category).pill,
+                      />
+
+                      {/* Floating CAD Glyph */}
+                      <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-base-200/90 bg-base-50/80 shadow-xs transition-all duration-300 group-hover:scale-110 group-hover:border-accent-500/30 group-hover:shadow-md group-hover:shadow-accent-500/10">
+                        {isArch ? (
+                          <Building2
+                            size={24}
+                            className="text-amber-500 transition-colors group-hover:text-amber-600"
+                            strokeWidth={1.75}
+                          />
+                        ) : (
+                          <Box
+                            size={24}
+                            className="text-accent-500 transition-colors group-hover:text-accent-600"
+                            strokeWidth={1.75}
+                          />
                         )}
-                      >
+                      </div>
+
+                      {/* Category Badge on Top-Left */}
+                      <div className="absolute left-2.5 top-2.5">
                         <span
                           className={cn(
-                            "h-1.5 w-1.5 shrink-0 rounded-full",
-                            getCategoryTheme(project.category).dot,
+                            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-md shadow-xs",
+                            catTheme.badge,
                           )}
-                        />
-                        <span className="truncate">{project.category}</span>
-                      </button>
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", catTheme.dot)} />
+                          {project.category}
+                        </span>
+                      </div>
 
-                      <div className="flex items-center gap-0.5">
+                      {/* Mode Badge on Top-Right */}
+                      <div className="absolute right-2.5 top-2.5">
+                        <span className="rounded-md border border-base-300/80 bg-base-100/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-base-500 tracking-wider backdrop-blur-md">
+                          {isArch ? "BIM" : "CAD"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="flex flex-1 flex-col justify-between p-3.5">
+                      <div>
+                        <div className="truncate text-[13.5px] font-semibold text-base-900 group-hover:text-accent-500 transition-colors">
+                          {project.name}
+                        </div>
+
+                        {/* Tags */}
+                        <div className="mt-2 flex flex-wrap items-center gap-1 min-h-[22px]">
+                          {project.tags.map((t) => (
+                            <span
+                              key={t}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTag(selectedTag === t ? null : t);
+                              }}
+                              className={cn(
+                                "inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 font-mono text-[10px] transition-colors cursor-pointer",
+                                selectedTag === t
+                                  ? "bg-accent-500 text-white font-medium"
+                                  : "bg-base-200/70 text-base-600 hover:bg-base-300 hover:text-base-900",
+                              )}
+                            >
+                              <span className="opacity-60">#</span>
+                              <span>{t}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Card Footer */}
+                      <div className="mt-3.5 flex items-center justify-between border-t border-base-200/70 pt-2.5 text-[11px] text-base-500">
+                        <span className="flex items-center gap-1.5">
+                          <Clock size={11} className="text-base-400" />
+                          {formatDate(project.modified)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-base-400">
+                            {formatSize(project.size)}
+                          </span>
+                          {/* Hover Quick Actions */}
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingMeta({
+                                  path: project.path,
+                                  name: project.name,
+                                  category: project.category,
+                                  tags: [...project.tags],
+                                });
+                                setCustomCategoryInput("");
+                                setNewTagInput("");
+                              }}
+                              title="Edit tags & category"
+                              className="rounded p-1 text-base-400 hover:bg-base-200 hover:text-base-900 transition-colors cursor-pointer"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingProject(project);
+                              }}
+                              title="Delete project"
+                              className="rounded p-1 text-base-400 hover:bg-red-500/15 hover:text-red-500 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredAndSorted.length === 0 && (
+                <div className="col-span-full py-16 text-center text-[12.5px] text-base-500">
+                  No projects match your current filters.
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Sleek List View */
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-base-200/90 bg-base-100 shadow-xs">
+              <div className="flex h-9 items-center border-b border-base-200/80 bg-base-150/40 px-4 text-[10.5px] font-semibold uppercase tracking-wider text-base-400">
+                <span className="flex-1">Name</span>
+                <span className="w-36 text-left">Category</span>
+                <span className="w-48 text-left">Tags</span>
+                <span className="w-36 text-left">Last Modified</span>
+                <span className="w-20 text-right">Size</span>
+                <span className="w-16 text-right"></span>
+              </div>
+              <div className="divide-y divide-base-200/70">
+                {filteredAndSorted.map((project) => {
+                  const catTheme = getCategoryTheme(project.category);
+                  const isArch = project.category.toLowerCase() === "architecture";
+                  return (
+                    <div
+                      key={project.path}
+                      onClick={() => void openProject(project)}
+                      className={cn(
+                        "group flex h-11 w-full items-center px-4 text-left text-[12.5px] transition-colors hover:bg-base-150/50 cursor-pointer",
+                        opening === project.path && "opacity-50 pointer-events-none",
+                      )}
+                    >
+                      <span className="flex flex-1 min-w-0 items-center gap-2.5 pr-2">
+                        {isArch ? (
+                          <Building2 size={14} className="shrink-0 text-amber-500" />
+                        ) : (
+                          <Box size={14} className="shrink-0 text-accent-500" />
+                        )}
+                        <span className="truncate font-medium text-base-900 group-hover:text-accent-500 transition-colors">
+                          {project.name}
+                        </span>
+                      </span>
+                      <span className="w-36 shrink-0 min-w-0 pr-2">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCategory(
+                              selectedCategory === project.category ? null : project.category,
+                            );
+                          }}
+                          className={cn(
+                            "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-xs",
+                            catTheme.badge,
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", catTheme.dot)} />
+                          <span className="truncate">{project.category}</span>
+                        </span>
+                      </span>
+                      <span className="w-48 shrink-0 flex flex-wrap items-center gap-1 overflow-hidden pr-2">
+                        {project.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTag(selectedTag === tag ? null : tag);
+                            }}
+                            className="inline-flex max-w-[120px] items-center gap-0.5 rounded border border-base-200 bg-base-150/70 px-1.5 py-0.2 text-[9.5px] font-mono text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900 cursor-pointer"
+                          >
+                            <span className="text-base-400 shrink-0">#</span>
+                            <span className="truncate">{tag}</span>
+                          </span>
+                        ))}
+                        {project.tags.length > 3 && (
+                          <span className="text-[9.5px] font-medium text-base-400 shrink-0">
+                            +{project.tags.length - 3}
+                          </span>
+                        )}
+                      </span>
+                      <span className="w-36 shrink-0 text-[11px] text-base-500">
+                        {formatDate(project.modified)}
+                      </span>
+                      <span className="w-20 shrink-0 text-right font-mono text-[10.5px] text-base-400">
+                        {formatSize(project.size)}
+                      </span>
+                      <span className="w-16 shrink-0 flex items-center justify-end gap-1">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -844,7 +1114,7 @@ export function Dashboard() {
                             setCustomCategoryInput("");
                             setNewTagInput("");
                           }}
-                          className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-base-200 hover:text-base-800 transition-all cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-base-200 hover:text-base-800 rounded-md transition-all cursor-pointer"
                           title="Edit"
                         >
                           <Pencil size={12} />
@@ -855,208 +1125,15 @@ export function Dashboard() {
                             e.stopPropagation();
                             setDeletingProject(project);
                           }}
-                          className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-600 transition-all cursor-pointer"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-red-500/15 hover:text-red-500 rounded-md transition-all cursor-pointer"
                           title="Delete"
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
-                    </div>
-
-                    {/* Project Name */}
-                    <button
-                      type="button"
-                      onClick={() => void openProject(project)}
-                      className="mt-2.5 mb-2 block w-full text-left cursor-pointer"
-                    >
-                      <div className="truncate text-[14px] font-semibold text-base-900 group-hover:text-accent-500 transition-colors">
-                        {project.name}
-                      </div>
-                    </button>
-
-                    {/* Tags Row */}
-                    <div className="flex flex-wrap items-center gap-1.5 mb-3 min-h-[24px]">
-                      {project.tags.map((tag) => {
-                        const isSelected = selectedTag?.toLowerCase() === tag.toLowerCase();
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedTag(isSelected ? null : tag);
-                            }}
-                            className={cn(
-                              "inline-flex max-w-[150px] items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-medium transition-colors cursor-pointer",
-                              isSelected
-                                ? "bg-accent-500 text-white font-semibold shadow-xs"
-                                : "border border-base-300 bg-base-150/70 text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900",
-                            )}
-                          >
-                            <span className={cn("shrink-0", isSelected ? "text-white/80" : "text-base-400")}>#</span>
-                            <span className="truncate">{tag}</span>
-                          </button>
-                        );
-                      })}
-                      {project.tags.length === 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingMeta({
-                              path: project.path,
-                              name: project.name,
-                              category: project.category,
-                              tags: [],
-                            });
-                            setCustomCategoryInput("");
-                            setNewTagInput("");
-                          }}
-                          className="inline-flex items-center gap-1 rounded-md border border-dashed border-base-300 px-2 py-0.5 text-[10px] text-base-400 opacity-0 group-hover:opacity-100 hover:border-accent-500 hover:text-accent-500 hover:bg-accent-500/10 transition-all cursor-pointer"
-                        >
-                          <Plus size={10} />
-                          <span>Add tags</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bottom Info: Modified date, size, and Open action */}
-                  <div className="flex items-center justify-between border-t border-base-200/80 pt-2.5 text-[11px] text-base-500">
-                    <span className="flex items-center gap-1">
-                      <Clock size={11} className="text-base-400" />
-                      {formatDate(project.modified)}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10.5px]">
-                        {formatSize(project.size)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => void openProject(project)}
-                        className="flex items-center gap-1 text-accent-500 font-medium hover:underline cursor-pointer"
-                      >
-                        <span>Open</span>
-                        <ArrowRight size={11} />
-                      </button>
                     </div>
-                  </div>
-                </div>
-              ))}
-              {filteredAndSorted.length === 0 && (
-                <div className="col-span-full py-16 text-center text-[12.5px] text-base-500">
-                  No projects match your current filters.
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Sleek List View */
-            <div className="flex flex-col overflow-hidden rounded-xl border border-base-200 bg-base-100/60">
-              <div className="flex h-9 items-center border-b border-base-200 bg-base-150/60 px-4 text-[11px] font-semibold uppercase tracking-wider text-base-500">
-                <span className="flex-1">Name</span>
-                <span className="w-36 text-left">Category</span>
-                <span className="w-48 text-left">Tags</span>
-                <span className="w-36 text-left">Last Modified</span>
-                <span className="w-20 text-right">Size</span>
-                <span className="w-16 text-right"></span>
-              </div>
-              <div className="divide-y divide-base-200">
-                {filteredAndSorted.map((project) => (
-                  <div
-                    key={project.path}
-                    onClick={() => void openProject(project)}
-                    className={cn(
-                      "group flex h-11 w-full items-center px-4 text-left text-[12.5px] transition-colors hover:bg-base-200/70 cursor-pointer",
-                      opening === project.path && "opacity-50 pointer-events-none",
-                    )}
-                  >
-                    <span className="flex flex-1 min-w-0 items-center gap-2.5 pr-2">
-                      <Box size={14} className="shrink-0 text-accent-500" />
-                      <span className="truncate font-medium text-base-900 group-hover:text-accent-500 transition-colors">
-                        {project.name}
-                      </span>
-                    </span>
-                    <span className="w-36 shrink-0 min-w-0 pr-2">
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCategory(
-                            selectedCategory === project.category ? null : project.category,
-                          );
-                        }}
-                        className={cn(
-                          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-xs",
-                          getCategoryTheme(project.category).pill,
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "h-1.5 w-1.5 shrink-0 rounded-full",
-                            getCategoryTheme(project.category).dot,
-                          )}
-                        />
-                        <span className="truncate">{project.category}</span>
-                      </span>
-                    </span>
-                    <span className="w-48 shrink-0 flex flex-wrap items-center gap-1.5 overflow-hidden pr-2">
-                      {project.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTag(selectedTag === tag ? null : tag);
-                          }}
-                          className="inline-flex max-w-[120px] items-center gap-0.5 rounded-md border border-base-300 bg-base-150/80 px-1.5 py-0.2 text-[10px] font-medium text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900 cursor-pointer"
-                        >
-                          <span className="text-base-400 shrink-0">#</span>
-                          <span className="truncate">{tag}</span>
-                        </span>
-                      ))}
-                      {project.tags.length > 3 && (
-                        <span className="text-[10px] font-medium text-base-400 shrink-0">
-                          +{project.tags.length - 3}
-                        </span>
-                      )}
-                    </span>
-                    <span className="w-36 shrink-0 text-[11.5px] text-base-500">
-                      {formatDate(project.modified)}
-                    </span>
-                    <span className="w-20 shrink-0 text-right font-mono text-[11px] text-base-500">
-                      {formatSize(project.size)}
-                    </span>
-                    <span className="w-16 shrink-0 flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingMeta({
-                            path: project.path,
-                            name: project.name,
-                            category: project.category,
-                            tags: [...project.tags],
-                          });
-                          setCustomCategoryInput("");
-                          setNewTagInput("");
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-base-200 hover:text-base-800 rounded-md transition-all cursor-pointer"
-                        title="Edit"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingProject(project);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-red-500/15 hover:text-red-600 rounded-md transition-all cursor-pointer"
-                        title="Delete"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
                 {filteredAndSorted.length === 0 && (
                   <div className="py-12 text-center text-[12.5px] text-base-500">
                     No projects match your current filters.
@@ -1176,7 +1253,7 @@ export function Dashboard() {
                       className={cn(
                         "inline-flex max-w-[160px] items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all cursor-pointer",
                         isChosen
-                          ? theme.activePill
+                          ? "bg-accent-500 text-white border-accent-600 font-semibold shadow-xs"
                           : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
                       )}
                     >
@@ -1323,18 +1400,21 @@ function EmptyState({
   onOpen: () => void;
 }) {
   return (
-    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-base-300 bg-base-100/30 p-10 text-center">
+    <div className="flex h-full min-h-[340px] flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-base-200/90 bg-base-100/40 p-10 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-500/10 text-accent-500">
+        <Sparkles size={24} />
+      </div>
       <div className="flex flex-col gap-1 max-w-sm">
-        <span className="text-[14px] font-semibold text-base-900">
+        <span className="text-[15px] font-semibold text-base-900 tracking-tight">
           {loading
-            ? "Loading projects"
+            ? "Loading projects..."
             : hasFolder
               ? "No projects in this workspace"
               : "No workspace folder selected"}
         </span>
         <span className="text-[12px] text-base-500">
           {hasFolder
-            ? "Create a new project or import existing 3D geometry to start designing."
+            ? "Create a new 3D project or import an existing model (STL, OBJ, DXF) to start designing."
             : "Choose a workspace directory to manage your CAD documents and models."}
         </span>
       </div>
@@ -1345,7 +1425,7 @@ function EmptyState({
         </Button>
         <Button variant="default" onClick={onImport}>
           <Upload size={14} />
-          Import geometry
+          Import model
         </Button>
         <Button variant="default" onClick={onOpen}>
           <FolderOpen size={14} />
@@ -1358,18 +1438,20 @@ function EmptyState({
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <span className="px-2 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-base-500">
+    <span className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-base-400">
       {children}
     </span>
   );
 }
 
 function SidebarNavButton({
+  icon,
   active,
   onClick,
   badge,
   children,
 }: {
+  icon?: ReactNode;
   active: boolean;
   onClick: () => void;
   badge?: number;
@@ -1380,15 +1462,23 @@ function SidebarNavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-8 items-center justify-between rounded-lg px-2.5 text-left text-[12px] transition-colors cursor-pointer",
+        "flex h-8 w-full items-center justify-between rounded-xl px-2.5 text-left text-[12px] transition-colors cursor-pointer",
         active
-          ? "bg-base-200 font-medium text-base-900"
+          ? "bg-base-200/90 font-medium text-base-900 shadow-xs"
           : "text-base-600 hover:bg-base-150 hover:text-base-800",
       )}
     >
-      <span>{children}</span>
+      <span className="flex items-center gap-2.5 min-w-0">
+        {icon && <span className={cn(active ? "text-accent-500" : "text-base-400")}>{icon}</span>}
+        <span className="truncate">{children}</span>
+      </span>
       {typeof badge === "number" && (
-        <span className="rounded-full bg-base-200 px-1.5 py-0.2 font-mono text-[10px] text-base-600">
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-0.2 font-mono text-[9.5px]",
+            active ? "bg-base-300 text-base-900 font-semibold" : "bg-base-200 text-base-500",
+          )}
+        >
           {badge}
         </span>
       )}
@@ -1409,7 +1499,7 @@ function SidebarFooterButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-7 items-center gap-2 rounded-lg px-2 text-left text-[11.5px] text-base-600 transition-colors hover:bg-base-200 hover:text-base-900 cursor-pointer"
+      className="flex h-7.5 items-center gap-2 rounded-lg px-2 text-left text-[11.5px] text-base-600 transition-colors hover:bg-base-200 hover:text-base-900 cursor-pointer"
     >
       {icon}
       {children}

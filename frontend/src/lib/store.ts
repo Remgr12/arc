@@ -58,6 +58,8 @@ interface ArcState {
   lowSpecMode: boolean;
   archViewMode: "3d" | "floorplan" | "section" | "elevation";
   setArchViewMode: (mode: "3d" | "floorplan" | "section" | "elevation") => void;
+  bimSketchTarget: "slab" | "roof" | "ceiling" | "room" | "extrude";
+  setBimSketchTarget: (target: "slab" | "roof" | "ceiling" | "room" | "extrude") => void;
   buildingScheduleOpen: boolean;
   setBuildingScheduleOpen: (open: boolean) => void;
   /** Left Items/Layers sidebar open state (Shapr3D Items toggle). */
@@ -192,7 +194,7 @@ export const useArcStore = create<ArcState>((set) => ({
   settingsOpen: false,
   pluginsOpen: false,
   materialsOpen: false,
-  startupOpen: true,
+  startupOpen: false,
   onboardingOpen: false,
   workspaceFolder: null,
   projectsCache: loadStoredProjectsCache(),
@@ -220,6 +222,8 @@ export const useArcStore = create<ArcState>((set) => ({
   lowSpecMode: loadStoredFastMode(),
   archViewMode: "3d",
   setArchViewMode: (archViewMode) => set({ archViewMode }),
+  bimSketchTarget: "slab",
+  setBimSketchTarget: (bimSketchTarget) => set({ bimSketchTarget }),
   buildingScheduleOpen: false,
   setBuildingScheduleOpen: (buildingScheduleOpen) => set({ buildingScheduleOpen }),
   leftSidebarOpen: true,
@@ -353,7 +357,19 @@ export const useArcStore = create<ArcState>((set) => ({
     }),
   enterSketchMode: (opts) =>
     set((st) => {
-      const rawN = opts?.normal ?? (opts?.height !== undefined ? [0, 1, 0] : st.sketchPlaneNormal);
+      const isArch = st.scene?.projectMode === "architecture";
+      const activeLvl = isArch
+        ? st.scene?.levels?.find((l) => l.id === st.scene?.activeLevel) ?? st.scene?.levels?.[0]
+        : null;
+      const storeyElev = activeLvl?.elevation ?? 0;
+
+      const rawN =
+        opts?.normal ??
+        (opts?.height !== undefined
+          ? [0, 1, 0]
+          : isArch
+            ? [0, 1, 0]
+            : st.sketchPlaneNormal);
       const len = Math.hypot(rawN[0], rawN[1], rawN[2]) || 1;
       const normal: [number, number, number] = [rawN[0] / len, rawN[1] / len, rawN[2] / len];
       const origin: [number, number, number] = opts?.origin
@@ -364,12 +380,15 @@ export const useArcStore = create<ArcState>((set) => ({
           ]
         : opts?.height !== undefined
           ? [0, Math.round(opts.height * 100) / 100, 0]
-          : st.sketchPlaneOrigin;
+          : isArch
+            ? [0, storeyElev, 0]
+            : st.sketchPlaneOrigin;
       const offset =
         Math.round((origin[0] * normal[0] + origin[1] * normal[1] + origin[2] * normal[2]) * 100) /
         100;
-      const autoLabel =
-        Math.abs(normal[1]) >= 0.9
+      const autoLabel = isArch
+        ? `${activeLvl?.name ?? "Storey"} (Y = +${storeyElev} cm)`
+        : Math.abs(normal[1]) >= 0.9
           ? Math.abs(offset) < 1e-4
             ? "Top XZ (Y = 0)"
             : `Face XZ (Y = ${offset})`

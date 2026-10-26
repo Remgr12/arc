@@ -1,6 +1,7 @@
 import {
   Box,
   BrickWall,
+  Check,
   Combine,
   Compass,
   Copy,
@@ -38,6 +39,7 @@ import { armExtrudeSelectedSketch } from "../tools/solid";
 import { facePlaneInfo } from "../tools/topology";
 import { faceEditable } from "../tools/faceTools";
 import { SKETCH_ENTITY_KINDS } from "../lib/selectionContext";
+import { commitBimBoundary, cancelBimBoundary, traceWallsToBoundary } from "../tools/bimSketch";
 import { cn } from "./ui";
 import type { ToolId, Geometry } from "../lib/types";
 import type { ReactNode } from "react";
@@ -193,6 +195,18 @@ export function ToolRail() {
   const setLeftSidebarOpen = useArcStore((s) => s.setLeftSidebarOpen);
   const activeCat = useArcStore((s) => s.activeToolCategory);
   const setActiveCat = useArcStore((s) => s.setActiveToolCategory);
+  const bimSketchTarget = useArcStore((s) => s.bimSketchTarget);
+
+  const targetLabel =
+    bimSketchTarget === "slab"
+      ? "Floor Slab"
+      : bimSketchTarget === "roof"
+        ? "Roof"
+        : bimSketchTarget === "ceiling"
+          ? "Ceiling"
+          : bimSketchTarget === "room"
+            ? "Room"
+            : "Extrude";
 
   const docId = overview?.active ?? "";
   const selection = scene?.selection ?? [];
@@ -302,16 +316,45 @@ export function ToolRail() {
         />
 
         {sketchMode ? (
-          /* ---- SKETCHING MODE DOCK (Screenshot 192310.PNG) ---- */
+          /* ---- SKETCHING MODE DOCK ---- */
           <>
-            <ShaprRow
-              icon={<X size={15} strokeWidth={2} />}
-              label="Exit Sketching"
-              sub="Sketch Plane"
-              shortcut="Esc"
-              onClick={() => exitSketchMode()}
-            />
-            <div className="my-0.5 h-px w-8 bg-base-300/60" />
+            {scene?.projectMode === "architecture" ? (
+              <>
+                <ShaprRow
+                  icon={<Check size={15} strokeWidth={2.5} className="text-emerald-500" />}
+                  label="Finish Boundary"
+                  sub={`Create ${targetLabel}`}
+                  shortcut="Enter"
+                  onClick={() => void commitBimBoundary(bimSketchTarget)}
+                />
+                <ShaprRow
+                  icon={<X size={15} strokeWidth={2} className="text-rose-500" />}
+                  label="Cancel Boundary"
+                  sub="Discard Sketch"
+                  shortcut="Esc"
+                  onClick={() => void cancelBimBoundary()}
+                />
+                <ShaprRow
+                  icon={<BrickWall size={15} strokeWidth={1.8} className="text-amber-500" />}
+                  label="Pick Walls"
+                  sub="Trace Footprint"
+                  shortcut="W"
+                  onClick={() => void traceWallsToBoundary()}
+                />
+                <div className="my-0.5 h-px w-8 bg-base-300/60" />
+              </>
+            ) : (
+              <>
+                <ShaprRow
+                  icon={<X size={15} strokeWidth={2} />}
+                  label="Exit Sketching"
+                  sub="Sketch Plane"
+                  shortcut="Esc"
+                  onClick={() => exitSketchMode()}
+                />
+                <div className="my-0.5 h-px w-8 bg-base-300/60" />
+              </>
+            )}
             {renderToolList(SKETCH_TOOLS)}
             {selection.length > 0 && (
               <ShaprRow

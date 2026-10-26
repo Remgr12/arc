@@ -271,15 +271,38 @@ export function pickEdgeScreen(
 ): { segIndex: number; point: THREE.Vector3; distance: number } | null {
   if (!entity.lines || entity.lines.length < 6) return null;
   object.updateMatrixWorld();
+  const halfW = hostSize.width * 0.5;
+  const halfH = hostSize.height * 0.5;
+  const px = mousePx.x;
+  const py = mousePx.y;
+
+  // Screen-space bounding sphere early reject: avoids iterating every segment on distant objects
+  const geom = (object as THREE.Mesh).geometry;
+  if (geom) {
+    if (!geom.boundingSphere) geom.computeBoundingSphere();
+    const sphere = geom.boundingSphere;
+    if (sphere && Number.isFinite(sphere.radius) && sphere.radius > 0) {
+      _s0.copy(sphere.center).applyMatrix4(object.matrixWorld);
+      const camDist = camera.position.distanceTo(_s0);
+      _p0.copy(_s0).project(camera);
+      if (_p0.z < -1 || _p0.z > 1) return null;
+      const sx = (_p0.x + 1) * halfW;
+      const sy = (-_p0.y + 1) * halfH;
+      const fov = (camera as THREE.PerspectiveCamera).fov ?? 50;
+      const fovRad = (fov * Math.PI) / 180;
+      const projRadius = (sphere.radius / Math.max(0.1, camDist * Math.tan(fovRad * 0.5))) * halfH;
+      const distToCenter = Math.hypot(px - sx, py - sy);
+      if (distToCenter > projRadius + thresholdPx + 20) {
+        return null;
+      }
+    }
+  }
+
   const lines = entity.lines;
   const segmentCount = lines.length / 6;
   let bestSeg = -1;
   let bestPoint: THREE.Vector3 | null = null;
   let bestPx = thresholdPx;
-  const halfW = hostSize.width * 0.5;
-  const halfH = hostSize.height * 0.5;
-  const px = mousePx.x;
-  const py = mousePx.y;
 
   for (let seg = 0; seg < segmentCount; seg++) {
     const o = seg * 6;

@@ -6,6 +6,7 @@ import {
   History,
   Magnet,
   StretchHorizontal,
+  Zap,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { ipc } from "../lib/ipc";
@@ -79,6 +80,8 @@ export function UtilityRail() {
   const setDisplayMode = useArcStore((s) => s.setDisplayMode);
   const rightSidebarOpen = useArcStore((s) => s.rightSidebarOpen);
   const setRightSidebarOpen = useArcStore((s) => s.setRightSidebarOpen);
+  const lowSpecMode = useArcStore((s) => s.lowSpecMode);
+  const setLowSpecMode = useArcStore((s) => s.setLowSpecMode);
   const [modesOpen, setModesOpen] = useState(false);
 
   const snapOn = settings?.snap_enabled ?? true;
@@ -120,10 +123,21 @@ export function UtilityRail() {
       .catch(() => undefined);
   };
 
+  const toggleFastMode = () => {
+    const next = !lowSpecMode;
+    setLowSpecMode(next);
+    if (settings) {
+      void ipc
+        .setSettings({ ...settings, fast_mode: next })
+        .then((s) => useArcStore.getState().updateSettings(s))
+        .catch(() => undefined);
+    }
+  };
+
   return (
     <>
       {/* 1. Top-Right Vertical Shapr3D Pill (next to the 3D ViewCube) */}
-      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-2.5 rounded-2xl border border-base-300/80 bg-base-100 p-2.5 shadow-md">
+      <div className="pointer-events-auto absolute right-3 top-2.5 z-30 flex flex-col items-center gap-2 rounded-2xl border border-base-300/80 bg-base-100 p-2 shadow-md">
         <button
           type="button"
           onClick={toggleSnap}
@@ -165,6 +179,24 @@ export function UtilityRail() {
           )}
         >
           <Axis3D size={16} strokeWidth={1.9} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleFastMode}
+          title={
+            lowSpecMode
+              ? "Fast mode ON (Surface / low-spec potato optimization active)"
+              : "Fast mode OFF (Click to boost performance on Surface / weak GPU)"
+          }
+          className={cn(
+            "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
+            lowSpecMode
+              ? "bg-amber-500/20 text-amber-500"
+              : "text-base-500 hover:bg-base-200 hover:text-base-800",
+          )}
+        >
+          <Zap size={16} strokeWidth={1.9} />
         </button>
       </div>
 

@@ -18,7 +18,8 @@ use super::nurbs::{payload_curve, payload_surface};
 use super::shapes;
 
 /// Tessellation tolerance for B-rep triangulation.
-const TESS_TOL: f64 = 0.02;
+/// Tuned for balanced geometric fidelity and low-spec GPU/CPU performance.
+const TESS_TOL: f64 = 0.045;
 
 // ------------------------------------------------------------------ dispatch
 

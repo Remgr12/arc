@@ -94,7 +94,7 @@ function GeneralTab({
             setLowSpecMode(checked);
             patch({ fast_mode: checked });
           }}
-          label="Fast mode (laptop battery & low-spec GPU optimization)"
+          label="Fast mode (Surface & low-spec GPU optimization: disables shadows & env reflections, dynamic resolution scaling)"
         />
       </Row>
       <Row label="Auto-save">
