@@ -220,10 +220,10 @@ export const offsetTool: ToolHandler = defineTool({
         const existing = offsetSet.findIndex((e) => e.id === picked);
         if (existing >= 0) {
           offsetSet.splice(existing, 1);
-          ctx.setStatus(`${offsetSet.length} curve(s) in offset set · click another, or empty space to commit`);
+          ctx.setStatus(`${offsetSet.length} curve(s) in offset set - click another, or empty space to commit`);
         } else {
           offsetSet = [...offsetSet, { id: picked, entity, chain }];
-          ctx.setStatus(`${offsetSet.length} curve(s) in offset set · move to preview, empty-space click commits`);
+          ctx.setStatus(`${offsetSet.length} curve(s) in offset set - move to preview, empty-space click commits`);
         }
         const after = ctx.planePoint(event, offsetSet[0]?.chain.points[0]?.y);
         if (after) offsetPreview(ctx, after);
@@ -232,14 +232,14 @@ export const offsetTool: ToolHandler = defineTool({
       }
     }
     if (offsetSet.length === 0) {
-      ctx.setStatus("Offset · click sketch curves to add them first");
+      ctx.setStatus("Offset - click sketch curves to add them first");
       return true;
     }
     const cursor = ctx.planePoint(event, offsetSet[0]?.chain.points[0]?.y);
     if (!cursor) return true;
     const distance = signedOffsetDistance(offsetSet[0].chain, cursor);
     if (Math.abs(distance) < 1e-3) {
-      ctx.setStatus("Offset distance is too small · move further from the first curve");
+      ctx.setStatus("Offset distance is too small - move further from the first curve");
       return true;
     }
     let ok = 0;
@@ -265,7 +265,7 @@ export const offsetTool: ToolHandler = defineTool({
     ctx.setStatus(`${offsetSet.length} curve(s) in offset set`);
     clearDraft(ctx);
   },
-  hint: () => "Offset · click sketch curves to add, move to preview, click empty space to commit · Esc clears",
+  hint: () => "Offset - click sketch curves to add, move to preview, click empty space to commit - Esc clears",
 });
 
 // ----------------------------------------------------------------------- trim
@@ -462,7 +462,7 @@ export const trimTool: ToolHandler = defineTool({
     segs.frustumCulled = false;
     ctx.setPreview(segs, "draft");
   },
-  hint: () => "Trim · click a curve to remove the piece between its nearest crossings",
+  hint: () => "Trim - click a curve to remove the piece between its nearest crossings",
 });
 
 // --------------------------------------------------------------------- extend
@@ -590,7 +590,7 @@ export const extendTool: ToolHandler = defineTool({
     }
     ctx.setPreview(previewGroup(parts), "draft");
   },
-  hint: () => "Extend · click a line or open polyline endpoint to stretch it to the next crossing",
+  hint: () => "Extend - click a line or open polyline endpoint to stretch it to the next crossing",
 });
 
 // --------------------------------------------------------------------- fillet
@@ -731,12 +731,12 @@ function commitFillet(ctx: ToolContext, event: PointerEvent | MouseEvent): void 
   const vertex = chain.points[Math.min(armedFillet.vertexIndex, chain.points.length - 1)];
   const radius = distXZ(vertex, cursor);
   if (radius < 1e-3) {
-    ctx.setStatus("Fillet radius is too small · move away from the corner");
+    ctx.setStatus("Fillet radius is too small - move away from the corner");
     return;
   }
   const result = filletResult(ctx, armedFillet, radius, event.shiftKey);
   if (!result) {
-    ctx.setStatus("Can't fillet this corner · its sides are collinear or the radius overflows");
+    ctx.setStatus("Can't fillet this corner - its sides are collinear or the radius overflows");
     return;
   }
   void ctx.createEntity(
@@ -772,7 +772,7 @@ export const filletTool: ToolHandler = defineTool({
     filletPress = { x: event.clientX, y: event.clientY };
     filletDragged = false;
     ctx.capturePointer(event);
-    ctx.setStatus("Fillet · move to set radius, click or release to commit · Esc cancels");
+    ctx.setStatus("Fillet - move to set radius, click or release to commit - Esc cancels");
     return true;
   },
   onPointerMove(event, ctx) {
@@ -819,7 +819,7 @@ export const filletTool: ToolHandler = defineTool({
     ctx.releasePointer(event);
   },
   onCancel: resetFillet,
-  hint: () => "Fillet · click a polyline corner or rectangle corner, drag or move, then click to commit",
+  hint: () => "Fillet - click a polyline corner or rectangle corner, drag or move, then click to commit",
 });
 
 // --------------------------------------------------------------------- mirror
@@ -871,7 +871,7 @@ export const mirrorTool: ToolHandler = defineTool({
       const entity = ctx.entityById(picked ?? "");
       if (picked && entity && isSketchEntity(entity)) {
         void ctx.setSelection([picked], picked);
-        ctx.setStatus("Curve selected · click the first point on the mirror axis");
+        ctx.setStatus("Curve selected - click the first point on the mirror axis");
         return true;
       }
       ctx.setStatus("Select curves first (or click a curve), then define mirror axis");
@@ -879,12 +879,12 @@ export const mirrorTool: ToolHandler = defineTool({
     }
     if (!mirrorAxis) {
       mirrorAxis = point.clone();
-      ctx.setStatus("Mirror · click the second axis point · Esc cancels");
+      ctx.setStatus("Mirror - click the second axis point - Esc cancels");
       return true;
     }
     const dir = point.clone().sub(mirrorAxis);
     if (Math.hypot(dir.x, dir.z) < 1e-3) {
-      ctx.setStatus("Mirror axis is degenerate · click a distinct second point");
+      ctx.setStatus("Mirror axis is degenerate - click a distinct second point");
       return true;
     }
     dir.divideScalar(Math.hypot(dir.x, dir.z));
@@ -955,5 +955,5 @@ export const mirrorTool: ToolHandler = defineTool({
   },
   onCancel: resetMirror,
   onBackspace: resetMirror,
-  hint: () => "Mirror · select sketch curves, then click two points on the mirror axis",
+  hint: () => "Mirror - select sketch curves, then click two points on the mirror axis",
 });

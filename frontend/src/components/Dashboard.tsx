@@ -20,14 +20,12 @@ import {
   Trash2,
   Upload,
   X,
-  Zap,
 } from "lucide-react";
 import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
 import { commitWorkspaceFolder } from "../lib/workspace";
 import { Button, Modal, TextField, cn } from "./ui";
-import { Logo } from "./Logo";
 import type { ProjectMode, ProjectSummary } from "../lib/types";
 
 type ViewMode = "grid" | "list";
@@ -122,7 +120,6 @@ export function Dashboard() {
   const folder = useArcStore((s) => s.workspaceFolder);
   const projectsCache = useArcStore((s) => s.projectsCache);
   const overview = useArcStore((s) => s.overview);
-  const lowSpecMode = useArcStore((s) => s.lowSpecMode);
 
   const openDocuments = useMemo(
     () => (overview?.documents ?? []).filter((d) => d.path),
@@ -403,32 +400,17 @@ export function Dashboard() {
     <div className="flex h-full w-full overflow-hidden bg-base-50 text-base-800 select-none">
       {/* Refined Minimalist Sidebar */}
       <aside className="flex w-[268px] shrink-0 flex-col border-r border-base-200/80 bg-base-50">
-        {/* Brand Header */}
-        <div className="flex h-13 shrink-0 items-center justify-between border-b border-base-200/80 px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-500/15 text-accent-500 shadow-xs">
-              <Logo size={16} />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-[13px] leading-tight text-base-900 tracking-tight">
-                arc
-              </span>
-              <span className="text-[10px] text-base-400 leading-tight">
-                3D Studio
-              </span>
-            </div>
-          </div>
-          {lowSpecMode ? (
-            <span
-              title="Fast mode active (GPU & battery optimized)"
-              className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9.5px] font-bold text-amber-500"
-            >
-              <Zap size={10} strokeWidth={2.5} />
-              FAST
-            </span>
-          ) : (
-            <span className="rounded-full bg-base-200 px-2 py-0.5 font-mono text-[9.5px] font-medium text-base-500">
-              v0.27
+        {/* Workspace Header - Clean with no logo */}
+        <div
+          data-tauri-drag-region
+          className="flex h-13 shrink-0 items-center justify-between border-b border-base-200/80 px-4"
+        >
+          <span className="text-[13px] font-semibold tracking-tight text-base-900">
+            Workspace
+          </span>
+          {projects.length > 0 && (
+            <span className="rounded-full bg-base-200 px-2 py-0.5 font-mono text-[10px] font-medium text-base-600">
+              {projects.length}
             </span>
           )}
         </div>
@@ -875,8 +857,8 @@ export function Dashboard() {
               })()}
             />
           ) : viewMode === "grid" ? (
-            /* Modern 3D Blueprint CAD Cards */
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4">
+            /* Clean Compact Cards */
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
               {filteredAndSorted.map((project) => {
                 const catTheme = getCategoryTheme(project.category);
                 const isArch = project.category.toLowerCase() === "architecture";
@@ -885,134 +867,115 @@ export function Dashboard() {
                     key={project.path}
                     onClick={() => void openProject(project)}
                     className={cn(
-                      "group relative flex flex-col overflow-hidden rounded-2xl border border-base-200/90 bg-base-100 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent-500/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer",
+                      "group flex flex-col justify-between rounded-xl border border-base-200/90 bg-base-100 p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-accent-500/40 hover:shadow-md hover:shadow-black/5 cursor-pointer",
                       opening === project.path && "opacity-50 pointer-events-none",
                     )}
                   >
-                    {/* Isometric CAD / BIM Blueprint Banner */}
-                    <div className="relative flex h-28 w-full items-center justify-center overflow-hidden border-b border-base-200/70 bg-gradient-to-b from-base-150/40 via-base-100/30 to-transparent">
-                      {/* Blueprint Grid Lines */}
-                      <div
-                        className="absolute inset-0 opacity-[0.06]"
-                        style={{
-                          backgroundImage: `radial-gradient(currentColor 1px, transparent 1px), radial-gradient(currentColor 1px, transparent 1px)`,
-                          backgroundSize: "16px 16px",
-                          backgroundPosition: "0 0, 8px 8px",
-                        }}
-                      />
+                    <div>
+                      {/* Top Row: Category Pill, Mode Badge & Actions */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCategory(
+                                selectedCategory === project.category ? null : project.category,
+                              );
+                            }}
+                            className={cn(
+                              "inline-flex max-w-[140px] items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-medium transition-all cursor-pointer shadow-xs",
+                              catTheme.badge,
+                            )}
+                          >
+                            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", catTheme.dot)} />
+                            <span className="truncate">{project.category}</span>
+                          </button>
 
-                      {/* Floating CAD Glyph */}
-                      <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-base-200/90 bg-base-50/80 shadow-xs transition-all duration-300 group-hover:scale-110 group-hover:border-accent-500/30 group-hover:shadow-md group-hover:shadow-accent-500/10">
-                        {isArch ? (
-                          <Building2
-                            size={24}
-                            className="text-amber-500 transition-colors group-hover:text-amber-600"
-                            strokeWidth={1.75}
-                          />
-                        ) : (
-                          <Box
-                            size={24}
-                            className="text-accent-500 transition-colors group-hover:text-accent-600"
-                            strokeWidth={1.75}
-                          />
-                        )}
+                          <span className="rounded border border-base-200 bg-base-150/70 px-1.5 py-0.2 font-mono text-[9px] font-bold text-base-500 tracking-wider">
+                            {isArch ? "BIM" : "CAD"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingMeta({
+                                path: project.path,
+                                name: project.name,
+                                category: project.category,
+                                tags: [...project.tags],
+                              });
+                              setCustomCategoryInput("");
+                              setNewTagInput("");
+                            }}
+                            title="Edit tags & category"
+                            className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 hover:bg-base-200 hover:text-base-800 transition-colors cursor-pointer"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingProject(project);
+                            }}
+                            title="Delete project"
+                            className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 hover:bg-red-500/15 hover:text-red-500 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Category Badge on Top-Left */}
-                      <div className="absolute left-2.5 top-2.5">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur-md shadow-xs",
-                            catTheme.badge,
+                      {/* Project Name & Icon */}
+                      <div className="mt-3 flex items-center gap-2.5">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-base-200/90 bg-base-150/60 transition-colors group-hover:border-accent-500/30 group-hover:bg-accent-500/10">
+                          {isArch ? (
+                            <Building2 size={14} className="text-amber-500" strokeWidth={2} />
+                          ) : (
+                            <Box size={14} className="text-accent-500" strokeWidth={2} />
                           )}
-                        >
-                          <span className={cn("h-1.5 w-1.5 rounded-full", catTheme.dot)} />
-                          {project.category}
-                        </span>
+                        </div>
+                        <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-base-900 group-hover:text-accent-500 transition-colors">
+                          {project.name}
+                        </div>
                       </div>
 
-                      {/* Mode Badge on Top-Right */}
-                      <div className="absolute right-2.5 top-2.5">
-                        <span className="rounded-md border border-base-300/80 bg-base-100/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-base-500 tracking-wider backdrop-blur-md">
-                          {isArch ? "BIM" : "CAD"}
-                        </span>
+                      {/* Tags */}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1 min-h-[20px]">
+                        {project.tags.map((t) => (
+                          <span
+                            key={t}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTag(selectedTag === t ? null : t);
+                            }}
+                            className={cn(
+                              "inline-flex max-w-[130px] items-center gap-0.5 rounded px-1.5 py-0.2 font-mono text-[9.5px] transition-colors cursor-pointer",
+                              selectedTag === t
+                                ? "bg-accent-500 text-white font-medium shadow-xs"
+                                : "border border-base-200 bg-base-150/50 text-base-600 hover:border-base-300 hover:bg-base-200 hover:text-base-900",
+                            )}
+                          >
+                            <span className={cn("shrink-0", selectedTag === t ? "text-white/80" : "text-base-400")}>#</span>
+                            <span className="truncate">{t}</span>
+                          </span>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Card Body */}
-                    <div className="flex flex-1 flex-col justify-between p-3.5">
-                      <div>
-                        <div className="truncate text-[13.5px] font-semibold text-base-900 group-hover:text-accent-500 transition-colors">
-                          {project.name}
-                        </div>
-
-                        {/* Tags */}
-                        <div className="mt-2 flex flex-wrap items-center gap-1 min-h-[22px]">
-                          {project.tags.map((t) => (
-                            <span
-                              key={t}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedTag(selectedTag === t ? null : t);
-                              }}
-                              className={cn(
-                                "inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 font-mono text-[10px] transition-colors cursor-pointer",
-                                selectedTag === t
-                                  ? "bg-accent-500 text-white font-medium"
-                                  : "bg-base-200/70 text-base-600 hover:bg-base-300 hover:text-base-900",
-                              )}
-                            >
-                              <span className="opacity-60">#</span>
-                              <span>{t}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Card Footer */}
-                      <div className="mt-3.5 flex items-center justify-between border-t border-base-200/70 pt-2.5 text-[11px] text-base-500">
-                        <span className="flex items-center gap-1.5">
-                          <Clock size={11} className="text-base-400" />
-                          {formatDate(project.modified)}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-base-400">
-                            {formatSize(project.size)}
-                          </span>
-                          {/* Hover Quick Actions */}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingMeta({
-                                  path: project.path,
-                                  name: project.name,
-                                  category: project.category,
-                                  tags: [...project.tags],
-                                });
-                                setCustomCategoryInput("");
-                                setNewTagInput("");
-                              }}
-                              title="Edit tags & category"
-                              className="rounded p-1 text-base-400 hover:bg-base-200 hover:text-base-900 transition-colors cursor-pointer"
-                            >
-                              <Pencil size={11} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeletingProject(project);
-                              }}
-                              title="Delete project"
-                              className="rounded p-1 text-base-400 hover:bg-red-500/15 hover:text-red-500 transition-colors cursor-pointer"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                    {/* Card Footer */}
+                    <div className="mt-3.5 flex items-center justify-between border-t border-base-200/70 pt-2.5 text-[11px] text-base-500">
+                      <span className="flex items-center gap-1.5 text-base-400">
+                        <Clock size={11} />
+                        <span>{formatDate(project.modified)}</span>
+                      </span>
+                      <span className="font-mono text-[10px] text-base-400">
+                        {formatSize(project.size)}
+                      </span>
                     </div>
                   </div>
                 );

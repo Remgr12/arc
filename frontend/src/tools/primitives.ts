@@ -256,7 +256,7 @@ function makeSimpleTool(
     },
     hint: () =>
       id === "plane"
-        ? "Plane · drag or click two corners (or type W,D + Enter)"
+        ? "Plane - drag or click two corners (or type W,D + Enter)"
         : "Drag or click center, then radius (or type R + Enter)",
   };
 }
@@ -475,7 +475,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
           commitAt(state.anchor, state.second, height, ctx);
           return true;
         }
-        ctx.setStatus("Move to set height (or type H + Enter) · click to place · Esc restarts footprint");
+        ctx.setStatus("Move to set height (or type H + Enter) - click to place - Esc restarts footprint");
         previewFor(ctx, event);
         return true;
       }
@@ -494,7 +494,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
           state.second = ctx.snap(raw).point;
           state.typed = "";
           height = 20;
-          ctx.setStatus("Move to set height (or type H + Enter) · click to place");
+          ctx.setStatus("Move to set height (or type H + Enter) - click to place");
           previewFor(ctx, event);
         }
         state.dragged = false;
@@ -541,7 +541,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
           return true;
         }
         height = 20;
-        ctx.setStatus("Move to set height (or type H + Enter) · click to place");
+        ctx.setStatus("Move to set height (or type H + Enter) - click to place");
         previewFor(ctx);
         return true;
       }
@@ -556,7 +556,7 @@ function makeHeightTool(spec: HeightTool): ToolHandler {
       if (state.second) {
         state.second = null;
         state.typed = "";
-        ctx.setStatus("Height cancelled · set the footprint again");
+        ctx.setStatus("Height cancelled - set the footprint again");
         return;
       }
       state = reset(ctx);
@@ -605,7 +605,7 @@ export const cylinderTool = makeHeightTool({
   },
   position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cylinder", radius: fp.r, height: h, segments: 24 }),
-  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
+  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10}, H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });
 
 export const coneTool = makeHeightTool({
@@ -621,5 +621,5 @@ export const coneTool = makeHeightTool({
   },
   position: (a) => [a.x, a.y, a.z],
   geometry: (fp, h) => ({ type: "cone", radius: fp.r, height: h, segments: 24 }),
-  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10} · H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
+  label: (fp, h, ctx) => `R ${Math.round(fp.r * 10) / 10}, H ${Math.round(h * 10) / 10} ${ctx.settings.unitLabel}`,
 });

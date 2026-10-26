@@ -123,6 +123,15 @@ export function UtilityRail() {
       .catch(() => undefined);
   };
 
+  const toggleUnits = () => {
+    if (!settings) return;
+    const nextUnit = isImperial ? "metric" : "imperial";
+    void ipc
+      .setSettings({ ...settings, units: nextUnit })
+      .then((next) => useArcStore.getState().updateSettings(next))
+      .catch(() => undefined);
+  };
+
   const toggleFastMode = () => {
     const next = !lowSpecMode;
     setLowSpecMode(next);
@@ -165,6 +174,20 @@ export function UtilityRail() {
           <span className="mt-0.5 font-mono text-[9px] text-base-500 leading-none">
             {unit}
           </span>
+        </button>
+
+        {/* 1-Click Metric / Imperial Unit Toggle */}
+        <button
+          type="button"
+          onClick={toggleUnits}
+          title={
+            isImperial
+              ? "Active: Imperial (Click to switch to Metric)"
+              : "Active: Metric (Click to switch to Imperial)"
+          }
+          className="flex h-8.5 w-8.5 items-center justify-center rounded-xl border border-base-300/80 bg-base-100 font-mono text-[10.5px] font-bold text-accent-500 hover:border-accent-500 hover:bg-base-200 transition-colors cursor-pointer shadow-2xs"
+        >
+          {isImperial ? "IN" : "CM"}
         </button>
 
         <button

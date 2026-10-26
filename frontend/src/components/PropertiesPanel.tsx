@@ -440,7 +440,7 @@ function ParametricFeatureCard({
           <div className="flex flex-col gap-1">
             {downstream.map((d) => (
               <span key={d.id} className="font-mono text-[10.5px] text-base-700">
-                • {d.name} ({d.operation})
+                - {d.name} ({d.operation})
               </span>
             ))}
           </div>
@@ -659,6 +659,7 @@ function RoomInspector({
     }
     areaCm2 = Math.abs(sum) * 0.5;
   }
+  const isImperial = useArcStore((s) => s.settings?.units === "in" || s.settings?.units === "ft");
   const areaM2 = (areaCm2 / 10000).toFixed(2);
   const areaSqFt = ((areaCm2 / 10000) * 10.7639).toFixed(1);
 
@@ -681,8 +682,7 @@ function RoomInspector({
       </Row>
       <Row label="Calculated Area">
         <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-accent-500">
-          <span>{areaM2} m²</span>
-          <span className="text-base-400">({areaSqFt} sq ft)</span>
+          <span>{isImperial ? `${areaSqFt} sq ft` : `${areaM2} m²`}</span>
         </div>
       </Row>
     </>

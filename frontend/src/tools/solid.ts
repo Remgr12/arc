@@ -344,7 +344,7 @@ function startExtrude(chain: Chain, ctx: ToolContext): void {
     sketchEntityId: chain.entityId,
   };
   updateExtrudePreview(ext, ctx);
-  ctx.setStatus("Drag outward to add or inward into a solid to Cut · click or type H + Enter");
+  ctx.setStatus("Drag outward to add or inward into a solid to Cut - click or type H + Enter");
 }
 
 function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
@@ -410,7 +410,7 @@ function commitExtrudeHeight(signedH: number, ctx: ToolContext): void {
         return;
       }
     }
-    ctx.setStatus(`Extruded H ${formatNum(absH)} ${ctx.settings.unitLabel} · pick another closed profile`);
+    ctx.setStatus(`Extruded H ${formatNum(absH)} ${ctx.settings.unitLabel} - pick another closed profile`);
   })();
 
   ext = null;
@@ -482,7 +482,7 @@ export const extrudeTool: ToolHandler = {
         return true;
       }
       if (picked && !picked.chain.closed) {
-        ctx.setStatus("Profile must be closed · click a closed sketch profile or a 3D face");
+        ctx.setStatus("Profile must be closed - click a closed sketch profile or a 3D face");
         return true;
       }
       ctx.setStatus("Click a closed sketch profile or a 3D solid face to extrude");
@@ -544,10 +544,10 @@ export const extrudeTool: ToolHandler = {
       ext = null;
       clearDraft(ctx);
       ctx.showMeasure(null);
-      ctx.setStatus("Extrude cancelled · pick a closed profile");
+      ctx.setStatus("Extrude cancelled - pick a closed profile");
     }
   },
-  hint: () => "Extrude / Cut · click closed profile, drag outward to add or inward into a solid to Cut",
+  hint: () => "Extrude / Cut - click closed profile, drag outward to add or inward into a solid to Cut",
 };
 
 // ----------------------------------------------------------------- revolve
@@ -665,11 +665,11 @@ export const revolveTool: ToolHandler = {
     if (!rev) {
       const picked = pickChain(event, ctx);
       if (!picked) {
-        ctx.setStatus("No sketch under cursor · click an open profile");
+        ctx.setStatus("No sketch under cursor - click an open profile");
         return true;
       }
       if (picked.chain.closed) {
-        ctx.setStatus("Profile must be open · revolve needs an open chain");
+        ctx.setStatus("Profile must be open - revolve needs an open chain");
         return true;
       }
       const plane =
@@ -707,7 +707,7 @@ export const revolveTool: ToolHandler = {
       const p2 = ctx.snap(hit).point;
       const dir = new THREE.Vector3().subVectors(p2, rev.p1);
       if (dir.length() < 1e-4) {
-        ctx.setStatus("Axis points are too close · click further apart");
+        ctx.setStatus("Axis points are too close - click further apart");
         return true;
       }
       dir.normalize();
@@ -716,12 +716,12 @@ export const revolveTool: ToolHandler = {
       rev.angle = 360;
       rev.lastScreen = ctx.screenPoint(event);
       revolvePreview(rev, ctx);
-      ctx.setStatus("Move to set the sweep angle (or type angle + Enter) · click to commit");
+      ctx.setStatus("Move to set the sweep angle (or type angle + Enter) - click to commit");
       return true;
     }
     // Phase 3: click commits.
     commitRevolve(ctx);
-    ctx.setStatus("Revolved · pick another open profile");
+    ctx.setStatus("Revolved - pick another open profile");
     return true;
   },
   onPointerMove(event, ctx) {
@@ -766,7 +766,7 @@ export const revolveTool: ToolHandler = {
     const d = rev;
     if (!d || !d.axis) return false;
     commitRevolve(ctx);
-    ctx.setStatus("Revolved · pick another open profile");
+    ctx.setStatus("Revolved - pick another open profile");
     return true;
   },
   onCancel(ctx) {
@@ -777,17 +777,17 @@ export const revolveTool: ToolHandler = {
       d.typed = "";
       clearDraft(ctx);
       ctx.showMeasure(null);
-      ctx.setStatus("Angle cancelled · click the second axis point again");
+      ctx.setStatus("Angle cancelled - click the second axis point again");
     } else if (d.p1) {
       d.p1 = null;
       ctx.setStatus("Click the first point on the revolve axis");
     } else {
       rev = null;
       clearDraft(ctx);
-      ctx.setStatus("Revolve cancelled · pick an open profile");
+      ctx.setStatus("Revolve cancelled - pick an open profile");
     }
   },
-  hint: () => "Revolve · click an open profile, two axis points, then set angle",
+  hint: () => "Revolve - click an open profile, two axis points, then set angle",
 };
 
 // ------------------------------------------------------------------- sweep
@@ -829,7 +829,7 @@ function commitSweep(ctx: ToolContext): void {
   sweepTyped = "";
   clearDraft(ctx);
   ctx.showMeasure(null);
-  ctx.setStatus(`Swept R ${formatNum(sweepRadius)} · pick another open path`);
+  ctx.setStatus(`Swept R ${formatNum(sweepRadius)} - pick another open path`);
 }
 
 export const sweepTool: ToolHandler = {
@@ -853,11 +853,11 @@ export const sweepTool: ToolHandler = {
     if (!sweepPath) {
       const picked = pickChain(event, ctx);
       if (!picked) {
-        ctx.setStatus("No sketch under cursor · click an open path");
+        ctx.setStatus("No sketch under cursor - click an open path");
         return true;
       }
       if (picked.chain.closed) {
-        ctx.setStatus("Path must be open · sweep needs an open chain");
+        ctx.setStatus("Path must be open - sweep needs an open chain");
         return true;
       }
       sweepPath = picked.chain.points.map((p) => p.clone());
@@ -865,7 +865,7 @@ export const sweepTool: ToolHandler = {
       sweepTyped = "";
       sweepScreen = ctx.screenPoint(event);
       updateSweepPreview(ctx);
-      ctx.setStatus("Move to size the tube (or type R + Enter) · click to commit · Esc re-picks");
+      ctx.setStatus("Move to size the tube (or type R + Enter) - click to commit - Esc re-picks");
       return true;
     }
     commitSweep(ctx);
@@ -917,10 +917,10 @@ export const sweepTool: ToolHandler = {
       sweepTyped = "";
       clearDraft(ctx);
       ctx.showMeasure(null);
-      ctx.setStatus("Sweep cancelled · pick an open path");
+      ctx.setStatus("Sweep cancelled - pick an open path");
     }
   },
-  hint: () => "Sweep · click an open path, then move or type radius + Enter",
+  hint: () => "Sweep - click an open path, then move or type radius + Enter",
 };
 
 // -------------------------------------------------------------------- loft
@@ -989,7 +989,7 @@ function resetLoft(ctx: ToolContext): void {
 
 function commitLoft(ctx: ToolContext): void {
   if (loftSections.length < 2) {
-    ctx.setStatus("Loft needs at least 2 profiles · Enter to finish when ready");
+    ctx.setStatus("Loft needs at least 2 profiles - Enter to finish when ready");
     return;
   }
   const sections = loftSections.map((s) => polylineCoordinates(s));
@@ -1020,8 +1020,8 @@ export const loftTool: ToolHandler = {
     loftPreview(ctx);
     ctx.setStatus(
       loftSections.length < 2
-        ? `Loft · ${loftSections.length} profile · pick the next (64 rings)`
-        : `Loft · ${loftSections.length} profiles · Enter to finish`,
+        ? `Loft - ${loftSections.length} profile - pick the next (64 rings)`
+        : `Loft - ${loftSections.length} profiles - Enter to finish`,
     );
     return true;
   },
@@ -1038,7 +1038,7 @@ export const loftTool: ToolHandler = {
   onCancel(ctx) {
     if (loftSections.length > 0) {
       resetLoft(ctx);
-      ctx.setStatus("Loft cancelled · click a closed profile");
+      ctx.setStatus("Loft cancelled - click a closed profile");
     }
   },
   onBackspace(ctx) {
@@ -1047,10 +1047,10 @@ export const loftTool: ToolHandler = {
       loftPreview(ctx);
       ctx.setStatus(
         loftSections.length === 0
-          ? "Loft · click a closed profile"
-          : `Loft · ${loftSections.length} profile${loftSections.length > 1 ? "s" : ""} · pick the next or Enter to finish`,
+          ? "Loft - click a closed profile"
+          : `Loft - ${loftSections.length} profile${loftSections.length > 1 ? "s" : ""} - pick the next or Enter to finish`,
       );
     }
   },
-  hint: () => "Loft · click 2+ closed profiles in order · Enter finishes",
+  hint: () => "Loft - click 2+ closed profiles in order - Enter finishes",
 };

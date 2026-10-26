@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const SERVER_NAME: &str = "arc-mcp";
-const SERVER_VERSION: &str = "0.27.0";
+const SERVER_VERSION: &str = "0.28.0";
 
 // ============================================================================
 // Bridge Connection & Auto-Discovery

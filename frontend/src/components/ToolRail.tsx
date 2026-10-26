@@ -119,10 +119,10 @@ function ShaprRow({
 const SKETCH_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
   { id: "line", key: "L" },
   { id: "arc", key: "A" },
-  { id: "polyline", sub: "Fit" },
-  { id: "rectangle", sub: "Diagonal", key: "R" },
+  { id: "polyline" },
+  { id: "rectangle", key: "R" },
   { id: "circle", key: "C" },
-  { id: "polygon", sub: "Polygon", key: "G" },
+  { id: "polygon", key: "G" },
   { id: "trim", key: "T" },
   { id: "offset", key: "O" },
   { id: "fillet", key: "F" },
@@ -130,51 +130,51 @@ const SKETCH_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
 ];
 
 const CONSTRUCT_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "box", sub: "Solid", key: "B" },
-  { id: "cylinder", sub: "Solid", key: "Y" },
-  { id: "sphere", sub: "Solid" },
-  { id: "cone", sub: "Solid" },
-  { id: "torus", sub: "Solid" },
+  { id: "box", key: "B" },
+  { id: "cylinder", key: "Y" },
+  { id: "sphere" },
+  { id: "cone" },
+  { id: "torus" },
 ];
 
 const INSERT_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "plane", sub: "Reference" },
-  { id: "wall", sub: "Architecture", key: "W" },
-  { id: "dimension", sub: "Measure", key: "D" },
+  { id: "plane" },
+  { id: "wall", key: "W" },
+  { id: "dimension", key: "D" },
 ];
 
 const MODEL_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "extrude", sub: "Push / Cut", key: "E" },
-  { id: "extrude-face", sub: "Face Push/Pull" },
-  { id: "offset-face", sub: "Offset Face" },
-  { id: "fillet-edge", sub: "Round Edge", key: "F" },
-  { id: "revolve", sub: "Around Axis", key: "V" },
-  { id: "sweep", sub: "Along Path" },
-  { id: "loft", sub: "Between Profiles" },
+  { id: "extrude", key: "E" },
+  { id: "extrude-face" },
+  { id: "offset-face" },
+  { id: "fillet-edge", key: "F" },
+  { id: "revolve", key: "V" },
+  { id: "sweep" },
+  { id: "loft" },
 ];
 
 const ARCH_STRUCTURE_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "wall", sub: "Mitered Wall", key: "W" },
-  { id: "slab", sub: "Floor / Ceiling", key: "L" },
-  { id: "roof", sub: "Pitched / Flat", key: "R" },
-  { id: "column", sub: "Structural", key: "C" },
-  { id: "beam", sub: "Structural", key: "B" },
+  { id: "wall", key: "W" },
+  { id: "slab", key: "L" },
+  { id: "roof", key: "R" },
+  { id: "column", key: "C" },
+  { id: "beam", key: "B" },
 ];
 
 const ARCH_OPENING_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "door", sub: "Wall Opening", key: "D" },
-  { id: "window", sub: "Glazed Window", key: "N" },
+  { id: "door", key: "D" },
+  { id: "window", key: "N" },
 ];
 
 const ARCH_BUILD_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "stair", sub: "Riser & Tread", key: "S" },
-  { id: "component", sub: "3D Furniture", key: "F" },
-  { id: "room", sub: "Space & Poché", key: "M" },
+  { id: "stair", key: "S" },
+  { id: "component", key: "F" },
+  { id: "room", key: "M" },
 ];
 
 const ARCH_DATUM_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
-  { id: "grid", sub: "Grid Lines", key: "G" },
-  { id: "level", sub: "Storey Elevation", key: "V" },
+  { id: "grid", key: "G" },
+  { id: "level", key: "V" },
 ];
 
 export function ToolRail() {
@@ -562,13 +562,11 @@ export function ToolRail() {
                     <ShaprRow
                       icon={<Combine size={15} strokeWidth={1.75} />}
                       label="Union"
-                      sub="Combine"
                       onClick={() => void actions.booleanApply("union")}
                     />
                     <ShaprRow
                       icon={<Scissors size={15} strokeWidth={1.75} />}
                       label="Subtract"
-                      sub="Boolean Cut"
                       onClick={() => void actions.booleanApply("difference")}
                     />
                   </>
@@ -576,13 +574,11 @@ export function ToolRail() {
                 <ShaprRow
                   icon={<Box size={15} strokeWidth={1.75} />}
                   label="Shell"
-                  sub="Hollow 2 cm"
                   onClick={() => void actions.shellSelection(2)}
                 />
                 <ShaprRow
                   icon={<Grid3X3 size={15} strokeWidth={1.75} />}
                   label="Pattern"
-                  sub="Linear 3×"
                   onClick={() =>
                     void actions.linearPattern({ count: 3, spacing: 30, axis: "x" })
                   }
@@ -590,7 +586,6 @@ export function ToolRail() {
                 <ShaprRow
                   icon={<Paintbrush size={15} strokeWidth={1.75} />}
                   label="Visualize"
-                  sub="Material"
                   onClick={() =>
                     window.dispatchEvent(
                       new CustomEvent("arc-materials-toggle", { detail: true }),
@@ -618,7 +613,6 @@ export function ToolRail() {
             <ShaprRow
               icon={<BrickWall size={15} strokeWidth={1.75} />}
               label="Structure"
-              sub="Walls, Slabs & Roofs"
               active={activeCat === "arch-structure" || activeCat === "insert"}
               onClick={() => toggleCat("arch-structure")}
             />
@@ -631,7 +625,6 @@ export function ToolRail() {
             <ShaprRow
               icon={<DoorOpen size={15} strokeWidth={1.75} />}
               label="Openings"
-              sub="Doors & Windows"
               active={activeCat === "arch-openings"}
               onClick={() => toggleCat("arch-openings")}
             />
@@ -644,7 +637,6 @@ export function ToolRail() {
             <ShaprRow
               icon={<Home size={15} strokeWidth={1.75} />}
               label="Build & Space"
-              sub="Stairs, Rooms & Furniture"
               active={activeCat === "arch-build"}
               onClick={() => toggleCat("arch-build")}
             />
@@ -657,7 +649,6 @@ export function ToolRail() {
             <ShaprRow
               icon={<Layers size={15} strokeWidth={1.75} />}
               label="Datums"
-              sub="Grids & Levels"
               active={activeCat === "arch-datums"}
               onClick={() => toggleCat("arch-datums")}
             />
@@ -670,7 +661,6 @@ export function ToolRail() {
             <ShaprRow
               icon={<Table size={15} strokeWidth={1.75} />}
               label="Schedule"
-              sub="BIM Quantities Takeoff"
               onClick={() => useArcStore.getState().setBuildingScheduleOpen(true)}
             />
 

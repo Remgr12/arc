@@ -55,7 +55,7 @@ export const dimensionTool: ToolHandler = {
       dim.press = { x: event.clientX, y: event.clientY };
       dim.dragged = false;
       ctx.capturePointer(event);
-      ctx.setStatus("Dimension · click the second point");
+      ctx.setStatus("Dimension - click the second point");
       return true;
     }
     if (snapped.distanceTo(dim.points[0]) > 1e-3) {
@@ -95,7 +95,7 @@ export const dimensionTool: ToolHandler = {
     if (dim.points.length > 0) resetDimension(ctx);
   },
   onBackspace: resetDimension,
-  hint: () => "Dimension · click or drag two points",
+  hint: () => "Dimension - click or drag two points",
 };
 
 // ---------------------------------------------------------------------- wall
@@ -170,7 +170,7 @@ export const wallTool: ToolHandler = {
     }
     wall.points.push(snapped);
     ctx.capturePointer(event);
-    ctx.setStatus(`Wall · click to add points · Enter finishes (${wall.points.length})`);
+    ctx.setStatus(`Wall - click to add points - Enter finishes (${wall.points.length})`);
     return true;
   },
   onPointerMove(event, ctx) {
@@ -213,5 +213,5 @@ export const wallTool: ToolHandler = {
       }
     }
   },
-  hint: () => "Wall · click path points · Enter or double-click finishes",
+  hint: () => "Wall - click path points - Enter or double-click finishes",
 };

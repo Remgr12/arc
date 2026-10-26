@@ -453,7 +453,7 @@ export function SelectionHud() {
             Dist: <strong className="font-semibold">{multiInfo.dist}</strong> {unitLabel}
           </span>
           <span className="font-mono text-base-500 shrink-0">
-            ΔX: {multiInfo.dx} · ΔY: {multiInfo.dy} · ΔZ: {multiInfo.dz}
+            ΔX: {multiInfo.dx}, ΔY: {multiInfo.dy}, ΔZ: {multiInfo.dz}
           </span>
           {multiInfo.canBoolean && (
             <>

@@ -44,7 +44,7 @@ export function StatusPill() {
           </span>
         )}
         <span className="shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums text-base-500">
-          {fmt(cursorWorld[0])} · {fmt(cursorWorld[2])}
+          {fmt(cursorWorld[0])}, {fmt(cursorWorld[2])}
         </span>
       </div>
     </div>

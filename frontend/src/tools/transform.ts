@@ -13,7 +13,7 @@ function centeredGizmoTool(id: string, mode: GizmoMode, label: string, tip: stri
     id: id as ToolHandler["id"],
     onActivate(ctx) {
       ctx.setGizmo(mode);
-      ctx.setStatus(`${label} · drag the gizmo · click an entity to select`);
+      ctx.setStatus(`${label} - drag the gizmo - click an entity to select`);
     },
     onDeactivate(ctx) {
       ctx.setGizmo(null);
@@ -25,7 +25,7 @@ function centeredGizmoTool(id: string, mode: GizmoMode, label: string, tip: stri
       ctx.setGizmo(mode);
       const primary = ctx.selection()[ctx.selection().length - 1] ?? null;
       if (primary && ctx.selection().length === 1 && had <= 1) {
-        ctx.setStatus(`${label} · drag the gizmo`);
+        ctx.setStatus(`${label} - drag the gizmo`);
       }
       return true;
     },
@@ -43,17 +43,17 @@ export const moveTool: ToolHandler = centeredGizmoTool(
   "move",
   "translate",
   "Move",
-  "Move · drag gizmo arrows/planes",
+  "Move - drag gizmo arrows/planes",
 );
 export const rotateTool: ToolHandler = centeredGizmoTool(
   "rotate",
   "rotate",
   "Rotate",
-  "Rotate · drag the rotate gizmo",
+  "Rotate - drag the rotate gizmo",
 );
 export const scaleTool: ToolHandler = centeredGizmoTool(
   "scale",
   "scale",
   "Scale",
-  "Scale · drag the scale gizmo",
+  "Scale - drag the scale gizmo",
 );

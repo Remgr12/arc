@@ -75,7 +75,7 @@ export function MaterialsPanel() {
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12.5px] text-base-800">{m.label}</span>
               <span className="block font-mono text-[10px] text-base-500">
-                R {m.roughness.toFixed(2)} · M {m.metalness.toFixed(2)}
+                R {m.roughness.toFixed(2)}, M {m.metalness.toFixed(2)}
               </span>
             </span>
             {m.transparent && <Droplet size={12} className="shrink-0 text-base-500" />}

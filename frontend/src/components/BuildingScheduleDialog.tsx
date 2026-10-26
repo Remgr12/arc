@@ -23,6 +23,15 @@ export function BuildingScheduleDialog() {
   const overview = useArcStore((s) => s.overview);
   const scene = useArcStore((s) => s.scene);
   const sceneVersion = useArcStore((s) => s.sceneVersion);
+  const settings = useArcStore((s) => s.settings);
+
+  const isDefaultImperial =
+    settings?.units === "imperial" || settings?.units === "in" || settings?.units === "ft";
+  const [isImperial, setIsImperial] = useState(isDefaultImperial);
+
+  useEffect(() => {
+    setIsImperial(isDefaultImperial);
+  }, [isDefaultImperial]);
 
   const [schedule, setSchedule] = useState<BuildingSchedule | null>(null);
   const [loading, setLoading] = useState(false);
@@ -329,6 +338,30 @@ export function BuildingScheduleDialog() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Metric / Imperial Unit Selector */}
+            <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5">
+              <button
+                type="button"
+                onClick={() => setIsImperial(false)}
+                className={cn(
+                  "rounded px-2 py-0.5 text-xs font-semibold transition-colors cursor-pointer",
+                  !isImperial ? "bg-accent-500 text-white shadow-2xs" : "text-base-600 hover:text-base-900",
+                )}
+              >
+                Metric
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsImperial(true)}
+                className={cn(
+                  "rounded px-2 py-0.5 text-xs font-semibold transition-colors cursor-pointer",
+                  isImperial ? "bg-accent-500 text-white shadow-2xs" : "text-base-600 hover:text-base-900",
+                )}
+              >
+                Imperial
+              </button>
+            </div>
+
             {activeTab !== "summary" && (
               <div className="relative">
                 <Search size={12} className="absolute left-2.5 top-2 text-base-400" />
@@ -374,11 +407,15 @@ export function BuildingScheduleDialog() {
                       <Building size={14} className="text-blue-500" />
                     </div>
                     <div className="mt-2 text-xl font-bold tracking-tight text-base-900">
-                      {Math.max(schedule.floorAreaM2, totalRoomAreaM2).toFixed(1)}{" "}
-                      <span className="text-xs font-normal text-base-500">m²</span>
+                      {isImperial
+                        ? (Math.max(schedule.floorAreaM2, totalRoomAreaM2) * 10.7639).toFixed(1)
+                        : Math.max(schedule.floorAreaM2, totalRoomAreaM2).toFixed(1)}{" "}
+                      <span className="text-xs font-normal text-base-500">
+                        {isImperial ? "sq ft" : "m²"}
+                      </span>
                     </div>
                     <div className="mt-1 text-[11px] text-base-500">
-                      {schedule.rooms.length} zoned rooms · {(Math.max(schedule.floorAreaM2, totalRoomAreaM2) * 10.7639).toFixed(0)} sq ft
+                      {schedule.rooms.length} zoned rooms
                     </div>
                   </div>
 
@@ -388,11 +425,17 @@ export function BuildingScheduleDialog() {
                       <BrickWall size={14} className="text-amber-500" />
                     </div>
                     <div className="mt-2 text-xl font-bold tracking-tight text-base-900">
-                      {schedule.totalWallLengthM.toFixed(1)}{" "}
-                      <span className="text-xs font-normal text-base-500">m length</span>
+                      {isImperial
+                        ? (schedule.totalWallLengthM * 3.28084).toFixed(1)
+                        : schedule.totalWallLengthM.toFixed(1)}{" "}
+                      <span className="text-xs font-normal text-base-500">
+                        {isImperial ? "ft length" : "m length"}
+                      </span>
                     </div>
                     <div className="mt-1 text-[11px] text-base-500">
-                      {schedule.totalWallAreaM2.toFixed(1)} m² surface · {totalWallVolumeM3.toFixed(1)} m³ vol
+                      {isImperial
+                        ? `${(schedule.totalWallAreaM2 * 10.7639).toFixed(1)} sq ft surface, ${(totalWallVolumeM3 * 1.30795).toFixed(1)} cu yd vol`
+                        : `${schedule.totalWallAreaM2.toFixed(1)} m² surface, ${totalWallVolumeM3.toFixed(1)} m³ vol`}
                     </div>
                   </div>
 
@@ -406,7 +449,9 @@ export function BuildingScheduleDialog() {
                       <span className="text-xs font-normal text-base-500">units</span>
                     </div>
                     <div className="mt-1 text-[11px] text-base-500">
-                      {schedule.doorCount} doors · {schedule.windowCount} windows ({totalOpeningsAreaM2.toFixed(1)} m²)
+                      {isImperial
+                        ? `${schedule.doorCount} doors, ${schedule.windowCount} windows (${(totalOpeningsAreaM2 * 10.7639).toFixed(1)} sq ft)`
+                        : `${schedule.doorCount} doors, ${schedule.windowCount} windows (${totalOpeningsAreaM2.toFixed(1)} m²)`}
                     </div>
                   </div>
 
@@ -420,7 +465,7 @@ export function BuildingScheduleDialog() {
                       <span className="text-xs font-normal text-base-500">elements</span>
                     </div>
                     <div className="mt-1 text-[11px] text-base-500">
-                      {schedule.columnCount} cols · {schedule.beamCount} beams · {schedule.roofCount} roofs · {schedule.stairCount} stairs
+                      {schedule.columnCount} cols, {schedule.beamCount} beams, {schedule.roofCount} roofs, {schedule.stairCount} stairs
                     </div>
                   </div>
                 </div>
@@ -500,11 +545,11 @@ export function BuildingScheduleDialog() {
                   <thead className="border-b border-base-200 font-semibold text-base-600 bg-base-50/50">
                     <tr>
                       <th className="py-2 px-2.5">Wall Mark / Name</th>
-                      <th className="py-2 px-2.5">Thickness</th>
-                      <th className="py-2 px-2.5">Height</th>
-                      <th className="py-2 px-2.5">Length</th>
-                      <th className="py-2 px-2.5">Surface Area</th>
-                      <th className="py-2 px-2.5">Volume</th>
+                      <th className="py-2 px-2.5">Thickness ({isImperial ? "in" : "mm"})</th>
+                      <th className="py-2 px-2.5">Height ({isImperial ? "ft" : "m"})</th>
+                      <th className="py-2 px-2.5">Length ({isImperial ? "ft" : "m"})</th>
+                      <th className="py-2 px-2.5">Surface Area ({isImperial ? "sq ft" : "m²"})</th>
+                      <th className="py-2 px-2.5">Volume ({isImperial ? "cu yd" : "m³"})</th>
                       <th className="py-2 px-2.5">Level Elevation</th>
                     </tr>
                   </thead>
@@ -512,12 +557,24 @@ export function BuildingScheduleDialog() {
                     {filteredWalls.map((w, i) => (
                       <tr key={i} className="hover:bg-base-50/50 transition-colors">
                         <td className="py-2 px-2.5 font-medium text-base-900">{w.name}</td>
-                        <td className="py-2 px-2.5 font-mono">{w.widthMm} mm</td>
-                        <td className="py-2 px-2.5 font-mono">{w.heightM.toFixed(2)} m</td>
-                        <td className="py-2 px-2.5 font-mono">{w.lengthM.toFixed(2)} m</td>
-                        <td className="py-2 px-2.5 font-mono font-medium">{w.areaM2.toFixed(2)} m²</td>
-                        <td className="py-2 px-2.5 font-mono text-base-500">{w.volumeM3.toFixed(2)} m³</td>
-                        <td className="py-2 px-2.5 font-mono text-base-500">+{w.elevationM.toFixed(2)} m</td>
+                        <td className="py-2 px-2.5 font-mono">
+                          {isImperial ? `${(w.widthMm / 25.4).toFixed(1)} in` : `${w.widthMm} mm`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono">
+                          {isImperial ? `${(w.heightM * 3.28084).toFixed(2)} ft` : `${w.heightM.toFixed(2)} m`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono">
+                          {isImperial ? `${(w.lengthM * 3.28084).toFixed(2)} ft` : `${w.lengthM.toFixed(2)} m`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono font-medium">
+                          {isImperial ? `${(w.areaM2 * 10.7639).toFixed(1)} sq ft` : `${w.areaM2.toFixed(2)} m²`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono text-base-500">
+                          {isImperial ? `${(w.volumeM3 * 1.30795).toFixed(2)} cu yd` : `${w.volumeM3.toFixed(2)} m³`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono text-base-500">
+                          {isImperial ? `+${(w.elevationM * 3.28084).toFixed(2)} ft` : `+${w.elevationM.toFixed(2)} m`}
+                        </td>
                       </tr>
                     ))}
                     {filteredWalls.length === 0 && (
@@ -539,10 +596,10 @@ export function BuildingScheduleDialog() {
                     <tr>
                       <th className="py-2 px-2.5">Category</th>
                       <th className="py-2 px-2.5">Mark / Name</th>
-                      <th className="py-2 px-2.5">Width</th>
-                      <th className="py-2 px-2.5">Height</th>
-                      <th className="py-2 px-2.5">Sill Height</th>
-                      <th className="py-2 px-2.5">Glazing Area</th>
+                      <th className="py-2 px-2.5">Width ({isImperial ? "in" : "mm"})</th>
+                      <th className="py-2 px-2.5">Height ({isImperial ? "in" : "mm"})</th>
+                      <th className="py-2 px-2.5">Sill Height ({isImperial ? "in" : "mm"})</th>
+                      <th className="py-2 px-2.5">Glazing Area ({isImperial ? "sq ft" : "m²"})</th>
                       <th className="py-2 px-2.5">Level Elevation</th>
                     </tr>
                   </thead>
@@ -562,11 +619,21 @@ export function BuildingScheduleDialog() {
                           </span>
                         </td>
                         <td className="py-2 px-2.5 font-medium text-base-900">{o.name}</td>
-                        <td className="py-2 px-2.5 font-mono">{o.widthMm} mm</td>
-                        <td className="py-2 px-2.5 font-mono">{o.heightMm} mm</td>
-                        <td className="py-2 px-2.5 font-mono text-base-500">{o.sillMm} mm</td>
-                        <td className="py-2 px-2.5 font-mono font-medium">{o.areaM2.toFixed(2)} m²</td>
-                        <td className="py-2 px-2.5 font-mono text-base-500">+{o.elevationM.toFixed(2)} m</td>
+                        <td className="py-2 px-2.5 font-mono">
+                          {isImperial ? `${(o.widthMm / 25.4).toFixed(1)} in` : `${o.widthMm} mm`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono">
+                          {isImperial ? `${(o.heightMm / 25.4).toFixed(1)} in` : `${o.heightMm} mm`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono text-base-500">
+                          {isImperial ? `${(o.sillMm / 25.4).toFixed(1)} in` : `${o.sillMm} mm`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono font-medium">
+                          {isImperial ? `${(o.areaM2 * 10.7639).toFixed(1)} sq ft` : `${o.areaM2.toFixed(2)} m²`}
+                        </td>
+                        <td className="py-2 px-2.5 font-mono text-base-500">
+                          {isImperial ? `+${(o.elevationM * 3.28084).toFixed(2)} ft` : `+${o.elevationM.toFixed(2)} m`}
+                        </td>
                       </tr>
                     ))}
                     {filteredOpenings.length === 0 && (
@@ -588,8 +655,7 @@ export function BuildingScheduleDialog() {
                     <tr>
                       <th className="py-2 px-2.5">Room Number</th>
                       <th className="py-2 px-2.5">Space Name</th>
-                      <th className="py-2 px-2.5">Floor Area (m²)</th>
-                      <th className="py-2 px-2.5">Floor Area (sq ft)</th>
+                      <th className="py-2 px-2.5">Floor Area ({isImperial ? "sq ft" : "m²"})</th>
                       <th className="py-2 px-2.5">% of Total Program</th>
                     </tr>
                   </thead>
@@ -602,10 +668,9 @@ export function BuildingScheduleDialog() {
                           <td className="py-2.5 px-2.5 font-mono text-base-500">{r.number}</td>
                           <td className="py-2.5 px-2.5 font-medium text-base-900">{r.name}</td>
                           <td className="py-2.5 px-2.5 font-mono font-semibold text-accent-600">
-                            {r.areaM2.toFixed(2)} m²
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-base-500">
-                            {(r.areaM2 * 10.7639).toFixed(1)} sq ft
+                            {isImperial
+                              ? `${(r.areaM2 * 10.7639).toFixed(1)} sq ft`
+                              : `${r.areaM2.toFixed(2)} m²`}
                           </td>
                           <td className="py-2.5 px-2.5 font-mono text-base-500">{pct}%</td>
                         </tr>
@@ -613,8 +678,8 @@ export function BuildingScheduleDialog() {
                     })}
                     {filteredRooms.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-base-400">
-                          No rooms defined yet. Use the Room tool (R) to tag spaces.
+                        <td colSpan={4} className="py-8 text-center text-base-400">
+                          No rooms defined yet. Use the Room tool to tag spaces.
                         </td>
                       </tr>
                     )}

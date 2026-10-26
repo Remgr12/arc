@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { DimensionCalculator, type SelectedEdgeInfo } from "./DimensionCalculator";
 import {
   Box,
   Circle,
@@ -135,17 +136,21 @@ interface ViewportRefs {
   lastArchViewMode?: "3d" | "floorplan" | "section" | "elevation";
   lastArchDatumsKey?: string;
   lastActiveLevelId?: string | null;
+  onEdgeDimChange?: (info: SelectedEdgeInfo | null) => void;
+  lastEdgeDimKey?: string;
 }
 
 /** The main editor viewport. Handles navigation, picking and tools. */
 export function Viewport() {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const [edgeDimInfo, setEdgeDimInfo] = useState<SelectedEdgeInfo | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const ref = createViewport(host);
     ref.disposed = false;
+    ref.onEdgeDimChange = setEdgeDimInfo;
     const unsubscribe = useArcStore.subscribe(() => syncSceneToThree(ref));
     const unsubscribeTheme = useThemeStore.subscribe((state) =>
       applyTheme(ref, viewportPalette(state.active())),
@@ -166,6 +171,7 @@ export function Viewport() {
   return (
     <div className="relative h-full w-full">
       <div ref={hostRef} className="h-full w-full" />
+      <DimensionCalculator info={edgeDimInfo} />
     </div>
   );
 }
@@ -607,6 +613,117 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   return ref;
 }
 
+function computeSelectedEdgeDim(ref: ViewportRefs): SelectedEdgeInfo | null {
+  const state = useArcStore.getState();
+  const scene = state.scene;
+  if (!scene || !ref.camera || !ref.host) return null;
+
+  const rect = ref.host.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+
+  // 1. Edge Selection (selKind === "edge")
+  if (state.selKind === "edge" && state.selEdge) {
+    const entity = scene.entities.find((e) => e.id === state.selEdge!.entityId);
+    const obj = ref.objects.get(state.selEdge.entityId);
+    if (!entity || !obj || !entity.lines) return null;
+
+    const parts = state.selEdge.key.split(":");
+    const seg = Number(parts[parts.length - 1]);
+    if (!Number.isInteger(seg) || entity.lines.length < (seg + 1) * 6) return null;
+
+    obj.updateMatrixWorld();
+    const o = seg * 6;
+    const l0 = new THREE.Vector3(entity.lines[o], entity.lines[o + 1], entity.lines[o + 2]).applyMatrix4(obj.matrixWorld);
+    const l1 = new THREE.Vector3(entity.lines[o + 3], entity.lines[o + 4], entity.lines[o + 5]).applyMatrix4(obj.matrixWorld);
+    const lengthCm = l0.distanceTo(l1);
+    if (lengthCm < 0.1) return null;
+
+    const mid = l0.clone().add(l1).multiplyScalar(0.5);
+    const ndc = mid.clone().project(ref.camera);
+    if (ndc.z >= 1 || ndc.x < -1.1 || ndc.x > 1.1 || ndc.y < -1.1 || ndc.y > 1.1) return null;
+
+    const screenX = (ndc.x * 0.5 + 0.5) * rect.width;
+    const screenY = (-ndc.y * 0.5 + 0.5) * rect.height;
+
+    return {
+      entityId: entity.id,
+      segIndex: seg,
+      lengthCm,
+      p0: [l0.x, l0.y, l0.z],
+      p1: [l1.x, l1.y, l1.z],
+      screenX,
+      screenY,
+      entityKind: entity.kind,
+    };
+  }
+
+  // 2. Single Entity Selection (line or wall)
+  if (state.selKind === "entity" && scene.selection.length === 1) {
+    const entity = scene.entities.find((e) => e.id === scene.selection[0]);
+    const obj = ref.objects.get(scene.selection[0]);
+    if (!entity || !obj) return null;
+
+    obj.updateMatrixWorld();
+    const g = entity.geometry as Record<string, unknown>;
+
+    if (entity.kind === "line" || entity.kind === "line_curve") {
+      const end = (g.end as [number, number, number]) || [1, 0, 0];
+      const l0 = new THREE.Vector3(0, 0, 0).applyMatrix4(obj.matrixWorld);
+      const l1 = new THREE.Vector3(end[0], end[1], end[2]).applyMatrix4(obj.matrixWorld);
+      const lengthCm = l0.distanceTo(l1);
+      if (lengthCm < 0.1) return null;
+
+      const mid = l0.clone().add(l1).multiplyScalar(0.5);
+      const ndc = mid.clone().project(ref.camera);
+      if (ndc.z >= 1) return null;
+
+      const screenX = (ndc.x * 0.5 + 0.5) * rect.width;
+      const screenY = (-ndc.y * 0.5 + 0.5) * rect.height;
+
+      return {
+        entityId: entity.id,
+        lengthCm,
+        p0: [l0.x, l0.y, l0.z],
+        p1: [l1.x, l1.y, l1.z],
+        screenX,
+        screenY,
+        entityKind: entity.kind,
+      };
+    }
+
+    if (entity.kind === "wall") {
+      const path = (g.path as [number, number][]) || [];
+      if (path.length >= 2) {
+        const pA = path[0];
+        const pB = path[1];
+        const l0 = new THREE.Vector3(pA[0], 0, pA[1]).applyMatrix4(obj.matrixWorld);
+        const l1 = new THREE.Vector3(pB[0], 0, pB[1]).applyMatrix4(obj.matrixWorld);
+        const lengthCm = l0.distanceTo(l1);
+        if (lengthCm < 0.1) return null;
+
+        const mid = l0.clone().add(l1).multiplyScalar(0.5);
+        const ndc = mid.clone().project(ref.camera);
+        if (ndc.z >= 1) return null;
+
+        const screenX = (ndc.x * 0.5 + 0.5) * rect.width;
+        const screenY = (-ndc.y * 0.5 + 0.5) * rect.height;
+
+        return {
+          entityId: entity.id,
+          lengthCm,
+          p0: [l0.x, l0.y, l0.z],
+          p1: [l1.x, l1.y, l1.z],
+          screenX,
+          screenY,
+          entityKind: entity.kind,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function startLoop(ref: ViewportRefs): () => void {
   const ro = new ResizeObserver(() => {
     const w = ref.host.clientWidth;
@@ -731,6 +848,17 @@ function startLoop(ref: ViewportRefs): () => void {
       const w = ref.host.clientWidth;
       const h = ref.host.clientHeight;
       if (w > 0 && h > 0) ref.gizmo.render(ref.renderer, ref.camera, w, h);
+    }
+
+    if (ref.onEdgeDimChange) {
+      const dimInfo = computeSelectedEdgeDim(ref);
+      const dimKey = dimInfo
+        ? `${dimInfo.entityId}:${dimInfo.segIndex ?? ""}:${dimInfo.lengthCm.toFixed(1)}:${Math.round(dimInfo.screenX)}:${Math.round(dimInfo.screenY)}`
+        : "";
+      if (dimKey !== ref.lastEdgeDimKey) {
+        ref.lastEdgeDimKey = dimKey;
+        ref.onEdgeDimChange(dimInfo);
+      }
     }
 
     if (pendingCapture) {

@@ -4,6 +4,12 @@ import { previewLine } from "./sketch";
 import { previewMaterial } from "./primitives";
 import { useArcStore } from "../lib/store";
 import type { EntityData, SceneData } from "../lib/types";
+import { ipc } from "../lib/ipc";
+import {
+  findEnclosedRoomAt,
+  findBuildingFootprint,
+  type PlanarFace,
+} from "./bimSketch";
 
 // ---------------------------------------------------------------------------
 // Architecture / BIM tools
@@ -39,6 +45,31 @@ export function getActiveStorey(): {
   };
 }
 
+export function formatLengthUnit(cmVal: number): string {
+  const isImperial = useArcStore.getState().settings?.units === "in" || useArcStore.getState().settings?.units === "ft";
+  if (isImperial) {
+    const inches = cmVal / 2.54;
+    if (inches >= 24) {
+      const feet = Math.floor(inches / 12);
+      const remInches = Math.round(inches % 12);
+      return remInches > 0 ? `${feet}' ${remInches}"` : `${feet}'`;
+    }
+    return `${inches.toFixed(1)}"`;
+  }
+  if (cmVal >= 100) {
+    return `${(cmVal / 100).toFixed(2)}m`;
+  }
+  return `${cmVal.toFixed(0)}cm`;
+}
+
+export function formatAreaUnit(m2Val: number): string {
+  const isImperial = useArcStore.getState().settings?.units === "in" || useArcStore.getState().settings?.units === "ft";
+  if (isImperial) {
+    return `${(m2Val * 10.7639).toFixed(1)} sq ft`;
+  }
+  return `${m2Val.toFixed(2)} m²`;
+}
+
 /** Result of snapping an opening (door/window) to a host wall segment. */
 export interface WallSnapResult {
   wallEntity: EntityData;
@@ -66,7 +97,7 @@ export function findNearestWallSegment(
   let bestDist = Infinity;
 
   for (const entity of scene.entities) {
-    if (entity.kind !== "wall" || !entity.visible) continue;
+    if (entity.kind !== "wall" || entity.visible === false) continue;
     const g = entity.geometry as Record<string, unknown> | undefined;
     if (!g || !Array.isArray(g.path) || g.path.length < 2) continue;
 
@@ -138,76 +169,89 @@ export const WALL_PRESETS: WallPreset[] = [
   { id: "g15", label: "150mm Curtain Wall", width: 15, desc: "Glazed Facade" },
 ];
 
-let activeWallPresetIndex = 1; // Default: 200mm Standard
+export type WallLocationLine = "centerline" | "exterior" | "interior";
 
-interface WallDraft {
-  points: THREE.Vector3[];
+export const WALL_LOCATION_LINES: { id: WallLocationLine; label: string }[] = [
+  { id: "centerline", label: "Centerline" },
+  { id: "exterior", label: "Exterior Face" },
+  { id: "interior", label: "Interior Face" },
+];
+
+export let activeWallPresetIndex = 1; // Default: 200mm Standard
+export let activeWallLocationLine: WallLocationLine = "centerline";
+
+export function setWallPresetIndex(index: number): void {
+  if (index >= 0 && index < WALL_PRESETS.length) {
+    activeWallPresetIndex = index;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
 }
 
-let wallDraft: WallDraft = {
-  points: [],
-};
+export function setWallLocationLine(line: WallLocationLine): void {
+  activeWallLocationLine = line;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+}
+
+export function cycleWallLocationLine(): WallLocationLine {
+  if (activeWallLocationLine === "centerline") activeWallLocationLine = "exterior";
+  else if (activeWallLocationLine === "exterior") activeWallLocationLine = "interior";
+  else activeWallLocationLine = "centerline";
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  return activeWallLocationLine;
+}
+
+let wallStartPoint: THREE.Vector3 | null = null;
+let wallFirstPoint: THREE.Vector3 | null = null;
 
 function resetWall(ctx: ToolContext): void {
-  wallDraft.points = [];
+  wallStartPoint = null;
+  wallFirstPoint = null;
   ctx.clearPreview("draft");
   ctx.showMeasure(null);
 }
 
-function buildWallPreviewMesh(
-  points: THREE.Vector3[],
+function buildWallSegmentPreview(
+  p0: THREE.Vector3,
+  p1: THREE.Vector3,
   width: number,
   height: number,
   elevation: number,
+  locationLine: WallLocationLine,
   ctx: ToolContext,
 ): THREE.Object3D {
   const group = new THREE.Group();
-  group.add(previewLine(points, ctx));
+  const dx = p1.x - p0.x;
+  const dz = p1.z - p0.z;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-3) return group;
+
+  const nx = -dz / len;
+  const nz = dx / len;
+  let offset = 0;
+  if (locationLine === "exterior") offset = width / 2;
+  else if (locationLine === "interior") offset = -width / 2;
+
+  const midX = (p0.x + p1.x) / 2 + nx * offset;
+  const midZ = (p0.z + p1.z) / 2 + nz * offset;
+
+  const geo = new THREE.BoxGeometry(len, height, width);
   const mat = previewMaterial(ctx);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(midX, elevation + height / 2, midZ);
+  mesh.rotation.y = -Math.atan2(dz, dx);
+  mesh.renderOrder = 997;
+  group.add(mesh);
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 1e-3) continue;
+  // Centerline / cursor snap guideline
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0x38bdf8,
+    linewidth: 1.5,
+    depthTest: false,
+  });
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([p0, p1]);
+  group.add(new THREE.Line(lineGeo, lineMat));
 
-    const geo = new THREE.BoxGeometry(len, height, width);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set((a.x + b.x) / 2, elevation + height / 2, (a.z + b.z) / 2);
-    mesh.rotation.y = -Math.atan2(dz, dx);
-    mesh.renderOrder = 997;
-    group.add(mesh);
-  }
   return group;
-}
-
-function commitWall(ctx: ToolContext): boolean {
-  if (wallDraft.points.length < 2) return false;
-  const storey = getActiveStorey();
-  const preset = WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1];
-  const path = wallDraft.points.map(flatXZ);
-
-  let totalLen = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    totalLen += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
-  }
-
-  const name = `Wall ${preset.label} (${(totalLen / 100).toFixed(1)}m)`;
-  void ctx.createEntity(
-    {
-      type: "wall",
-      path,
-      width: preset.width,
-      height: storey.height,
-    },
-    [0, storey.elevation, 0],
-    name,
-  );
-  ctx.setStatus(`Created ${name} on ${storey.name}`);
-  resetWall(ctx);
-  return true;
 }
 
 export const wallTool: ToolHandler = {
@@ -218,142 +262,199 @@ export const wallTool: ToolHandler = {
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate: resetWall,
-  hasActivity: () => wallDraft.points.length > 0,
+  hasActivity: () => wallStartPoint !== null,
   onPointerDown(event, ctx) {
     const storey = getActiveStorey();
     const raw = ctx.planePoint(event, storey.elevation);
     if (!raw) return true;
 
     const snapped = ctx.snap(raw, {
-      extraPoints: wallDraft.points,
-      anchor: wallDraft.points[wallDraft.points.length - 1],
+      anchor: wallStartPoint ?? undefined,
     }).point;
 
-    // Clicking initial point closes the wall perimeter
-    if (
-      wallDraft.points.length >= 2 &&
-      snapped.distanceTo(wallDraft.points[0]) < ctx.settings.gridSize * 0.7
-    ) {
-      wallDraft.points.push(wallDraft.points[0].clone());
-      commitWall(ctx);
+    // First click: sets initial point of the wall chain
+    if (!wallStartPoint) {
+      wallStartPoint = snapped.clone();
+      wallFirstPoint = snapped.clone();
+      ctx.capturePointer(event);
+      const preset = WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1];
+      ctx.setStatus(
+        `Wall (${preset.label}) - Click next corner to place wall - Space: flip alignment (${activeWallLocationLine}) - Esc: finish chain`,
+      );
       return true;
     }
 
-    wallDraft.points.push(snapped);
-    ctx.capturePointer(event);
+    // Subsequent click: commit wall segment immediately
+    const dx = snapped.x - wallStartPoint.x;
+    const dz = snapped.z - wallStartPoint.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 10) return true; // ignore tiny jitter / accidental click
+
+    const closingLoop =
+      wallFirstPoint !== null &&
+      snapped.distanceTo(wallFirstPoint) < Math.max(25, ctx.settings.gridSize * 0.7);
+
+    const target = closingLoop ? wallFirstPoint!.clone() : snapped.clone();
+
+    // Compute location line offset
+    const segDx = target.x - wallStartPoint.x;
+    const segDz = target.z - wallStartPoint.z;
+    const segLen = Math.hypot(segDx, segDz);
+    const nx = -segDz / segLen;
+    const nz = segDx / segLen;
     const preset = WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1];
-    ctx.setStatus(
-      `Wall (${preset.label}) · Point ${wallDraft.points.length} placed · Enter or double-click to commit · [1-5]: switch wall type`,
+
+    let offset = 0;
+    if (activeWallLocationLine === "exterior") offset = preset.width / 2;
+    else if (activeWallLocationLine === "interior") offset = -preset.width / 2;
+
+    const p0 = new THREE.Vector3(wallStartPoint.x + nx * offset, storey.elevation, wallStartPoint.z + nz * offset);
+    const p1 = new THREE.Vector3(target.x + nx * offset, storey.elevation, target.z + nz * offset);
+
+    const name = `Wall ${preset.label} (${formatLengthUnit(segLen)})`;
+    void ctx.createEntity(
+      {
+        type: "wall",
+        path: [flatXZ(p0), flatXZ(p1)],
+        width: preset.width,
+        height: storey.height,
+      },
+      [0, storey.elevation, 0],
+      name,
     );
+
+    if (closingLoop) {
+      ctx.setStatus(`Closed wall perimeter created! You can now place Rooms, Slabs, or Openings with 1-click.`);
+      wallStartPoint = null;
+      wallFirstPoint = null;
+      ctx.clearPreview("draft");
+      ctx.showMeasure(null);
+    } else {
+      wallStartPoint = target.clone();
+      ctx.setStatus(
+        `Wall placed (${formatLengthUnit(segLen)}) - Click next corner to continue - Space: flip alignment - Esc: finish`,
+      );
+    }
     return true;
   },
   onPointerMove(event, ctx) {
     const storey = getActiveStorey();
     const raw = ctx.planePoint(event, storey.elevation);
-    if (!raw || wallDraft.points.length === 0) return;
+    if (!raw || !wallStartPoint) return;
 
-    const last = wallDraft.points[wallDraft.points.length - 1];
     let cursor = ctx.snap(raw, {
-      extraPoints: wallDraft.points,
-      anchor: last,
+      anchor: wallStartPoint,
     }).point;
 
-    // Orthogonal snap assistance (lock to nearest 0°, 45°, 90°, 135°, 180°)
-    const dx = cursor.x - last.x;
-    const dz = cursor.z - last.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > 15) {
-      const angle = Math.atan2(dz, dx);
-      const snapStep = Math.PI / 4; // 45 degrees
-      const nearestAngle = Math.round(angle / snapStep) * snapStep;
-      if (Math.abs(angle - nearestAngle) < 0.12) {
-        cursor = new THREE.Vector3(
-          last.x + Math.cos(nearestAngle) * dist,
-          storey.elevation,
-          last.z + Math.sin(nearestAngle) * dist,
-        );
+    // Check loop closure snap to initial point
+    if (
+      wallFirstPoint &&
+      cursor.distanceTo(wallFirstPoint) < Math.max(25, ctx.settings.gridSize * 0.7)
+    ) {
+      cursor = wallFirstPoint.clone();
+    } else {
+      // Orthogonal snap assistance (lock to nearest 0°, 45°, 90°, 135°, 180°)
+      const dx = cursor.x - wallStartPoint.x;
+      const dz = cursor.z - wallStartPoint.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 15) {
+        const angle = Math.atan2(dz, dx);
+        const snapStep = Math.PI / 4; // 45 degrees
+        const nearestAngle = Math.round(angle / snapStep) * snapStep;
+        if (Math.abs(angle - nearestAngle) < 0.12) {
+          cursor = new THREE.Vector3(
+            wallStartPoint.x + Math.cos(nearestAngle) * dist,
+            storey.elevation,
+            wallStartPoint.z + Math.sin(nearestAngle) * dist,
+          );
+        }
       }
     }
 
     const preset = WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1];
-    const pts = [...wallDraft.points, cursor];
     ctx.setPreview(
-      buildWallPreviewMesh(pts, preset.width, storey.height, storey.elevation, ctx),
+      buildWallSegmentPreview(
+        wallStartPoint,
+        cursor,
+        preset.width,
+        storey.height,
+        storey.elevation,
+        activeWallLocationLine,
+        ctx,
+      ),
       "draft",
     );
 
-    const segLen = last.distanceTo(cursor);
+    const segLen = wallStartPoint.distanceTo(cursor);
     ctx.showMeasure(
-      `L: ${(segLen / 100).toFixed(2)}m (${segLen.toFixed(0)} cm) | ${preset.label} | H: ${storey.height} cm`,
+      `L: ${formatLengthUnit(segLen)} | ${preset.label} | ${activeWallLocationLine} | H: ${formatLengthUnit(storey.height)}`,
       ctx.screenPoint(event),
     );
   },
   onPointerUp(event, ctx) {
-    if (wallDraft.points.length === 0) return;
+    if (!wallStartPoint) return;
     ctx.releasePointer(event);
   },
-  onEnter(ctx) {
-    return commitWall(ctx);
-  },
   onDoubleClick(_event, ctx) {
-    return commitWall(ctx);
+    if (wallStartPoint !== null) {
+      wallStartPoint = null;
+      wallFirstPoint = null;
+      ctx.clearPreview("draft");
+      ctx.showMeasure(null);
+      ctx.setStatus("Wall chain finished. Placed walls kept.");
+      return true;
+    }
+    return false;
+  },
+  onEnter(_ctx) {
+    if (wallStartPoint !== null) {
+      wallStartPoint = null;
+      wallFirstPoint = null;
+      _ctx.clearPreview("draft");
+      _ctx.showMeasure(null);
+      _ctx.setStatus("Wall chain finished. Placed walls kept.");
+      return true;
+    }
+    return false;
   },
   onCancel(ctx) {
-    if (wallDraft.points.length > 0) {
-      wallDraft.points.pop();
-      if (wallDraft.points.length === 0) {
-        ctx.clearPreview("draft");
-        ctx.showMeasure(null);
-      } else {
-        const storey = getActiveStorey();
-        const preset = WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1];
-        ctx.setPreview(
-          buildWallPreviewMesh(
-            wallDraft.points,
-            preset.width,
-            storey.height,
-            storey.elevation,
-            ctx,
-          ),
-          "draft",
-        );
-      }
+    if (wallStartPoint !== null) {
+      wallStartPoint = null;
+      wallFirstPoint = null;
+      ctx.clearPreview("draft");
+      ctx.showMeasure(null);
+      ctx.setStatus("Wall chain finished. Placed walls kept.");
+      return true;
     }
+    useArcStore.getState().setTool("select");
+    return true;
   },
   onBackspace(ctx) {
     this.onCancel!(ctx);
   },
   onKey(event, ctx) {
+    if (event.key === " " || event.code === "Space") {
+      cycleWallLocationLine();
+      ctx.setStatus(`Wall Location Line: ${activeWallLocationLine} (Space to toggle)`);
+      return true;
+    }
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= WALL_PRESETS.length) {
-      activeWallPresetIndex = num - 1;
+      setWallPresetIndex(num - 1);
       const preset = WALL_PRESETS[activeWallPresetIndex];
-      const storey = getActiveStorey();
-      ctx.setStatus(`Wall Type: ${preset.label} (${preset.width}cm) · ${preset.desc}`);
-      if (wallDraft.points.length > 0) {
-        ctx.setPreview(
-          buildWallPreviewMesh(
-            wallDraft.points,
-            preset.width,
-            storey.height,
-            storey.elevation,
-            ctx,
-          ),
-          "draft",
-        );
-      }
+      ctx.setStatus(`Wall Type: ${preset.label} (${preset.width}cm) - ${preset.desc}`);
       return true;
     }
     if (event.key === "Tab" || event.key.toLowerCase() === "t") {
-      activeWallPresetIndex = (activeWallPresetIndex + 1) % WALL_PRESETS.length;
+      setWallPresetIndex((activeWallPresetIndex + 1) % WALL_PRESETS.length);
       const preset = WALL_PRESETS[activeWallPresetIndex];
-      ctx.setStatus(`Wall Type: ${preset.label} (${preset.width}cm) · ${preset.desc}`);
+      ctx.setStatus(`Wall Type: ${preset.label} (${preset.width}cm) - ${preset.desc}`);
       return true;
     }
     return false;
   },
   hint: () =>
-    `Wall · Click points along centerline · Enter commits · [1-5]: switch wall type (${WALL_PRESETS[activeWallPresetIndex]?.label})`,
+    `Wall - Click points to place continuous walls - Space: flip alignment (${activeWallLocationLine}) - Esc: finish chain - [1-5]: preset`,
 };
 
 // ===========================================================================
@@ -377,7 +478,7 @@ export const DOOR_PRESETS: DoorPreset[] = [
   { id: "d200", label: "2000×2150 Sliding Patio", width: 200, height: 215 },
 ];
 
-let activeDoorPresetIndex = 0;
+export let activeDoorPresetIndex = 0;
 
 interface DoorDraft {
   swingDeg: number;
@@ -385,11 +486,30 @@ interface DoorDraft {
   flipFacing: boolean;
 }
 
-let doorDraft: DoorDraft = {
+export let doorDraft: DoorDraft = {
   swingDeg: 90,
   flipHand: false,
   flipFacing: false,
 };
+
+export function setDoorPresetIndex(index: number): void {
+  if (index >= 0 && index < DOOR_PRESETS.length) {
+    activeDoorPresetIndex = index;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
+}
+
+export function toggleDoorHand(): boolean {
+  doorDraft.flipHand = !doorDraft.flipHand;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  return doorDraft.flipHand;
+}
+
+export function toggleDoorFacing(): boolean {
+  doorDraft.flipFacing = !doorDraft.flipFacing;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  return doorDraft.flipFacing;
+}
 
 let currentDoorSnap: WallSnapResult | null = null;
 let currentDoorPos: THREE.Vector3 | null = null;
@@ -434,11 +554,15 @@ function buildDoorPreview(
   const arcGeo = new THREE.BufferGeometry().setFromPoints(arcPts);
   group.add(new THREE.Line(arcGeo, lineMat));
 
-  // If hosted on a wall, draw host guideline
+  // If hosted on a wall, draw temporary dimension clearance guides to corners
   if (snapResult) {
+    const halfW = preset.width / 2;
+    const clA = Math.max(0, snapResult.offset - halfW);
+    const clB = Math.max(0, snapResult.segLen - snapResult.offset - halfW);
+
     const guidePts = [
-      new THREE.Vector3(-preset.width * 1.5, 0.05, 0),
-      new THREE.Vector3(preset.width * 1.5, 0.05, 0),
+      new THREE.Vector3(-halfW - clA, 0.05, 0),
+      new THREE.Vector3(halfW + clB, 0.05, 0),
     ];
     const guideGeo = new THREE.BufferGeometry().setFromPoints(guidePts);
     const guideMat = new THREE.LineDashedMaterial({
@@ -450,6 +574,19 @@ function buildDoorPreview(
     const guideLine = new THREE.Line(guideGeo, guideMat);
     guideLine.computeLineDistances();
     group.add(guideLine);
+
+    // Dimension tick marks at wall corners
+    const tickMat = new THREE.LineBasicMaterial({ color: 0x22c55e, depthTest: false });
+    const tickGeoA = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-halfW - clA, 0.05, -depth / 2 - 5),
+      new THREE.Vector3(-halfW - clA, 0.05, depth / 2 + 5),
+    ]);
+    group.add(new THREE.Line(tickGeoA, tickMat));
+    const tickGeoB = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(halfW + clB, 0.05, -depth / 2 - 5),
+      new THREE.Vector3(halfW + clB, 0.05, depth / 2 + 5),
+    ]);
+    group.add(new THREE.Line(tickGeoB, tickMat));
   }
 
   return group;
@@ -495,8 +632,12 @@ export const doorTool: ToolHandler = {
         buildDoorPreview(pos, rotY, preset, depth, doorDraft, hostSnap, ctx),
         "draft",
       );
+
+      const halfW = preset.width / 2;
+      const clA = Math.max(0, hostSnap.offset - halfW);
+      const clB = Math.max(0, hostSnap.segLen - hostSnap.offset - halfW);
       ctx.showMeasure(
-        `Door ${preset.label} • Hosted on ${hostSnap.wallEntity.name || "Wall"} (${(hostSnap.offset / 100).toFixed(2)}m from corner) • Space: flip hand, F: flip facing, [1-5]: preset`,
+        `← ${formatLengthUnit(clA)} | Door ${preset.label} | ${formatLengthUnit(clB)} → (Space: flip hand, F: flip facing, [1-5]: preset)`,
         ctx.screenPoint(event),
       );
     } else {
@@ -512,7 +653,7 @@ export const doorTool: ToolHandler = {
         "draft",
       );
       ctx.showMeasure(
-        `Door ${preset.label} (Hover near wall to host) • Space: flip hand, F: flip facing, [1-5]: preset`,
+        `Door ${preset.label} (Hover near wall to host) - Space: flip hand, F: flip facing, [1-5]: preset`,
         ctx.screenPoint(event),
       );
     }
@@ -550,20 +691,20 @@ export const doorTool: ToolHandler = {
   },
   onKey(event, ctx) {
     if (event.key === " " || event.code === "Space") {
-      doorDraft.flipHand = !doorDraft.flipHand;
-      ctx.setStatus(`Door · Flip hand: ${doorDraft.flipHand ? "Right" : "Left"}`);
+      toggleDoorHand();
+      ctx.setStatus(`Door - Flip hand: ${doorDraft.flipHand ? "Right" : "Left"}`);
       return true;
     }
     if (event.key.toLowerCase() === "f") {
-      doorDraft.flipFacing = !doorDraft.flipFacing;
+      toggleDoorFacing();
       ctx.setStatus(
-        `Door · Flip facing: ${doorDraft.flipFacing ? "Exterior" : "Interior"}`,
+        `Door - Flip facing: ${doorDraft.flipFacing ? "Exterior" : "Interior"}`,
       );
       return true;
     }
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= DOOR_PRESETS.length) {
-      activeDoorPresetIndex = num - 1;
+      setDoorPresetIndex(num - 1);
       const preset = DOOR_PRESETS[activeDoorPresetIndex];
       ctx.setStatus(`Door Type: ${preset.label}`);
       return true;
@@ -571,7 +712,7 @@ export const doorTool: ToolHandler = {
     return false;
   },
   hint: () =>
-    `Door · Click to place (snaps to wall centerline) · Space: flip hand, F: flip facing, [1-5]: switch size (${DOOR_PRESETS[activeDoorPresetIndex]?.label})`,
+    `Door - Click to place (snaps to wall centerline) - Space: flip hand, F: flip facing, [1-5]: switch size (${DOOR_PRESETS[activeDoorPresetIndex]?.label})`,
 };
 
 // ===========================================================================
@@ -598,8 +739,24 @@ export const WINDOW_PRESETS: WindowPreset[] = [
   { id: "w60", label: "600×900 Bathroom Frosted", width: 60, height: 90, sillHeight: 120, panesX: 1, panesY: 1 },
 ];
 
-let activeWindowPresetIndex = 0;
-let windowSillOverride: number | null = null;
+export let activeWindowPresetIndex = 0;
+export let windowSillOverride: number | null = null;
+
+export function setWindowPresetIndex(index: number): void {
+  if (index >= 0 && index < WINDOW_PRESETS.length) {
+    activeWindowPresetIndex = index;
+    windowSillOverride = null;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
+}
+
+export function adjustWindowSill(delta: number): number {
+  const preset = WINDOW_PRESETS[activeWindowPresetIndex] ?? WINDOW_PRESETS[0];
+  const cur = windowSillOverride ?? preset.sillHeight;
+  windowSillOverride = Math.max(0, Math.min(260, cur + delta));
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  return windowSillOverride;
+}
 
 let currentWindowSnap: WallSnapResult | null = null;
 let currentWindowPos: THREE.Vector3 | null = null;
@@ -642,11 +799,15 @@ function buildWindowPreview(
   const glassMesh = new THREE.Mesh(glassGeo, glassMat);
   group.add(glassMesh);
 
-  // Host snap line
+  // Host snap line & temporary dimension guides
   if (snapResult) {
+    const halfW = preset.width / 2;
+    const clA = Math.max(0, snapResult.offset - halfW);
+    const clB = Math.max(0, snapResult.segLen - snapResult.offset - halfW);
+
     const guidePts = [
-      new THREE.Vector3(-preset.width * 1.5, -preset.height / 2 - sillHeight, 0),
-      new THREE.Vector3(preset.width * 1.5, -preset.height / 2 - sillHeight, 0),
+      new THREE.Vector3(-halfW - clA, -preset.height / 2 - sillHeight, 0),
+      new THREE.Vector3(halfW + clB, -preset.height / 2 - sillHeight, 0),
     ];
     const guideGeo = new THREE.BufferGeometry().setFromPoints(guidePts);
     const guideMat = new THREE.LineDashedMaterial({
@@ -658,6 +819,19 @@ function buildWindowPreview(
     const guideLine = new THREE.Line(guideGeo, guideMat);
     guideLine.computeLineDistances();
     group.add(guideLine);
+
+    // Dimension tick marks at wall corners
+    const tickMat = new THREE.LineBasicMaterial({ color: 0x22c55e, depthTest: false });
+    const tickGeoA = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-halfW - clA, -preset.height / 2 - sillHeight, -depth / 2 - 5),
+      new THREE.Vector3(-halfW - clA, -preset.height / 2 - sillHeight, depth / 2 + 5),
+    ]);
+    group.add(new THREE.Line(tickGeoA, tickMat));
+    const tickGeoB = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(halfW + clB, -preset.height / 2 - sillHeight, -depth / 2 - 5),
+      new THREE.Vector3(halfW + clB, -preset.height / 2 - sillHeight, depth / 2 + 5),
+    ]);
+    group.add(new THREE.Line(tickGeoB, tickMat));
   }
 
   return group;
@@ -704,8 +878,12 @@ export const windowTool: ToolHandler = {
         buildWindowPreview(pos, rotY, preset, sill, depth, hostSnap, ctx),
         "draft",
       );
+
+      const halfW = preset.width / 2;
+      const clA = Math.max(0, hostSnap.offset - halfW);
+      const clB = Math.max(0, hostSnap.segLen - hostSnap.offset - halfW);
       ctx.showMeasure(
-        `Window ${preset.label} (Sill: ${sill}cm) • Hosted on ${hostSnap.wallEntity.name || "Wall"} (${(hostSnap.offset / 100).toFixed(2)}m from corner) • [1-5]: size, [ / ]: sill ±10cm`,
+        `← ${formatLengthUnit(clA)} | Window ${preset.label} (Sill: ${formatLengthUnit(sill)}) | ${formatLengthUnit(clB)} → ([1-5]: size, [ / ]: sill ±10cm)`,
         ctx.screenPoint(event),
       );
     } else {
@@ -721,7 +899,7 @@ export const windowTool: ToolHandler = {
         "draft",
       );
       ctx.showMeasure(
-        `Window ${preset.label} (Sill: ${sill}cm) • Hover near wall to host • [1-5]: size, [ / ]: sill ±10cm`,
+        `Window ${preset.label} (Sill: ${formatLengthUnit(sill)}) - Hover near wall to host - [1-5]: size, [ / ]: sill ±10cm`,
         ctx.screenPoint(event),
       );
     }
@@ -756,7 +934,7 @@ export const windowTool: ToolHandler = {
     );
 
     ctx.setStatus(
-      `Window placed (${preset.label}, Sill ${sill}cm)${currentWindowSnap ? ` hosted on ${currentWindowSnap.wallEntity.name || "Wall"}` : ""}`,
+      `Window placed (${preset.label}, Sill ${formatLengthUnit(sill)})${currentWindowSnap ? ` hosted on ${currentWindowSnap.wallEntity.name || "Wall"}` : ""}`,
     );
     return true;
   },
@@ -765,40 +943,41 @@ export const windowTool: ToolHandler = {
     const currentSill = windowSillOverride ?? preset.sillHeight;
 
     if (event.key === "[") {
-      windowSillOverride = Math.max(0, currentSill - 10);
-      ctx.setStatus(`Window Sill Height: ${windowSillOverride} cm`);
+      adjustWindowSill(-10);
+      ctx.setStatus(`Window Sill Height: ${formatLengthUnit(windowSillOverride ?? currentSill)}`);
       return true;
     }
     if (event.key === "]") {
-      windowSillOverride = Math.min(250, currentSill + 10);
-      ctx.setStatus(`Window Sill Height: ${windowSillOverride} cm`);
+      adjustWindowSill(10);
+      ctx.setStatus(`Window Sill Height: ${formatLengthUnit(windowSillOverride ?? currentSill)}`);
       return true;
     }
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= WINDOW_PRESETS.length) {
-      activeWindowPresetIndex = num - 1;
-      windowSillOverride = null;
+      setWindowPresetIndex(num - 1);
       const nextPreset = WINDOW_PRESETS[activeWindowPresetIndex];
-      ctx.setStatus(`Window Type: ${nextPreset.label} (Sill: ${nextPreset.sillHeight}cm)`);
+      ctx.setStatus(`Window Type: ${nextPreset.label} (Sill: ${formatLengthUnit(nextPreset.sillHeight)})`);
       return true;
     }
     return false;
   },
   hint: () =>
-    `Window · Click to place (snaps to wall) · [1-5]: switch size (${WINDOW_PRESETS[activeWindowPresetIndex]?.label}) · [ / ]: sill height ±10cm`,
+    `Window - Click to place (snaps to wall) - [1-5]: switch size (${WINDOW_PRESETS[activeWindowPresetIndex]?.label}) - [ / ]: sill height ±10cm`,
 };
 
 // ===========================================================================
 // 4. SLAB / FLOOR TOOL
 // Polygon footprint floor plate with thickness, live area takeoff HUD,
-// and storey level binding. Modeled after BIMCraft.
+// 1-click room auto-detection, and storey level binding. Modeled after BIMCraft.
 // ===========================================================================
 
 let slabPoints: THREE.Vector3[] = [];
+let hoveredSlabRoom: PlanarFace | null = null;
 export const SLAB_DEFAULT_THICKNESS = 20;
 
 function resetSlab(ctx: ToolContext): void {
   slabPoints = [];
+  hoveredSlabRoom = null;
   ctx.clearPreview("draft");
   ctx.showMeasure(null);
 }
@@ -810,7 +989,7 @@ function calculatePolygonAreaM2(points: THREE.Vector3[]): number {
     const j = (i + 1) % points.length;
     areaCm2 += points[i].x * points[j].z - points[j].x * points[i].z;
   }
-  return Math.abs(areaCm2) * 0.5 / 10000;
+  return (Math.abs(areaCm2) * 0.5) / 10000;
 }
 
 function commitSlab(ctx: ToolContext): boolean {
@@ -819,7 +998,7 @@ function commitSlab(ctx: ToolContext): boolean {
   const polygon = slabPoints.map(flatXZ);
   const areaM2 = calculatePolygonAreaM2(slabPoints);
 
-  const name = `Floor Slab (${areaM2.toFixed(1)} m²)`;
+  const name = `Floor Slab (${formatAreaUnit(areaM2)})`;
   void ctx.createEntity(
     {
       type: "slab",
@@ -829,8 +1008,79 @@ function commitSlab(ctx: ToolContext): boolean {
     [0, storey.elevation, 0],
     name,
   );
-  ctx.setStatus(`Floor slab created on ${storey.name} (${areaM2.toFixed(1)} m²)`);
+  ctx.setStatus(`Floor slab created on ${storey.name} (${formatAreaUnit(areaM2)})`);
   resetSlab(ctx);
+  return true;
+}
+
+function buildSlabPreview(
+  polygon: [number, number][],
+  elevation: number,
+  _ctx: ToolContext,
+): THREE.Object3D {
+  const group = new THREE.Group();
+  if (polygon.length < 3) return group;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(polygon[0][0], polygon[0][1]);
+  for (let i = 1; i < polygon.length; i++) {
+    shape.lineTo(polygon[i][0], polygon[i][1]);
+  }
+  shape.closePath();
+
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(Math.PI / 2);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.28,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = elevation + 0.1;
+  mesh.renderOrder = 997;
+  group.add(mesh);
+
+  const linePts = polygon.map((p) => new THREE.Vector3(p[0], elevation + 0.3, p[1]));
+  linePts.push(linePts[0].clone());
+  const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x0284c7, linewidth: 2, depthTest: false });
+  group.add(new THREE.Line(lineGeo, lineMat));
+
+  return group;
+}
+
+export async function autoCreateFloorSlab(): Promise<boolean> {
+  const st = useArcStore.getState();
+  const docId = st.overview?.active;
+  const scene = st.scene;
+  if (!docId || !scene) return false;
+  const storey = getActiveStorey();
+  const footprint = findBuildingFootprint(scene.entities ?? [], storey.elevation);
+  if (!footprint) {
+    st.setStatusMessage(`No enclosed building footprint found on ${storey.name}`);
+    return false;
+  }
+  const name = `Floor Slab (${formatAreaUnit(footprint.areaM2)})`;
+  await ipc.createEntity(
+    docId,
+    {
+      type: "slab",
+      polygon: footprint.polygon,
+      height: SLAB_DEFAULT_THICKNESS,
+    },
+    name,
+    {
+      position: [0, storey.elevation, 0],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    },
+  );
+  const updated = await ipc.getScene(docId);
+  st.setScene(updated);
+  st.setStatusMessage(`Floor slab created for building footprint (${formatAreaUnit(footprint.areaM2)})`);
   return true;
 }
 
@@ -848,6 +1098,26 @@ export const slabTool: ToolHandler = {
     const raw = ctx.planePoint(event, storey.elevation);
     if (!raw) return true;
 
+    // 1-Click placement inside detected room
+    if (slabPoints.length === 0 && hoveredSlabRoom) {
+      const areaM2 = hoveredSlabRoom.areaM2;
+      const name = `Floor Slab (${formatAreaUnit(areaM2)})`;
+      void ctx.createEntity(
+        {
+          type: "slab",
+          polygon: hoveredSlabRoom.polygon,
+          height: SLAB_DEFAULT_THICKNESS,
+        },
+        [0, storey.elevation, 0],
+        name,
+      );
+      ctx.setStatus(`Floor slab placed in room (${formatAreaUnit(areaM2)}) on ${storey.name}`);
+      hoveredSlabRoom = null;
+      ctx.clearPreview("draft");
+      ctx.showMeasure(null);
+      return true;
+    }
+
     const snapped = ctx.snap(raw, {
       extraPoints: slabPoints,
       anchor: slabPoints[slabPoints.length - 1],
@@ -862,29 +1132,48 @@ export const slabTool: ToolHandler = {
     slabPoints.push(snapped);
     ctx.capturePointer(event);
     ctx.setStatus(
-      `Floor Slab · Add vertex ${slabPoints.length + 1} · Enter or click first point commits (${slabPoints.length} vertices)`,
+      `Floor Slab - Add vertex ${slabPoints.length + 1} - Enter or click first point commits (${slabPoints.length} vertices)`,
     );
     return true;
   },
   onPointerMove(event, ctx) {
     const storey = getActiveStorey();
     const raw = ctx.planePoint(event, storey.elevation);
-    if (!raw || slabPoints.length === 0) return;
+    if (!raw) return;
 
-    const cursor = ctx.snap(raw, {
-      extraPoints: slabPoints,
-      anchor: slabPoints[slabPoints.length - 1],
-    }).point;
+    if (slabPoints.length === 0) {
+      // 1-Click Room auto-detect
+      const scene = useArcStore.getState().scene;
+      const face = scene?.entities ? findEnclosedRoomAt(flatXZ(raw), scene.entities, storey.elevation) : null;
+      if (face) {
+        hoveredSlabRoom = face;
+        ctx.setPreview(buildSlabPreview(face.polygon, storey.elevation, ctx), "draft");
+        ctx.showMeasure(
+          `Floor Slab - ${formatAreaUnit(face.areaM2)} (1-Click to Place in Room)`,
+          ctx.screenPoint(event),
+        );
+        return;
+      } else {
+        hoveredSlabRoom = null;
+        ctx.clearPreview("draft");
+        ctx.showMeasure(null);
+      }
+    } else {
+      // Manual vertex boundary mode
+      const cursor = ctx.snap(raw, {
+        extraPoints: slabPoints,
+        anchor: slabPoints[slabPoints.length - 1],
+      }).point;
 
-    const pts = [...slabPoints, cursor, slabPoints[0]];
-    ctx.setPreview(previewLine(pts, ctx), "draft");
+      const pts = [...slabPoints, cursor, slabPoints[0]];
+      ctx.setPreview(previewLine(pts, ctx), "draft");
 
-    const areaM2 = calculatePolygonAreaM2([...slabPoints, cursor]);
-    const areaSqFt = areaM2 * 10.7639;
-    ctx.showMeasure(
-      `Floor Slab • ${slabPoints.length + 1} pts • Area: ${areaM2.toFixed(2)} m² (${areaSqFt.toFixed(0)} sq ft) • Enter commits`,
-      ctx.screenPoint(event),
-    );
+      const areaM2 = calculatePolygonAreaM2([...slabPoints, cursor]);
+      ctx.showMeasure(
+        `Floor Slab - ${slabPoints.length + 1} pts - Area: ${formatAreaUnit(areaM2)} - Enter commits`,
+        ctx.screenPoint(event),
+      );
+    }
   },
   onPointerUp(event, ctx) {
     if (slabPoints.length === 0) return;
@@ -905,7 +1194,7 @@ export const slabTool: ToolHandler = {
       }
     }
   },
-  hint: () => "Floor Slab · Click boundary vertices · Enter or first vertex commits",
+  hint: () => "Floor Slab - Click inside enclosed walls for 1-click slab, or click boundary vertices",
 };
 
 // ===========================================================================
@@ -914,9 +1203,67 @@ export const slabTool: ToolHandler = {
 // ===========================================================================
 
 let roofAnchor: THREE.Vector3 | null = null;
-const ROOF_PITCH_PRESETS = [15, 22.5, 30, 45];
-let activeRoofPitchIndex = 2; // Default: 30 degrees
-const ROOF_DEFAULT_OVERHANG = 40;
+export const ROOF_PITCH_PRESETS = [15, 22.5, 30, 45];
+export let activeRoofPitchIndex = 2; // Default: 30 degrees
+export const ROOF_DEFAULT_OVERHANG = 40;
+
+export function setRoofPitchIndex(index: number): void {
+  if (index >= 0 && index < ROOF_PITCH_PRESETS.length) {
+    activeRoofPitchIndex = index;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
+}
+
+export async function autoCreateBuildingRoof(): Promise<boolean> {
+  const st = useArcStore.getState();
+  const docId = st.overview?.active;
+  const scene = st.scene;
+  if (!docId || !scene) return false;
+  const storey = getActiveStorey();
+  const footprint = findBuildingFootprint(scene.entities ?? [], storey.elevation);
+  if (!footprint) {
+    st.setStatusMessage(`No enclosed building footprint found on ${storey.name}`);
+    return false;
+  }
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const [x, z] of footprint.polygon) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const overhang = ROOF_DEFAULT_OVERHANG;
+  const w = maxX - minX + overhang * 2;
+  const d = maxZ - minZ + overhang * 2;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+  const pitch = ROOF_PITCH_PRESETS[activeRoofPitchIndex];
+  const roofElev = storey.elevation + storey.height;
+  const name = `Roof ${pitch}° (${formatLengthUnit(w)}×${formatLengthUnit(d)})`;
+  await ipc.createEntity(
+    docId,
+    {
+      type: "roof",
+      width: w,
+      depth: d,
+      pitch_deg: pitch,
+      overhang,
+    },
+    name,
+    {
+      position: [cx, roofElev, cz],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    },
+  );
+  const updated = await ipc.getScene(docId);
+  st.setScene(updated);
+  st.setStatusMessage(`Roof (${pitch}°) placed over building on ${storey.name}`);
+  return true;
+}
 
 export const roofTool: ToolHandler = {
   id: "roof",
@@ -942,7 +1289,7 @@ export const roofTool: ToolHandler = {
     if (!roofAnchor) {
       roofAnchor = p;
       ctx.capturePointer(event);
-      ctx.setStatus("Roof · Click opposite diagonal corner of roof footprint");
+      ctx.setStatus("Roof - Click opposite diagonal corner of roof footprint");
       return true;
     }
 
@@ -953,7 +1300,7 @@ export const roofTool: ToolHandler = {
       const cz = (roofAnchor.z + p.z) / 2;
       const pitch = ROOF_PITCH_PRESETS[activeRoofPitchIndex];
       const areaM2 = (w * d) / 10000;
-      const name = `Roof ${pitch}° (${(w / 100).toFixed(1)}×${(d / 100).toFixed(1)}m)`;
+      const name = `Roof ${pitch}° (${formatLengthUnit(w)}×${formatLengthUnit(d)})`;
 
       void ctx.createEntity(
         {
@@ -966,7 +1313,7 @@ export const roofTool: ToolHandler = {
         [cx, roofBaseElev, cz],
         name,
       );
-      ctx.setStatus(`Created ${name} (${areaM2.toFixed(1)} m²)`);
+      ctx.setStatus(`Created ${name} (${formatAreaUnit(areaM2)})`);
     }
 
     roofAnchor = null;
@@ -991,14 +1338,14 @@ export const roofTool: ToolHandler = {
 
     ctx.setPreview(mesh, "draft");
     ctx.showMeasure(
-      `Roof ${(w / 100).toFixed(1)}×${(d / 100).toFixed(1)}m • Area: ${(w * d / 10000).toFixed(1)} m² • Pitch: ${pitch}° • [1-4]: Pitch`,
+      `Roof ${formatLengthUnit(w)}×${formatLengthUnit(d)} - Area: ${formatAreaUnit((w * d) / 10000)} - Pitch: ${pitch}° - [1-4]: Pitch`,
       ctx.screenPoint(event),
     );
   },
   onKey(event, ctx) {
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= ROOF_PITCH_PRESETS.length) {
-      activeRoofPitchIndex = num - 1;
+      setRoofPitchIndex(num - 1);
       const pitch = ROOF_PITCH_PRESETS[activeRoofPitchIndex];
       ctx.setStatus(`Roof Pitch: ${pitch}°`);
       return true;
@@ -1011,7 +1358,7 @@ export const roofTool: ToolHandler = {
     ctx.showMeasure(null);
   },
   hint: () =>
-    `Roof · Click two diagonal corners to span footprint · [1-4]: pitch (${ROOF_PITCH_PRESETS[activeRoofPitchIndex]}°)`,
+    `Roof - Click two diagonal corners to span footprint, or click Fit Building Roof in ribbon - [1-4]: pitch (${ROOF_PITCH_PRESETS[activeRoofPitchIndex]}°)`,
 };
 
 // ===========================================================================
@@ -1034,7 +1381,14 @@ export const COLUMN_PRESETS: ColumnPreset[] = [
   { id: "rd40", label: "Ø400mm Circular", radius: 20, sides: 16, widthCm: 40 },
 ];
 
-let activeColumnPresetIndex = 0;
+export let activeColumnPresetIndex = 0;
+
+export function setColumnPresetIndex(index: number): void {
+  if (index >= 0 && index < COLUMN_PRESETS.length) {
+    activeColumnPresetIndex = index;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
+}
 
 export const columnTool: ToolHandler = {
   id: "column",
@@ -1063,7 +1417,7 @@ export const columnTool: ToolHandler = {
 
     ctx.setPreview(mesh, "draft");
     ctx.showMeasure(
-      `Column ${preset.label} • H: ${storey.height} cm • [1-4]: switch type`,
+      `Column ${preset.label} - H: ${formatLengthUnit(storey.height)} - [1-4]: switch type`,
       ctx.screenPoint(event),
     );
   },
@@ -1091,7 +1445,7 @@ export const columnTool: ToolHandler = {
   onKey(event, ctx) {
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= COLUMN_PRESETS.length) {
-      activeColumnPresetIndex = num - 1;
+      setColumnPresetIndex(num - 1);
       const preset = COLUMN_PRESETS[activeColumnPresetIndex];
       ctx.setStatus(`Column Type: ${preset.label}`);
       return true;
@@ -1099,7 +1453,7 @@ export const columnTool: ToolHandler = {
     return false;
   },
   hint: () =>
-    `Column · Click point or grid intersection to place · [1-4]: switch type (${COLUMN_PRESETS[activeColumnPresetIndex]?.label})`,
+    `Column - Click point or grid intersection to place - [1-4]: switch type (${COLUMN_PRESETS[activeColumnPresetIndex]?.label})`,
 };
 
 // ===========================================================================
@@ -1108,8 +1462,8 @@ export const columnTool: ToolHandler = {
 // ===========================================================================
 
 let beamStart: THREE.Vector3 | null = null;
-const BEAM_DEFAULT_WIDTH = 20;
-const BEAM_DEFAULT_HEIGHT = 40;
+export const BEAM_DEFAULT_WIDTH = 20;
+export const BEAM_DEFAULT_HEIGHT = 40;
 
 export const beamTool: ToolHandler = {
   id: "beam",
@@ -1135,7 +1489,7 @@ export const beamTool: ToolHandler = {
     if (!beamStart) {
       beamStart = p;
       ctx.capturePointer(event);
-      ctx.setStatus("Beam · Click end point");
+      ctx.setStatus("Beam - Click end point");
       return true;
     }
 
@@ -1144,7 +1498,7 @@ export const beamTool: ToolHandler = {
       const mid = beamStart.clone().add(p).multiplyScalar(0.5);
       const angle = -Math.atan2(p.z - beamStart.z, p.x - beamStart.x);
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-      const name = `Beam 200×400mm (L=${(len / 100).toFixed(2)}m)`;
+      const name = `Beam 200×400mm (L=${formatLengthUnit(len)})`;
 
       void ctx.createEntity(
         {
@@ -1157,7 +1511,7 @@ export const beamTool: ToolHandler = {
         name,
         [q.x, q.y, q.z, q.w],
       );
-      ctx.setStatus(`Beam placed (${(len / 100).toFixed(2)}m)`);
+      ctx.setStatus(`Beam placed (${formatLengthUnit(len)})`);
     }
 
     beamStart = null;
@@ -1180,7 +1534,7 @@ export const beamTool: ToolHandler = {
 
     ctx.setPreview(mesh, "draft");
     ctx.showMeasure(
-      `Beam L: ${(len / 100).toFixed(2)}m (${len.toFixed(0)} cm) • 200×400mm`,
+      `Beam L: ${formatLengthUnit(len)} - 200×400mm`,
       ctx.screenPoint(event),
     );
   },
@@ -1189,7 +1543,7 @@ export const beamTool: ToolHandler = {
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   },
-  hint: () => "Beam · Click start and end points for structural framing beam",
+  hint: () => "Beam - Click start and end points for structural framing beam",
 };
 
 // ===========================================================================
@@ -1222,7 +1576,7 @@ export const stairTool: ToolHandler = {
     if (!stairStart) {
       stairStart = p;
       ctx.capturePointer(event);
-      ctx.setStatus("Stair · Click flight landing / top of run");
+      ctx.setStatus("Stair - Click flight landing / top of run");
       return true;
     }
 
@@ -1230,13 +1584,12 @@ export const stairTool: ToolHandler = {
     const dz = p.z - stairStart.z;
     const totalRun = Math.hypot(dx, dz);
     if (totalRun > 30) {
-      // Calculate risers to perfectly meet storey height (optimal rise ~17.5cm)
       const optimalStepCount = Math.max(3, Math.round(storey.height / 17.5));
       const actualRise = storey.height / optimalStepCount;
       const runPerStep = totalRun / optimalStepCount;
       const angle = -Math.atan2(dz, dx);
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-      const name = `Staircase (${optimalStepCount} risers @ ${actualRise.toFixed(1)}cm)`;
+      const name = `Staircase (${optimalStepCount} risers @ ${formatLengthUnit(actualRise)})`;
 
       void ctx.createEntity(
         {
@@ -1269,7 +1622,7 @@ export const stairTool: ToolHandler = {
     const actualRise = storey.height / steps;
     ctx.setPreview(previewLine([stairStart, cursor], ctx), "draft");
     ctx.showMeasure(
-      `Stair: ${steps} risers @ ${actualRise.toFixed(1)}cm rise (Run: ${(totalRun / 100).toFixed(2)}m)`,
+      `Stair: ${steps} risers @ ${formatLengthUnit(actualRise)} rise (Run: ${formatLengthUnit(totalRun)})`,
       ctx.screenPoint(event),
     );
   },
@@ -1278,13 +1631,13 @@ export const stairTool: ToolHandler = {
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   },
-  hint: () => "Stair · Click start and drag flight direction to meet storey height",
+  hint: () => "Stair - Click start and drag flight direction to meet storey height",
 };
 
 // ===========================================================================
 // 9. ROOM / SPACE TOOL
 // Defines space boundaries with live area takeoff and room presets.
-// Modeled after BIMCraft.
+// 1-Click automatic enclosed room detection modeled after BIMCraft.
 // ===========================================================================
 
 export interface RoomPreset {
@@ -1304,8 +1657,28 @@ export const ROOM_PRESETS: RoomPreset[] = [
   { name: "Balcony / Terrace", number: "109" },
 ];
 
-let activeRoomPresetIndex = 0;
+export let activeRoomPresetIndex = 0;
 let roomCorners: THREE.Vector3[] = [];
+let hoveredEnclosedRoom: PlanarFace | null = null;
+
+export function setRoomPresetIndex(index: number): void {
+  if (index >= 0 && index < ROOM_PRESETS.length) {
+    activeRoomPresetIndex = index;
+    window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  }
+}
+
+export function incrementRoomPreset(): void {
+  const cur = ROOM_PRESETS[activeRoomPresetIndex];
+  if (cur) {
+    const num = parseInt(cur.number, 10);
+    if (!isNaN(num)) {
+      cur.number = String(num + 1);
+    }
+  }
+  activeRoomPresetIndex = (activeRoomPresetIndex + 1) % ROOM_PRESETS.length;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+}
 
 function calculatePerimeterM(points: THREE.Vector3[]): number {
   if (points.length < 2) return 0;
@@ -1317,16 +1690,57 @@ function calculatePerimeterM(points: THREE.Vector3[]): number {
   return peri / 100;
 }
 
+function buildRoomPreview(
+  polygon: [number, number][],
+  elevation: number,
+  _ctx: ToolContext,
+): THREE.Object3D {
+  const group = new THREE.Group();
+  if (polygon.length < 3) return group;
+
+  const shape = new THREE.Shape();
+  shape.moveTo(polygon[0][0], polygon[0][1]);
+  for (let i = 1; i < polygon.length; i++) {
+    shape.lineTo(polygon[i][0], polygon[i][1]);
+  }
+  shape.closePath();
+
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(Math.PI / 2);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x10b981,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = elevation + 0.2;
+  mesh.renderOrder = 998;
+  group.add(mesh);
+
+  const linePts = polygon.map((p) => new THREE.Vector3(p[0], elevation + 0.4, p[1]));
+  linePts.push(linePts[0].clone());
+  const lineGeo = new THREE.BufferGeometry().setFromPoints(linePts);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2, depthTest: false });
+  group.add(new THREE.Line(lineGeo, lineMat));
+
+  return group;
+}
+
 export const roomTool: ToolHandler = {
   id: "room",
   cursor: "crosshair",
   onActivate(ctx) {
     roomCorners = [];
+    hoveredEnclosedRoom = null;
     ctx.clearPreview("draft");
     ctx.setStatus(this.hint!(ctx));
   },
   onDeactivate(ctx) {
     roomCorners = [];
+    hoveredEnclosedRoom = null;
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   },
@@ -1335,6 +1749,32 @@ export const roomTool: ToolHandler = {
     const storey = getActiveStorey();
     const raw = ctx.planePoint(event, storey.elevation);
     if (!raw) return true;
+
+    // 1-Click placement inside detected enclosed wall room
+    if (roomCorners.length === 0 && hoveredEnclosedRoom) {
+      const preset = ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0];
+      const areaM2 = hoveredEnclosedRoom.areaM2;
+      const name = `${preset.name} (${preset.number})`;
+
+      void ctx.createEntity(
+        {
+          type: "room",
+          name: preset.name,
+          number: preset.number,
+          polygon: hoveredEnclosedRoom.polygon,
+        },
+        [0, storey.elevation, 0],
+        name,
+      );
+      ctx.setStatus(`Room placed: ${name} (${formatAreaUnit(areaM2)})`);
+      incrementRoomPreset();
+      hoveredEnclosedRoom = null;
+      ctx.clearPreview("draft");
+      ctx.showMeasure(null);
+      return true;
+    }
+
+    // Manual corner points mode
     const p = ctx.snap(raw, {
       extraPoints: roomCorners,
       anchor: roomCorners[roomCorners.length - 1],
@@ -1359,7 +1799,8 @@ export const roomTool: ToolHandler = {
         [0, storey.elevation, 0],
         name,
       );
-      ctx.setStatus(`Room created: ${name} (${areaM2.toFixed(1)} m²)`);
+      ctx.setStatus(`Room created: ${name} (${formatAreaUnit(areaM2)})`);
+      incrementRoomPreset();
       roomCorners = [];
       ctx.clearPreview("draft");
       ctx.showMeasure(null);
@@ -1370,34 +1811,56 @@ export const roomTool: ToolHandler = {
     ctx.capturePointer(event);
     const preset = ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0];
     ctx.setStatus(
-      `Room (${preset.name}) · Add corner ${roomCorners.length + 1} · Click first vertex commits · [1-9]: switch template`,
+      `Room (${preset.name}) - Add corner ${roomCorners.length + 1} - Click first vertex commits - [1-9]: switch template`,
     );
     return true;
   },
   onPointerMove(event, ctx) {
     const storey = getActiveStorey();
     const raw = ctx.planePoint(event, storey.elevation);
-    if (!raw || roomCorners.length === 0) return;
-    const cursor = ctx.snap(raw, {
-      extraPoints: roomCorners,
-      anchor: roomCorners[roomCorners.length - 1],
-    }).point;
+    if (!raw) return;
 
-    const pts = [...roomCorners, cursor, roomCorners[0]];
-    ctx.setPreview(previewLine(pts, ctx), "draft");
+    if (roomCorners.length === 0) {
+      // 1-Click auto room detection
+      const scene = useArcStore.getState().scene;
+      const face = scene?.entities ? findEnclosedRoomAt(flatXZ(raw), scene.entities, storey.elevation) : null;
+      if (face) {
+        hoveredEnclosedRoom = face;
+        const preset = ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0];
+        ctx.setPreview(buildRoomPreview(face.polygon, storey.elevation, ctx), "draft");
+        ctx.showMeasure(
+          `1-Click: Place ${preset.name} (${preset.number}) - ${formatAreaUnit(face.areaM2)} (Click inside room to place)`,
+          ctx.screenPoint(event),
+        );
+        return;
+      } else {
+        hoveredEnclosedRoom = null;
+        ctx.clearPreview("draft");
+        ctx.showMeasure(null);
+      }
+    } else {
+      // Manual corner points mode
+      const cursor = ctx.snap(raw, {
+        extraPoints: roomCorners,
+        anchor: roomCorners[roomCorners.length - 1],
+      }).point;
 
-    const areaM2 = calculatePolygonAreaM2([...roomCorners, cursor]);
-    const periM = calculatePerimeterM([...roomCorners, cursor]);
-    const preset = ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0];
-    ctx.showMeasure(
-      `Room: ${preset.name} (${preset.number}) • Area: ${areaM2.toFixed(2)} m² • Perimeter: ${periM.toFixed(1)} m • [1-9]: Template`,
-      ctx.screenPoint(event),
-    );
+      const pts = [...roomCorners, cursor, roomCorners[0]];
+      ctx.setPreview(previewLine(pts, ctx), "draft");
+
+      const areaM2 = calculatePolygonAreaM2([...roomCorners, cursor]);
+      const periM = calculatePerimeterM([...roomCorners, cursor]);
+      const preset = ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0];
+      ctx.showMeasure(
+        `Room: ${preset.name} (${preset.number}) - Area: ${formatAreaUnit(areaM2)} - Perimeter: ${formatLengthUnit(periM * 100)} - [1-9]: Template`,
+        ctx.screenPoint(event),
+      );
+    }
   },
   onKey(event, ctx) {
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= ROOM_PRESETS.length) {
-      activeRoomPresetIndex = num - 1;
+      setRoomPresetIndex(num - 1);
       const preset = ROOM_PRESETS[activeRoomPresetIndex];
       ctx.setStatus(`Room Template: ${preset.name} (${preset.number})`);
       return true;
@@ -1406,11 +1869,12 @@ export const roomTool: ToolHandler = {
   },
   onCancel(ctx) {
     roomCorners = [];
+    hoveredEnclosedRoom = null;
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   },
   hint: () =>
-    `Room · Click boundary corners to tag space · [1-9]: switch template (${ROOM_PRESETS[activeRoomPresetIndex]?.name})`,
+    `Room - Click inside enclosed walls for 1-click room tag, or click corners - [1-9]: switch template (${ROOM_PRESETS[activeRoomPresetIndex]?.name})`,
 };
 
 // ===========================================================================
@@ -1428,8 +1892,19 @@ export type ArchComponentKind =
   | "toilet"
   | "sink";
 
-let activeCompKind: ArchComponentKind = "sofa";
-let compRotationDeg = 0;
+export let activeCompKind: ArchComponentKind = "sofa";
+export let compRotationDeg = 0;
+
+export function setActiveCompKind(kind: ArchComponentKind): void {
+  activeCompKind = kind;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+}
+
+export function rotateActiveComponent(): number {
+  compRotationDeg = (compRotationDeg + 45) % 360;
+  window.dispatchEvent(new CustomEvent("arc-bim-options-update"));
+  return compRotationDeg;
+}
 
 export const COMPONENT_SPECS: Record<
   ArchComponentKind,
@@ -1469,7 +1944,7 @@ export const componentTool: ToolHandler = {
     mesh.rotation.y = THREE.MathUtils.degToRad(compRotationDeg);
 
     ctx.setPreview(mesh, "draft");
-    ctx.showMeasure(`${spec.label} • Space: rotate 45° • [1-8]: type`, ctx.screenPoint(event));
+    ctx.showMeasure(`${spec.label} - Space: rotate 45° - [1-8]: type`, ctx.screenPoint(event));
   },
   onPointerDown(event, ctx) {
     const storey = getActiveStorey();
@@ -1500,7 +1975,7 @@ export const componentTool: ToolHandler = {
   },
   onKey(event, ctx) {
     if (event.key === " " || event.code === "Space") {
-      compRotationDeg = (compRotationDeg + 45) % 360;
+      rotateActiveComponent();
       ctx.setStatus(`Rotate: ${compRotationDeg}°`);
       return true;
     }
@@ -1516,13 +1991,38 @@ export const componentTool: ToolHandler = {
     ];
     const num = parseInt(event.key, 10);
     if (num >= 1 && num <= keys.length) {
-      activeCompKind = keys[num - 1];
+      setActiveCompKind(keys[num - 1]);
       ctx.setStatus(`Selected: ${COMPONENT_SPECS[activeCompKind].label}`);
       return true;
     }
     return false;
   },
-  hint: () => "Furniture · Click to place · Space = rotate 45° · Keys 1-8 switch kind",
+  hint: () => "Furniture - Click to place - Space = rotate 45° - Keys 1-8 switch kind",
+};
+
+/** Get the current BIM options state for the contextual ribbon in ModeBanner. */
+export function getBimOptionsState() {
+  return {
+    wallPreset: WALL_PRESETS[activeWallPresetIndex] ?? WALL_PRESETS[1],
+    wallPresetIndex: activeWallPresetIndex,
+    wallLocationLine: activeWallLocationLine,
+    doorPreset: DOOR_PRESETS[activeDoorPresetIndex] ?? DOOR_PRESETS[0],
+    doorPresetIndex: activeDoorPresetIndex,
+    doorHand: doorDraft.flipHand,
+    doorFacing: doorDraft.flipFacing,
+    windowPreset: WINDOW_PRESETS[activeWindowPresetIndex] ?? WINDOW_PRESETS[0],
+    windowPresetIndex: activeWindowPresetIndex,
+    windowSill: windowSillOverride ?? (WINDOW_PRESETS[activeWindowPresetIndex]?.sillHeight ?? 90),
+    roomPreset: ROOM_PRESETS[activeRoomPresetIndex] ?? ROOM_PRESETS[0],
+    roomPresetIndex: activeRoomPresetIndex,
+    roofPitch: ROOF_PITCH_PRESETS[activeRoofPitchIndex] ?? 30,
+    roofPitchIndex: activeRoofPitchIndex,
+    columnPreset: COLUMN_PRESETS[activeColumnPresetIndex] ?? COLUMN_PRESETS[0],
+    columnPresetIndex: activeColumnPresetIndex,
+    compKind: activeCompKind,
+    compSpec: COMPONENT_SPECS[activeCompKind],
+    compRotation: compRotationDeg,
+  };
 };
 
 // ===========================================================================
@@ -1554,7 +2054,7 @@ export const gridTool: ToolHandler = {
     if (!gridStart) {
       gridStart = p;
       ctx.capturePointer(event);
-      ctx.setStatus("Grid Line · Click end point");
+      ctx.setStatus("Grid Line - Click end point");
       return true;
     }
 
@@ -1581,7 +2081,7 @@ export const gridTool: ToolHandler = {
 
     ctx.setPreview(previewLine([gridStart, cursor], ctx), "draft");
     ctx.showMeasure(
-      `Grid Length: ${(gridStart.distanceTo(cursor) / 100).toFixed(2)}m (${gridStart.distanceTo(cursor).toFixed(0)} cm)`,
+      `Grid Length: ${formatLengthUnit(gridStart.distanceTo(cursor))}`,
       ctx.screenPoint(event),
     );
   },
@@ -1590,7 +2090,7 @@ export const gridTool: ToolHandler = {
     ctx.clearPreview("draft");
     ctx.showMeasure(null);
   },
-  hint: () => "Grid · Click start and end points for structural datum grid",
+  hint: () => "Grid - Click start and end points for structural datum grid",
 };
 
 // ===========================================================================
@@ -1625,8 +2125,8 @@ export const levelTool: ToolHandler = {
         ipc.addLevel(docId, newName, newElevation, 300),
       );
     }
-    ctx.setStatus(`Level '${newName}' (+${newElevation} cm) created`);
+    ctx.setStatus(`Level '${newName}' (+${formatLengthUnit(newElevation)}) created`);
     return true;
   },
-  hint: () => "Level · Click to add a new building storey level (+300 cm)",
+  hint: () => `Level - Click to add a new building storey level (+${formatLengthUnit(300)})`,
 };

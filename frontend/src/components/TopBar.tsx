@@ -346,7 +346,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
   const hasDoc = scene != null || overview?.active != null;
   const docId = overview?.active ?? null;
   const doc = overview?.documents.find((d) => d.id === docId);
-  const docTitle = doc ? `${doc.name}${doc.dirty ? " •" : ""}` : "No document";
+  const docTitle = doc ? `${doc.name}${doc.dirty ? " *" : ""}` : "No document";
   const recents = (overview?.settings.recent_files ?? []).slice(0, 5);
 
   const fileMenu: MenuEntry[] = [
@@ -464,20 +464,20 @@ export function TopBar({ children }: { children?: ReactNode }) {
       data-tauri-drag-region
       onDoubleClick={handleToggleMaximize}
       className={cn(
-        "relative flex h-10 shrink-0 items-center border-b border-base-200 bg-base-50 select-none",
-        effectiveStyle === "windows" ? "pl-3 pr-0" : "px-3",
+        "relative flex h-11 shrink-0 items-center border-b border-base-200/90 bg-base-50/95 select-none",
+        effectiveStyle === "windows" ? "pl-4 pr-0" : "px-4",
       )}
     >
       {/* macOS traffic lights on the far left */}
       {effectiveStyle === "macos" && (
         <div className="flex items-center">
           <WindowControls variant="macos" />
-          <div className="h-4 w-px bg-base-200 ml-1 mr-2" />
+          <div className="h-5 w-px bg-base-200 ml-1.5 mr-3" />
         </div>
       )}
 
       {/* Menus */}
-      <div ref={menuBarRef} className="flex items-center gap-1.5">
+      <div ref={menuBarRef} className="flex items-center gap-2">
         <Menu id="file" label="File" open={openMenu} onOpen={setOpenMenu} entries={fileMenu} />
         {view === "editor" && (
           <>
@@ -488,48 +488,48 @@ export function TopBar({ children }: { children?: ReactNode }) {
       </div>
 
       {view === "editor" && docId && (
-        <div className="flex items-center gap-2 ml-1">
+        <div className="flex items-center gap-3 ml-2.5">
           {/* Workbench Switcher */}
-          <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5 shadow-2xs">
+          <div className="flex items-center rounded-xl border border-base-300 bg-base-100 p-0.5 shadow-2xs">
             <button
               type="button"
               onClick={() => void ipc.setProjectMode(docId, "cad")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold transition-all cursor-pointer",
                 (scene?.projectMode ?? "cad") === "cad"
                   ? "bg-accent-500 text-white shadow-2xs"
                   : "text-base-600 hover:text-base-900",
               )}
             >
-              <DraftingCompass size={12} strokeWidth={2} />
+              <DraftingCompass size={13} strokeWidth={2} />
               <span>CAD</span>
             </button>
             <button
               type="button"
               onClick={() => void ipc.setProjectMode(docId, "architecture")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold transition-all cursor-pointer",
                 scene?.projectMode === "architecture"
                   ? "bg-accent-500 text-white shadow-2xs"
                   : "text-base-600 hover:text-base-900",
               )}
             >
-              <Building2 size={12} strokeWidth={2} />
-              <span>Architecture</span>
+              <Building2 size={13} strokeWidth={2} />
+              <span>BIM</span>
             </button>
           </div>
 
           {/* Architecture Workbench Controls */}
           {scene?.projectMode === "architecture" && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <LevelSelector docId={docId} />
               <ArchViewSelector />
               <button
                 type="button"
                 onClick={() => useArcStore.getState().setBuildingScheduleOpen(true)}
-                className="flex items-center gap-1 rounded-md border border-base-300 bg-base-100 px-2 py-1 text-[11px] font-medium text-base-700 hover:bg-base-200 transition-colors cursor-pointer shadow-2xs"
+                className="flex items-center gap-1.5 rounded-xl border border-base-300 bg-base-100 px-2.5 py-1 text-[11.5px] font-semibold text-base-700 hover:bg-base-200 transition-colors cursor-pointer shadow-2xs"
               >
-                <Table size={12} className="text-accent-500" />
+                <Table size={13} className="text-accent-500" />
                 <span>Schedule</span>
               </button>
             </div>

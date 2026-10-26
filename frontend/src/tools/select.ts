@@ -32,9 +32,9 @@ function commitRefSelection(
   void ctx.setSelection(selection, primary);
   const label =
     refObj.kind === "face"
-      ? `${selection.length} selected · face ${refObj.face}`
+      ? `${selection.length} selected - face ${refObj.face}`
       : refObj.kind === "edge"
-        ? `${selection.length} selected · edge`
+        ? `${selection.length} selected - edge`
         : `${selection.length} selected`;
   ctx.setStatus(label);
 }
@@ -100,8 +100,8 @@ export const selectTool: ToolHandler = {
     ctx.setGizmo(null);
     ctx.setStatus(
       ctx.selection().length > 0
-        ? `${ctx.selection().length} selected · click to reselect, Shift toggles`
-        : "Select · click to pick · Shift toggles · drag for a rubber band",
+        ? `${ctx.selection().length} selected - click to reselect, Shift toggles`
+        : "Select - click to pick - Shift toggles - drag for a rubber band",
     );
   },
   onPointerDown(event, ctx) {
@@ -174,5 +174,5 @@ export const selectTool: ToolHandler = {
     }
     return false;
   },
-  hint: () => "Select · click to pick face/edge/body · double-click face to sketch · Shift toggles",
+  hint: () => "Select - click to pick face/edge/body - double-click face to sketch - Shift toggles",
 };

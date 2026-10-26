@@ -128,7 +128,7 @@ export function StatusBar() {
       )}
 
       <span className="shrink-0 font-mono text-[11px] tabular-nums text-base-500">
-        X {fmt(cursorWorld[0])} · Y {fmt(cursorWorld[1])} · Z {fmt(cursorWorld[2])}
+        X {fmt(cursorWorld[0])}, Y {fmt(cursorWorld[1])}, Z {fmt(cursorWorld[2])}
       </span>
 
       <span className="h-4 w-px bg-base-200" />

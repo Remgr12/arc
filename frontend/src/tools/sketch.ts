@@ -342,8 +342,8 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
 
     const label = state.typed
       ? (Number.isFinite(parsed) && parsed > 0 && String(parsed) !== state.typed.trim()
-          ? `L: ${state.typed} = ${formatNum(parsed)} ${u}${constraintTag} · [Enter]`
-          : `L: ${state.typed}| ${u}${constraintTag} · [Enter]`)
+          ? `L: ${state.typed} = ${formatNum(parsed)} ${u}${constraintTag} [Enter]`
+          : `L: ${state.typed}| ${u}${constraintTag} [Enter]`)
       : `L: ${lenLabel(from, target)} ${u}${constraintTag}   ∠ ${angleLabel(from, target)}`;
     ctx.showMeasure(label, state.lastScreen);
   };
@@ -511,7 +511,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
       ctx.releasePointer(event);
       if (isSingleLineDrag) {
         reset(ctx);
-        ctx.setStatus("Line created · drag or click to draw next");
+        ctx.setStatus("Line created - drag or click to draw next");
       }
     },
     onKey(event, ctx) {
@@ -554,7 +554,7 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     onCancel(ctx) {
       if (points.length > 0) {
         reset(ctx);
-        ctx.setStatus("Draft cancelled · click to start again");
+        ctx.setStatus("Draft cancelled - click to start again");
       }
     },
     onBackspace(ctx) {
@@ -573,8 +573,8 @@ function makeLineTool(id: "line" | "polyline"): ToolHandler {
     },
     hint: () =>
       id === "line"
-        ? "Line · click start, then endpoint (or type length + Enter) · Shift constrains axis"
-        : "Polyline · click points (or type length + Enter) · click first point to close · Enter finishes",
+        ? "Line - click start, then endpoint (or type length + Enter) - Shift constrains axis"
+        : "Polyline - click points (or type length + Enter) - click first point to close - Enter finishes",
   };
 }
 
@@ -779,7 +779,7 @@ export const rectangleTool: ToolHandler = {
     return true;
   },
   onCancel: resetRect,
-  hint: () => "Rectangle · drag or click two corners (or type W,D + Enter) · Shift for square",
+  hint: () => "Rectangle - drag or click two corners (or type W,D + Enter) - Shift for square",
 };
 
 // -------------------------------------------------------------------- circle
@@ -900,7 +900,7 @@ export const circleTool: ToolHandler = {
     return true;
   },
   onCancel: resetCircle,
-  hint: () => "Circle · drag or click center, then radius (or type R + Enter)",
+  hint: () => "Circle - drag or click center, then radius (or type R + Enter)",
 };
 
 // ----------------------------------------------------------------------- arc
@@ -933,7 +933,7 @@ export const arcTool: ToolHandler = {
     const snapped = ctx.snap(raw).point;
     arc.points.push(snapped);
     if (arc.points.length < 3) {
-      ctx.setStatus(arc.points.length === 1 ? "Arc · click endpoint" : "Arc · click to set the bulge");
+      ctx.setStatus(arc.points.length === 1 ? "Arc - click endpoint" : "Arc - click to set the bulge");
       return true;
     }
     const [start, end, mid] = arc.points;
@@ -961,7 +961,7 @@ export const arcTool: ToolHandler = {
       );
       ctx.setStatus("Arc created");
     } else {
-      ctx.setStatus("Arc points are collinear · try again");
+      ctx.setStatus("Arc points are collinear - try again");
     }
     resetArc(ctx);
     return true;
@@ -1009,7 +1009,7 @@ export const arcTool: ToolHandler = {
       if (arc.points.length === 0) ctx.clearPreview("draft");
     }
   },
-  hint: () => "Arc · click start, endpoint, then bulge",
+  hint: () => "Arc - click start, endpoint, then bulge",
 };
 
 // ------------------------------------------------------------------- polygon
@@ -1048,7 +1048,7 @@ function updatePolyPreview(ctx: ToolContext): void {
   ctx.setPreview(previewLine(pts, ctx, true), "draft");
   const u = ctx.settings.unitLabel;
   ctx.showMeasure(
-    poly.typed ? `R ${poly.typed}| ${u} · ${sides} sides` : `R ${formatNum(r)} ${u} · ${sides} sides`,
+    poly.typed ? `R ${poly.typed}| ${u} - ${sides} sides` : `R ${formatNum(r)} ${u} - ${sides} sides`,
     poly.lastScreen,
   );
 }
@@ -1124,13 +1124,13 @@ export const polygonTool: ToolHandler = {
   onKey(event, ctx) {
     if (event.key === "[" || event.key === "-") {
       setPolygonSides(getPolygonSides() - 1);
-      ctx.setStatus(`Polygon · ${getPolygonSides()} sides`);
+      ctx.setStatus(`Polygon - ${getPolygonSides()} sides`);
       updatePolyPreview(ctx);
       return true;
     }
     if (event.key === "]" || event.key === "=" || event.key === "+") {
       setPolygonSides(getPolygonSides() + 1);
-      ctx.setStatus(`Polygon · ${getPolygonSides()} sides`);
+      ctx.setStatus(`Polygon - ${getPolygonSides()} sides`);
       updatePolyPreview(ctx);
       return true;
     }
@@ -1154,5 +1154,5 @@ export const polygonTool: ToolHandler = {
     return true;
   },
   onCancel: resetPoly,
-  hint: () => `Polygon (${getPolygonSides()} sides, [ / ] changes sides) · click center, then radius (or type R + Enter)`,
+  hint: () => `Polygon (${getPolygonSides()} sides, [ / ] changes sides) - click center, then radius (or type R + Enter)`,
 };

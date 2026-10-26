@@ -525,7 +525,7 @@ function commitFillet(
     radius: Math.max(0.05, Math.round(radius * 100) / 100),
   };
   if (!payload_edge_points(payload)) {
-    store.setStatusMessage("Fillet Edge · edge endpoints unavailable");
+    store.setStatusMessage("Fillet Edge - edge endpoints unavailable");
     return;
   }
   void ctx
@@ -535,7 +535,7 @@ function commitFillet(
       store.setStatusMessage(
         after && "type" in after.geometry && after.geometry.type === "solid_fillet"
           ? `Fillet r=${(payload as { radius?: number }).radius}`
-          : "Fillet failed · edge could not be rounded",
+          : "Fillet failed - edge could not be rounded",
       );
     })
     .catch((err: unknown) => {
@@ -592,18 +592,18 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       const store = useArcStore.getState();
       const entity = store.selFace ? ctx.entityById(store.selFace.entityId) : null;
       if (!entity || !store.selFace) {
-        ctx.setStatus(`${label} · click a face (box / extrude / cylinder / cone)`);
+        ctx.setStatus(`${label} - click a face (box / extrude / cylinder / cone)`);
         return;
       }
       if (!faceEditable(entity.kind)) {
-        ctx.setStatus(`${label} · "${entity.kind}" is not face-editable yet (prisms first)`);
+        ctx.setStatus(`${label} - "${entity.kind}" is not face-editable yet (prisms first)`);
         return;
       }
       updateGizmo(ctx, entity.id);
       const param = faceParam(entity, store.selFace.face);
       const cur = param ? paramValue(entity, param) : Number.NaN;
       const curStr = Number.isFinite(cur) ? ` (${param!.label}: ${fmt(cur)} ${ctx.settings.unitLabel})` : "";
-      ctx.setStatus(`${label}${curStr} · drag the face/arrow or type exact dimension + Enter`);
+      ctx.setStatus(`${label}${curStr} - drag the face/arrow or type exact dimension + Enter`);
     },
     onDeactivate(ctx) {
       if (tool.drag) restoreLiveDragPreview(ctx, tool.drag);
@@ -640,7 +640,7 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       if (!entity || !fresh.selFace) return true;
       ensureEntitySelected(ctx, entity.id);
       if (!faceEditable(entity.kind)) {
-        ctx.setStatus(`${label} · "${entity.kind}" cannot be face-edited (prisms first)`);
+        ctx.setStatus(`${label} - "${entity.kind}" cannot be face-edited (prisms first)`);
         return true;
       }
       updateGizmo(ctx, entity.id);
@@ -649,7 +649,7 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       const mouseScreen = ctx.screenPoint(event);
       const param = faceParam(entity, fresh.selFace.face);
       if (!param) {
-        ctx.setStatus(`${label} · select a planar face to push-pull`);
+        ctx.setStatus(`${label} - select a planar face to push-pull`);
         return true;
       }
       const isDirect = param.kind === "none";
@@ -776,7 +776,7 @@ function faceToolHandlers(id: ToolHandler["id"], label: string): ToolHandler {
       const store = useArcStore.getState();
       return store.selFace !== null && ctx.entityById(store.selFace.entityId) !== null;
     },
-    hint: () => `${label} · click a face, drag to push/pull (snaps to cm), or type value + Enter`,
+    hint: () => `${label} - click a face, drag to push/pull (snaps to cm), or type value + Enter`,
   };
 }
 
@@ -792,15 +792,15 @@ export const filletEdgeTool: ToolHandler = {
     const store = useArcStore.getState();
     const entity = store.selEdge ? ctx.entityById(store.selEdge.entityId) : null;
     if (!entity || !store.selEdge) {
-      ctx.setStatus("Fillet Edge · click an edge of a solid");
+      ctx.setStatus("Fillet Edge - click an edge of a solid");
       return;
     }
     if (!FILLET_KINDS.has(entity.kind)) {
-      ctx.setStatus(`Fillet Edge · "${entity.kind}" fillets land later (box first)`);
+      ctx.setStatus(`Fillet Edge - "${entity.kind}" fillets land later (box first)`);
       return;
     }
     updateGizmo(ctx, entity.id);
-    ctx.setStatus("Fillet Edge · drag the arrow for radius, click the number to type");
+    ctx.setStatus("Fillet Edge - drag the arrow for radius, click the number to type");
   },
   onDeactivate() {
     detachGizmo();
@@ -831,7 +831,7 @@ export const filletEdgeTool: ToolHandler = {
       const entity = selEdge ? ctx.entityById(selEdge.entityId) : null;
       if (!entity || !selEdge) return true;
       if (!FILLET_KINDS.has(entity.kind)) {
-        ctx.setStatus(`Fillet Edge · "${entity.kind}" cannot be filleted`);
+        ctx.setStatus(`Fillet Edge - "${entity.kind}" cannot be filleted`);
         return true;
       }
       ensureEntitySelected(ctx, entity.id);
@@ -874,7 +874,7 @@ export const filletEdgeTool: ToolHandler = {
         screenUnit,
         pxToWorld,
       };
-      ctx.setStatus("Fillet Edge · drag outward for radius, release to commit (or double-click to type)");
+      ctx.setStatus("Fillet Edge - drag outward for radius, release to commit (or double-click to type)");
       return true;
     },
   onPointerMove(event, ctx) {
@@ -944,5 +944,5 @@ export const filletEdgeTool: ToolHandler = {
     const store = useArcStore.getState();
     return store.selEdge !== null && ctx.entityById(store.selEdge.entityId) !== null;
   },
-  hint: () => "Fillet Edge · click an edge, set the radius",
+  hint: () => "Fillet Edge - click an edge, set the radius",
 };
