@@ -108,9 +108,22 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install system dependencies
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          # Swap out slow/flaky Azure mirror for main Ubuntu mirror
+          sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null || true
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' /etc/apt/apt-mirrors.txt || true
+          fi
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold" \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
             libgtk-3-dev \
             libwebkit2gtk-4.1-dev \
             libssl-dev \
@@ -326,9 +339,23 @@ jobs:
               -H "Content-Type: application/octet-stream"
           fi
 
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
-            -F draft=false -F prerelease=false -F make_latest=true \
-            -F generate_release_notes=true >/dev/null
+          # Publish the release: GitHub PATCH releases does not accept generate_release_notes.
+          # Fetch auto-generated release notes first if draft has default/empty body.
+          BODY=$(gh api "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" --jq '.body // ""')
+          if [ -z "$BODY" ] || [ "$BODY" = "See the assets to download this version." ]; then
+            GEN_NOTES=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body 2>/dev/null || true)
+            if [ -n "$GEN_NOTES" ]; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+                -F draft:=false -F prerelease:=false -f make_latest=true \
+                -f body="$GEN_NOTES" >/dev/null
+            else
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+                -F draft:=false -F prerelease:=false -f make_latest=true >/dev/null
+            fi
+          else
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$DRAFT_ID" \
+              -F draft:=false -F prerelease:=false -f make_latest=true >/dev/null
+          fi
           echo "published release for $TAG"
 
   flatpak-repo-update:
