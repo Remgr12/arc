@@ -68,7 +68,7 @@ function DocumentRow({
       </button>
       <IconButton
         icon={<X size={12} strokeWidth={2} />}
-        title="Close document"
+        title="Close"
         size="sm"
         className="h-6 w-6 opacity-0 group-hover:opacity-100"
         onClick={() => void ipc.closeDocument(doc.id).catch(() => undefined)}
@@ -247,7 +247,7 @@ function LayerRow({
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-          title="Set active layer (double-click to rename)"
+          title="Active layer"
           onClick={() => void ipc.setActiveLayer(docId, layer.id).catch(() => undefined)}
           onDoubleClick={() => setEditing(true)}
         >
@@ -261,14 +261,14 @@ function LayerRow({
       )}
       <IconButton
         icon={layer.visible ? <Eye size={11} strokeWidth={1.75} /> : <EyeOff size={11} strokeWidth={1.75} />}
-        title={layer.visible ? "Hide layer" : "Show layer"}
+        title={layer.visible ? "Hide" : "Show"}
         size="sm"
         className={cn("h-5 w-5", layer.visible ? "opacity-0 group-hover:opacity-100" : "opacity-80")}
         onClick={() => void ipc.setLayerVisible(docId, layer.id, !layer.visible).catch(() => undefined)}
       />
       <IconButton
         icon={layer.locked ? <Lock size={11} strokeWidth={1.75} /> : <LockOpen size={11} strokeWidth={1.75} />}
-        title={layer.locked ? "Unlock layer" : "Lock layer"}
+        title={layer.locked ? "Unlock" : "Lock"}
         size="sm"
         className={cn("h-5 w-5", layer.locked ? "opacity-80" : "opacity-0 group-hover:opacity-100")}
         onClick={() => void ipc.setLayerLocked(docId, layer.id, !layer.locked).catch(() => undefined)}
@@ -276,7 +276,7 @@ function LayerRow({
       {canDelete && (
         <IconButton
           icon={<Trash2 size={11} strokeWidth={1.75} />}
-          title="Delete layer"
+          title="Delete"
           size="sm"
           className="h-5 w-5 opacity-0 hover:text-danger-500 group-hover:opacity-100"
           onClick={() => void ipc.deleteLayer(docId, layer.id).catch(() => undefined)}
@@ -361,7 +361,7 @@ export function ProjectPanel() {
           />
           <IconButton
             icon={<X size={13} strokeWidth={2} />}
-            title="Hide sidebar"
+            title="Hide"
             size="sm"
             onClick={() => useArcStore.getState().setLeftSidebarOpen(false)}
             className="hover:bg-base-200"

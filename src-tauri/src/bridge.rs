@@ -181,6 +181,7 @@ fn dispatch(app: &AppHandle, cmd: &str, params: &Value) -> Result<Value, String>
             st(app),
             st(app),
             opt("name"),
+            opt("mode"),
         )),
         "open_document" => to_json(commands::open_document(
             app.clone(),

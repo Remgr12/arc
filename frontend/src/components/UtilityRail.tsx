@@ -127,7 +127,7 @@ export function UtilityRail() {
         <button
           type="button"
           onClick={toggleSnap}
-          title={snapOn ? "Snap ON (click to disable)" : "Snap OFF (click to enable)"}
+          title={snapOn ? "Snap on" : "Snap off"}
           className={cn(
             "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             snapOn
@@ -142,7 +142,7 @@ export function UtilityRail() {
         <button
           type="button"
           onClick={cycleGridSize}
-          title="Grid scale (click to cycle 1 / 2 / 5 / 10)"
+          title="Grid size"
           className="flex h-9 w-8.5 flex-col items-center justify-center rounded-xl border border-base-300 bg-base-200/80 leading-none text-base-800 transition-colors hover:border-accent-500/60 hover:text-accent-500"
         >
           <span className="font-mono text-[11.5px] font-bold leading-none">
@@ -156,7 +156,7 @@ export function UtilityRail() {
         <button
           type="button"
           onClick={toggleGrid}
-          title={gridOn ? "Grid & Axes visible" : "Grid & Axes hidden"}
+          title={gridOn ? "Grid visible" : "Grid hidden"}
           className={cn(
             "flex h-8.5 w-8.5 items-center justify-center rounded-xl transition-colors",
             gridOn

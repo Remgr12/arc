@@ -54,7 +54,7 @@ export function KeybindSettings() {
           ))}
         </select>
         <button
-          title="Create a new profile (copies the current one)"
+          title="New profile"
           onClick={create}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-base-600 transition-colors hover:bg-base-300 hover:text-base-800"
         >
@@ -63,14 +63,14 @@ export function KeybindSettings() {
         {editable && (
           <>
             <button
-              title="Reset this profile to the classic defaults"
+              title="Reset"
               onClick={() => reset(profile.id)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-base-600 transition-colors hover:bg-base-300 hover:text-base-800"
             >
               <RotateCcw size={13} />
             </button>
             <button
-              title="Delete this profile"
+              title="Delete"
               onClick={() => remove(profile.id)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-base-600 transition-colors hover:bg-base-300 hover:text-base-800"
             >
@@ -131,7 +131,7 @@ export function KeybindSettings() {
                             </button>
                             {editable && (
                               <button
-                                title="Remove this binding"
+                                title="Remove"
                                 onClick={() =>
                                   useKeybindStore.getState().clearBinding(profile.id, def.id, binding)
                                 }
@@ -144,7 +144,7 @@ export function KeybindSettings() {
                         ))}
                         {editable && (
                           <button
-                            title="Add a binding"
+                            title="Add"
                             onClick={() => setCapturing({ action: def.id })}
                             className="flex items-center rounded border border-dashed border-base-400 px-1.5 py-0.5 text-[10.5px] text-base-500 hover:border-accent-600 hover:text-accent-500"
                           >

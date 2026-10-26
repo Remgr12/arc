@@ -8,13 +8,15 @@ use crate::core::constraints::{
 use crate::core::entity::CsgOperation;
 use crate::core::formats::{Format, TriangleSoup};
 use crate::core::sheetmetal::{FlatPattern, SheetMetalMaterial, SheetMetalPart};
-use crate::core::{Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, Transform};
+use crate::core::{
+    Color, Document, Entity, EntityId, Geometry, MeshBuffer, RayHit, SceneData, Transform,
+};
 use crate::plugins::PluginLock;
 use crate::state::{
     AppOverview, DocumentInfo, SceneEnvelope, Settings, SharedState, TransformUpdate, doc_mut,
     doc_ref, parse_ids,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -192,17 +194,24 @@ pub fn new_document(
     state: State<'_, SharedState>,
     plugins: State<'_, PluginLock>,
     name: Option<String>,
+    mode: Option<String>,
 ) -> Result<DocumentInfo, String> {
     let info = {
         let mut s = state.lock();
         let id = s.next_doc_id();
         let name = name.unwrap_or_else(|| format!("Untitled {}", s.doc_counter));
-        s.documents.insert(id.clone(), Document::new(name));
+        let proj_mode = match mode.as_deref().unwrap_or("cad").to_ascii_lowercase().as_str() {
+            "architecture" | "bim" | "arch" => crate::core::document::ProjectMode::Architecture,
+            _ => crate::core::document::ProjectMode::Cad,
+        };
+        s.documents
+            .insert(id.clone(), Document::new_with_mode(name, proj_mode));
         s.order.push(id.clone());
         s.active = Some(id.clone());
         s.doc_info(&id).expect("just inserted")
     };
     emit_documents(&app, &state);
+    emit_scene(&app, &state, &info.id);
     fire_plugin_hook(&state, Some(&plugins), "new", &serde_json::json!({}));
     Ok(info)
 }
@@ -803,6 +812,276 @@ pub fn set_active_layer(
     Ok(())
 }
 
+// ------------------------------------------------------------ architecture & BIM
+
+#[tauri::command]
+pub fn set_project_mode(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    mode: String,
+) -> Result<SceneData, String> {
+    let scene = {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        let proj_mode = match mode.to_ascii_lowercase().as_str() {
+            "architecture" | "bim" | "arch" => crate::core::document::ProjectMode::Architecture,
+            _ => crate::core::document::ProjectMode::Cad,
+        };
+        doc.set_project_mode(proj_mode);
+        crate::core::materialize_meshes(doc);
+        doc.scene_data()
+    };
+    emit_scene(&app, &state, &document_id);
+    Ok(scene)
+}
+
+#[tauri::command]
+pub fn add_level(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    name: String,
+    elevation: f64,
+    height: f64,
+) -> Result<crate::core::document::LevelData, String> {
+    let level = {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.add_level(name, elevation, height)
+    };
+    emit_scene(&app, &state, &document_id);
+    Ok(level)
+}
+
+#[tauri::command]
+pub fn remove_level(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    level_id: String,
+) -> Result<bool, String> {
+    let ok = {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.remove_level(&level_id)
+    };
+    emit_scene(&app, &state, &document_id);
+    Ok(ok)
+}
+
+#[tauri::command]
+pub fn set_active_level(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    level_id: Option<String>,
+) -> Result<(), String> {
+    {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.set_active_level(level_id);
+    }
+    emit_scene(&app, &state, &document_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_grid(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    name: String,
+    start: [f64; 2],
+    end: [f64; 2],
+) -> Result<crate::core::document::GridData, String> {
+    let grid = {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.add_grid(name, start, end)
+    };
+    emit_scene(&app, &state, &document_id);
+    Ok(grid)
+}
+
+#[tauri::command]
+pub fn remove_grid(
+    app: AppHandle,
+    state: State<'_, SharedState>,
+    document_id: String,
+    grid_id: String,
+) -> Result<bool, String> {
+    let ok = {
+        let mut s = state.lock();
+        let doc = s
+            .documents
+            .get_mut(&document_id)
+            .ok_or_else(|| format!("unknown document {document_id}"))?;
+        doc.remove_grid(&grid_id)
+    };
+    emit_scene(&app, &state, &document_id);
+    Ok(ok)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildingSchedule {
+    pub total_elements: usize,
+    pub wall_count: usize,
+    pub total_wall_length_m: f64,
+    pub total_wall_area_m2: f64,
+    pub door_count: usize,
+    pub window_count: usize,
+    pub floor_area_m2: f64,
+    pub roof_count: usize,
+    pub column_count: usize,
+    pub beam_count: usize,
+    pub stair_count: usize,
+    pub room_count: usize,
+    pub furniture_count: usize,
+    pub rooms: Vec<RoomScheduleItem>,
+    pub doors: Vec<OpeningScheduleItem>,
+    pub windows: Vec<OpeningScheduleItem>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomScheduleItem {
+    pub name: String,
+    pub number: String,
+    pub area_m2: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpeningScheduleItem {
+    pub name: String,
+    pub width_cm: f64,
+    pub height_cm: f64,
+}
+
+#[tauri::command]
+pub fn get_building_schedule(
+    state: State<'_, SharedState>,
+    document_id: String,
+) -> Result<BuildingSchedule, String> {
+    let s = state.lock();
+    let doc = s
+        .documents
+        .get(&document_id)
+        .ok_or_else(|| format!("unknown document {document_id}"))?;
+
+    let mut wall_count = 0;
+    let mut total_wall_length_cm = 0.0;
+    let mut total_wall_area_cm2 = 0.0;
+    let mut door_count = 0;
+    let mut window_count = 0;
+    let mut floor_area_cm2 = 0.0;
+    let mut roof_count = 0;
+    let mut column_count = 0;
+    let mut beam_count = 0;
+    let mut stair_count = 0;
+    let mut room_count = 0;
+    let mut furniture_count = 0;
+    let mut rooms = Vec::new();
+    let mut doors = Vec::new();
+    let mut windows = Vec::new();
+
+    for entity in doc.entities.values() {
+        match &entity.kind {
+            crate::core::entity::Geometry::Wall { path, height, .. } => {
+                wall_count += 1;
+                let mut len = 0.0;
+                for i in 0..path.len().saturating_sub(1) {
+                    let (p0, p1) = (path[i], path[i + 1]);
+                    len += (p1[0] - p0[0]).hypot(p1[1] - p0[1]);
+                }
+                total_wall_length_cm += len;
+                total_wall_area_cm2 += len * height;
+            }
+            crate::core::entity::Geometry::Door { width, height, .. } => {
+                door_count += 1;
+                doors.push(OpeningScheduleItem {
+                    name: entity.name.clone(),
+                    width_cm: *width,
+                    height_cm: *height,
+                });
+            }
+            crate::core::entity::Geometry::Window { width, height, .. } => {
+                window_count += 1;
+                windows.push(OpeningScheduleItem {
+                    name: entity.name.clone(),
+                    width_cm: *width,
+                    height_cm: *height,
+                });
+            }
+            crate::core::entity::Geometry::Slab { polygon, .. } => {
+                let mut area = 0.0;
+                let n = polygon.len();
+                for i in 0..n {
+                    let j = (i + 1) % n;
+                    area += polygon[i][0] * polygon[j][1] - polygon[j][0] * polygon[i][1];
+                }
+                floor_area_cm2 += area.abs() * 0.5;
+            }
+            crate::core::entity::Geometry::Roof { .. } => roof_count += 1,
+            crate::core::entity::Geometry::Column { .. } => column_count += 1,
+            crate::core::entity::Geometry::Beam { .. } => beam_count += 1,
+            crate::core::entity::Geometry::Stair { .. } => stair_count += 1,
+            crate::core::entity::Geometry::Room { name, number, polygon, .. } => {
+                room_count += 1;
+                let mut area = 0.0;
+                let n = polygon.len();
+                for i in 0..n {
+                    let j = (i + 1) % n;
+                    area += polygon[i][0] * polygon[j][1] - polygon[j][0] * polygon[i][1];
+                }
+                rooms.push(RoomScheduleItem {
+                    name: name.clone(),
+                    number: number.clone(),
+                    area_m2: (area.abs() * 0.5) / 10000.0,
+                });
+            }
+            crate::core::entity::Geometry::Component { .. } => furniture_count += 1,
+            _ => {}
+        }
+    }
+
+    Ok(BuildingSchedule {
+        total_elements: doc.entities.len(),
+        wall_count,
+        total_wall_length_m: total_wall_length_cm / 100.0,
+        total_wall_area_m2: total_wall_area_cm2 / 10000.0,
+        door_count,
+        window_count,
+        floor_area_m2: floor_area_cm2 / 10000.0,
+        roof_count,
+        column_count,
+        beam_count,
+        stair_count,
+        room_count,
+        furniture_count,
+        rooms,
+        doors,
+        windows,
+    })
+}
+
 // ------------------------------------------------------------ settings
 
 #[tauri::command]
@@ -1026,6 +1305,7 @@ pub fn export_scene(
                 &doc.name,
             )?),
             "step" | "stp" => bytes_of_text(&crate::kernel::step::export_document(doc)?),
+            "ifc" => bytes_of_text(&crate::core::formats::export_ifc(doc)),
             other => return Err(format!("unsupported format: {other}")),
         }
     };
@@ -1154,6 +1434,7 @@ fn format_name(format: Format) -> &'static str {
         Format::Dxf => "dxf",
         Format::Gltf => "gltf",
         Format::Step => "step",
+        Format::Ifc => "ifc",
     }
 }
 
@@ -1198,6 +1479,7 @@ pub fn import_file(
         Some("dxf") => Format::Dxf,
         Some("gltf") => return Err("gltf import is not supported".into()),
         Some("step") | Some("stp") => Format::Step,
+        Some("ifc") => Format::Ifc,
         Some(other) => return Err(format!("unsupported import format: {other}")),
         None => {
             let detected = Format::detect(&path).ok_or_else(|| {
@@ -1299,6 +1581,7 @@ pub fn import_file(
             }
         }
         Format::Gltf => unreachable!("rejected above"),
+        Format::Ifc => return Err("IFC export is supported; direct IFC import will be available in next update".into()),
     }
 
     let mut created: Vec<String> = Vec::new();

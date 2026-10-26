@@ -1,11 +1,14 @@
 import {
   Box,
+  BrickWall,
   Combine,
   Compass,
   Copy,
+  DoorOpen,
   Eye,
   FolderKanban,
   Grid3X3,
+  Home,
   Layers,
   Maximize2,
   Move,
@@ -22,6 +25,7 @@ import {
   Slice,
   Sparkles,
   Square,
+  Table,
   Trash2,
   Wrench,
   X,
@@ -145,6 +149,30 @@ const MODEL_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
   { id: "revolve", sub: "Around Axis", key: "V" },
   { id: "sweep", sub: "Along Path" },
   { id: "loft", sub: "Between Profiles" },
+];
+
+const ARCH_STRUCTURE_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
+  { id: "wall", sub: "Mitered Wall", key: "W" },
+  { id: "slab", sub: "Floor / Ceiling", key: "L" },
+  { id: "roof", sub: "Pitched / Flat", key: "R" },
+  { id: "column", sub: "Structural", key: "C" },
+  { id: "beam", sub: "Structural", key: "B" },
+];
+
+const ARCH_OPENING_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
+  { id: "door", sub: "Wall Opening", key: "D" },
+  { id: "window", sub: "Glazed Window", key: "N" },
+];
+
+const ARCH_BUILD_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
+  { id: "stair", sub: "Riser & Tread", key: "S" },
+  { id: "component", sub: "3D Furniture", key: "F" },
+  { id: "room", sub: "Space & Poché", key: "M" },
+];
+
+const ARCH_DATUM_TOOLS: { id: ToolId; sub?: string; key?: string }[] = [
+  { id: "grid", sub: "Grid Lines", key: "G" },
+  { id: "level", sub: "Storey Elevation", key: "V" },
 ];
 
 export function ToolRail() {
@@ -539,6 +567,116 @@ export function ToolRail() {
               label="Delete"
               danger
               onClick={() => void actions.deleteSelection()}
+            />
+          </>
+        ) : scene?.projectMode === "architecture" ? (
+          /* ---- ARCHITECTURE BIM WORKBENCH DOCK ---- */
+          <>
+            <ShaprRow
+              icon={<BrickWall size={15} strokeWidth={1.75} />}
+              label="Structure"
+              sub="Walls, Slabs & Roofs"
+              active={activeCat === "arch-structure" || activeCat === "insert"}
+              onClick={() => toggleCat("arch-structure")}
+            />
+            {(activeCat === "arch-structure" || activeCat === "insert") && (
+              <div className="anim-slide-right flex flex-col gap-1 pl-3">
+                {renderToolList(ARCH_STRUCTURE_TOOLS)}
+              </div>
+            )}
+
+            <ShaprRow
+              icon={<DoorOpen size={15} strokeWidth={1.75} />}
+              label="Openings"
+              sub="Doors & Windows"
+              active={activeCat === "arch-openings"}
+              onClick={() => toggleCat("arch-openings")}
+            />
+            {activeCat === "arch-openings" && (
+              <div className="anim-slide-right flex flex-col gap-1 pl-3">
+                {renderToolList(ARCH_OPENING_TOOLS)}
+              </div>
+            )}
+
+            <ShaprRow
+              icon={<Home size={15} strokeWidth={1.75} />}
+              label="Build & Space"
+              sub="Stairs, Rooms & Furniture"
+              active={activeCat === "arch-build"}
+              onClick={() => toggleCat("arch-build")}
+            />
+            {activeCat === "arch-build" && (
+              <div className="anim-slide-right flex flex-col gap-1 pl-3">
+                {renderToolList(ARCH_BUILD_TOOLS)}
+              </div>
+            )}
+
+            <ShaprRow
+              icon={<Layers size={15} strokeWidth={1.75} />}
+              label="Datums"
+              sub="Grids & Levels"
+              active={activeCat === "arch-datums"}
+              onClick={() => toggleCat("arch-datums")}
+            />
+            {activeCat === "arch-datums" && (
+              <div className="anim-slide-right flex flex-col gap-1 pl-3">
+                {renderToolList(ARCH_DATUM_TOOLS)}
+              </div>
+            )}
+
+            <ShaprRow
+              icon={<Table size={15} strokeWidth={1.75} />}
+              label="Schedule"
+              sub="BIM Quantities Takeoff"
+              onClick={() => useArcStore.getState().setBuildingScheduleOpen(true)}
+            />
+
+            <ShaprRow
+              icon={<Move size={15} strokeWidth={1.75} />}
+              label="Transform"
+              active={activeCat === "transform"}
+              onClick={() => toggleCat("transform")}
+            />
+            {activeCat === "transform" && (
+              <div className="anim-slide-right flex flex-col gap-1 pl-3">
+                <ShaprRow
+                  icon={<Move size={14} strokeWidth={1.75} />}
+                  label="Move"
+                  shortcut="M"
+                  active={tool === "move"}
+                  onClick={() => setTool("move")}
+                />
+                <ShaprRow
+                  icon={<Orbit size={14} strokeWidth={1.75} />}
+                  label="Rotate"
+                  active={tool === "rotate"}
+                  onClick={() => setTool("rotate")}
+                />
+                <ShaprRow
+                  icon={<Scaling size={14} strokeWidth={1.75} />}
+                  label="Scale"
+                  shortcut="S"
+                  active={tool === "scale"}
+                  onClick={() => setTool("scale")}
+                />
+              </div>
+            )}
+
+            <ShaprRow
+              icon={<PencilRuler size={15} strokeWidth={1.75} />}
+              label="Sketch"
+              sub="2D Sketching"
+              onClick={() => startSketch()}
+            />
+
+            <ShaprRow
+              icon={<Paintbrush size={15} strokeWidth={1.75} />}
+              label="Visualize"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent("arc-materials-toggle", { detail: true }),
+                )
+              }
             />
           </>
         ) : (

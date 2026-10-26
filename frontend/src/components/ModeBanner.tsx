@@ -96,7 +96,7 @@ export function ModeBanner() {
           {sketchMode && (
             <button
               type="button"
-              title="Normal (Space)"
+              title="Focus plane"
               onClick={() => {
                 const n = useArcStore.getState().sketchPlaneNormal;
                 window.dispatchEvent(
@@ -110,7 +110,7 @@ export function ModeBanner() {
           )}
           <button
             type="button"
-            title="Exit (Esc)"
+            title="Exit"
             onClick={sketchMode ? exitSketchMode : deselectTool}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-base-500 transition-colors hover:bg-base-200 hover:text-base-800"
           >
@@ -135,7 +135,7 @@ export function ModeBanner() {
           />
           <button
             type="button"
-            title="Close section view"
+            title="Close"
             onClick={() => setSectionView(false)}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-base-500 hover:bg-base-200 hover:text-base-800"
           >

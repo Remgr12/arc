@@ -4,7 +4,9 @@ import {
   ArrowRight,
   ArrowUp,
   Box,
+  Building2,
   Clock,
+  DraftingCompass,
   Folder,
   FolderOpen,
   LayoutGrid,
@@ -23,7 +25,7 @@ import { useArcStore } from "../lib/store";
 import { actions } from "../lib/actions";
 import { ipc } from "../lib/ipc";
 import { Button, Modal, TextField, cn } from "./ui";
-import type { ProjectSummary } from "../lib/types";
+import type { ProjectMode, ProjectSummary } from "../lib/types";
 
 type ViewMode = "grid" | "list";
 type FilterTab = "all" | "recent";
@@ -136,6 +138,7 @@ export function Dashboard() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [naming, setNaming] = useState<string | null>(null);
+  const [newProjectType, setNewProjectType] = useState<ProjectMode>("cad");
   const [saving, setSaving] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -329,7 +332,19 @@ export function Dashboard() {
     if (!name || saving) return;
     setSaving(true);
     try {
-      await actions.createWorkspaceProject(name);
+      await actions.createWorkspaceProject(name, newProjectType);
+      const folder = useArcStore.getState().workspaceFolder;
+      if (folder) {
+        const filePath = `${folder.replace(/[\\/]+$/, "")}/${name}.arc`;
+        const cat = newProjectType === "architecture" ? "Architecture" : "Mechanical";
+        const tag = newProjectType === "architecture" ? "BIM" : "CAD";
+        const updated = {
+          ...metaMap,
+          [filePath]: { category: cat, tags: [tag] },
+        };
+        setMetaMap(updated);
+        saveMetaMap(updated);
+      }
       setNaming(null);
     } finally {
       setSaving(false);
@@ -619,7 +634,7 @@ export function Dashboard() {
                   type="button"
                   onClick={() => setSelectedCategory(null)}
                   className="shrink-0 hover:text-accent-300 cursor-pointer"
-                  title="Clear category filter"
+                  title="Clear"
                 >
                   <X size={10} />
                 </button>
@@ -635,7 +650,7 @@ export function Dashboard() {
                   type="button"
                   onClick={() => setSelectedTag(null)}
                   className="shrink-0 hover:text-accent-300 cursor-pointer"
-                  title="Clear tag filter"
+                  title="Clear"
                 >
                   <X size={10} />
                 </button>
@@ -674,7 +689,6 @@ export function Dashboard() {
                 value={sortField}
                 onChange={(e) => setSortField(e.target.value as SortField)}
                 className="h-7 bg-transparent px-2 text-[11.5px] font-medium text-base-700 outline-none cursor-pointer"
-                title="Sort projects by"
               >
                 <option value="category">Category</option>
                 <option value="tags">Tags</option>
@@ -685,11 +699,7 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
-                title={
-                  sortDir === "asc"
-                    ? "Sort Ascending (click for Descending)"
-                    : "Sort Descending (click for Ascending)"
-                }
+                title={sortDir === "asc" ? "Ascending" : "Descending"}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-base-500 hover:bg-base-200 hover:text-base-800 transition-colors cursor-pointer"
               >
                 {sortDir === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
@@ -701,7 +711,7 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                title="Grid view"
+                title="Grid"
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
                   viewMode === "grid"
@@ -714,7 +724,7 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                title="List view"
+                title="List"
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer",
                   viewMode === "list"
@@ -810,7 +820,6 @@ export function Dashboard() {
                           "inline-flex max-w-[150px] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all cursor-pointer shadow-xs",
                           getCategoryTheme(project.category).pill,
                         )}
-                        title={`Filter by category ${project.category}`}
                       >
                         <span
                           className={cn(
@@ -836,7 +845,7 @@ export function Dashboard() {
                             setNewTagInput("");
                           }}
                           className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-base-200 hover:text-base-800 transition-all cursor-pointer"
-                          title="Edit category and tags"
+                          title="Edit"
                         >
                           <Pencil size={12} />
                         </button>
@@ -847,7 +856,7 @@ export function Dashboard() {
                             setDeletingProject(project);
                           }}
                           className="flex h-6.5 w-6.5 items-center justify-center rounded-lg text-base-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-600 transition-all cursor-pointer"
-                          title="Delete project"
+                          title="Delete"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -883,7 +892,6 @@ export function Dashboard() {
                                 ? "bg-accent-500 text-white font-semibold shadow-xs"
                                 : "border border-base-300 bg-base-150/70 text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900",
                             )}
-                            title={`Filter by tag #${tag}`}
                           >
                             <span className={cn("shrink-0", isSelected ? "text-white/80" : "text-base-400")}>#</span>
                             <span className="truncate">{tag}</span>
@@ -980,7 +988,6 @@ export function Dashboard() {
                           "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium transition-all hover:opacity-85 cursor-pointer shadow-xs",
                           getCategoryTheme(project.category).pill,
                         )}
-                        title={`Filter by category ${project.category}`}
                       >
                         <span
                           className={cn(
@@ -1000,7 +1007,6 @@ export function Dashboard() {
                             setSelectedTag(selectedTag === tag ? null : tag);
                           }}
                           className="inline-flex max-w-[120px] items-center gap-0.5 rounded-md border border-base-300 bg-base-150/80 px-1.5 py-0.2 text-[10px] font-medium text-base-600 hover:border-base-400 hover:bg-base-200 hover:text-base-900 cursor-pointer"
-                          title={`Filter by tag #${tag}`}
                         >
                           <span className="text-base-400 shrink-0">#</span>
                           <span className="truncate">{tag}</span>
@@ -1033,7 +1039,7 @@ export function Dashboard() {
                           setNewTagInput("");
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-base-200 hover:text-base-800 rounded-md transition-all cursor-pointer"
-                        title="Edit category and tags"
+                        title="Edit"
                       >
                         <Pencil size={12} />
                       </button>
@@ -1044,7 +1050,7 @@ export function Dashboard() {
                           setDeletingProject(project);
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-base-400 hover:bg-red-500/15 hover:text-red-600 rounded-md transition-all cursor-pointer"
-                        title="Delete project"
+                        title="Delete"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -1067,16 +1073,63 @@ export function Dashboard() {
         open={naming !== null}
         onClose={() => !saving && setNaming(null)}
         title="New project"
-        width="w-[380px]"
+        width="w-[440px]"
       >
         <div className="flex flex-col gap-4">
-          <TextField
-            value={naming ?? ""}
-            onChange={(value) => setNaming(value)}
-            placeholder="Project name"
-            mono
-          />
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold text-base-700">Project Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setNewProjectType("cad")}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all cursor-pointer",
+                  newProjectType === "cad"
+                    ? "border-accent-500 bg-accent-500/10 shadow-xs ring-1 ring-accent-500/30"
+                    : "border-base-300 bg-base-100 hover:border-base-400 hover:bg-base-200",
+                )}
+              >
+                <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-base-900">
+                  <DraftingCompass size={14} className="text-accent-500" strokeWidth={2} />
+                  <span>CAD Model</span>
+                </div>
+                <span className="text-[10.5px] text-base-500 leading-tight">
+                  Mechanical parts, solids, sketches & CSG
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNewProjectType("architecture")}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all cursor-pointer",
+                  newProjectType === "architecture"
+                    ? "border-accent-500 bg-accent-500/10 shadow-xs ring-1 ring-accent-500/30"
+                    : "border-base-300 bg-base-100 hover:border-base-400 hover:bg-base-200",
+                )}
+              >
+                <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-base-900">
+                  <Building2 size={14} className="text-accent-500" strokeWidth={2} />
+                  <span>Architecture</span>
+                </div>
+                <span className="text-[10.5px] text-base-500 leading-tight">
+                  Storeys, mitered walls, openings, stairs & IFC
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold text-base-700">Project Name</label>
+            <TextField
+              value={naming ?? ""}
+              onChange={(value) => setNaming(value)}
+              placeholder="e.g. Modern-Villa or Bracket-Mount"
+              mono
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setNaming(null)} disabled={saving}>
               Cancel
             </Button>
@@ -1085,7 +1138,7 @@ export function Dashboard() {
               disabled={saving || !naming?.trim()}
               onClick={() => void createProject()}
             >
-              Create
+              {saving ? "Creating…" : "Create project"}
             </Button>
           </div>
         </div>

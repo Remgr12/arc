@@ -161,6 +161,16 @@ pub fn generate(kind: &Geometry) -> Result<MeshBuffer, String> {
             panes_x,
             panes_y,
         } => gen_window(&mut mb, *width, *height, *depth, *panes_x, *panes_y),
+        Geometry::Component {
+            component_type,
+            width,
+            depth,
+            height,
+        } => gen_component(&mut mb, component_type, *width, *depth, *height),
+        Geometry::Room { polygon, .. } => gen_room(&mut mb, polygon),
+        Geometry::Railing { path, height } => gen_railing(&mut mb, path, *height),
+        Geometry::GridLine { start, end, .. } => gen_grid_line(&mut mb, *start, *end),
+        Geometry::LevelDatum { elevation, .. } => gen_level_datum(&mut mb, *elevation),
         Geometry::Dimension { start, end } => gen_dimension(&mut mb, *start, *end),
         Geometry::ImportedMesh { positions, indices } => {
             gen_imported_mesh(&mut mb, positions, indices)?
@@ -522,31 +532,166 @@ fn gen_arc(mb: &mut MeshBuilder, radius: f64, start_deg: f64, end_deg: f64, segm
 }
 
 fn gen_wall(mb: &mut MeshBuilder, path: &[[f64; 2]], width: f64, height: f64) {
-    if path.len() < 2 {
+    let n = path.len();
+    if n < 2 {
         return;
     }
-    let half = width / 2.0;
-    let mut next_face = 0u32;
-    for i in 0..path.len() - 1 {
-        let (start, end) = (path[i], path[i + 1]);
-        let dx = end[0] - start[0];
-        let dz = end[1] - start[1];
-        let len = (dx * dx + dz * dz).sqrt();
-        if len < 1e-9 {
-            continue;
+    let half = (width / 2.0).max(0.01);
+    let is_closed = n >= 3
+        && (path[0][0] - path[n - 1][0]).hypot(path[0][1] - path[n - 1][1]) < 1e-4;
+
+    let seg_count = n - 1;
+    let mut seg_perp = Vec::with_capacity(seg_count);
+    for i in 0..seg_count {
+        let (p0, p1) = (path[i], path[i + 1]);
+        let dx = p1[0] - p0[0];
+        let dz = p1[1] - p0[1];
+        let len = (dx * dx + dz * dz).sqrt().max(1e-9);
+        seg_perp.push([-dz / len, dx / len]);
+    }
+
+    let mut offsets = Vec::with_capacity(n);
+    for i in 0..n {
+        let offset = if i == 0 {
+            if is_closed {
+                let p_prev = seg_perp[seg_count - 1];
+                let p_next = seg_perp[0];
+                let avg = [p_prev[0] + p_next[0], p_prev[1] + p_next[1]];
+                let l = (avg[0] * avg[0] + avg[1] * avg[1]).sqrt();
+                if l > 1e-4 {
+                    let dot = p_next[0] * (avg[0] / l) + p_next[1] * (avg[1] / l);
+                    let scale = (half / dot.max(0.35)).min(half * 2.5);
+                    [avg[0] / l * scale, avg[1] / l * scale]
+                } else {
+                    [p_next[0] * half, p_next[1] * half]
+                }
+            } else {
+                [seg_perp[0][0] * half, seg_perp[0][1] * half]
+            }
+        } else if i == n - 1 {
+            if is_closed {
+                offsets[0]
+            } else {
+                let last = seg_perp[seg_count - 1];
+                [last[0] * half, last[1] * half]
+            }
+        } else {
+            let p_prev = seg_perp[i - 1];
+            let p_next = seg_perp[i];
+            let avg = [p_prev[0] + p_next[0], p_prev[1] + p_next[1]];
+            let l = (avg[0] * avg[0] + avg[1] * avg[1]).sqrt();
+            if l > 1e-4 {
+                let dot = p_next[0] * (avg[0] / l) + p_next[1] * (avg[1] / l);
+                let scale = (half / dot.max(0.35)).min(half * 2.5);
+                [avg[0] / l * scale, avg[1] / l * scale]
+            } else {
+                [p_next[0] * half, p_next[1] * half]
+            }
+        };
+        offsets.push(offset);
+    }
+
+    let mut face_id = 0u32;
+    for i in 0..seg_count {
+        let (p0, p1) = (path[i], path[i + 1]);
+        let (off0, off1) = (offsets[i], offsets[i + 1]);
+        let left0 = [p0[0] + off0[0], p0[1] + off0[1]];
+        let right0 = [p0[0] - off0[0], p0[1] - off0[1]];
+        let right1 = [p1[0] - off1[0], p1[1] - off1[1]];
+        let left1 = [p1[0] + off1[0], p1[1] + off1[1]];
+
+        // Top face
+        mb.push_quad(
+            [left0[0], height, left0[1]],
+            [right0[0], height, right0[1]],
+            [right1[0], height, right1[1]],
+            [left1[0], height, left1[1]],
+            [0.0, 1.0, 0.0],
+            face_id,
+        );
+        face_id += 1;
+
+        // Bottom face
+        mb.push_quad(
+            [left0[0], 0.0, left0[1]],
+            [left1[0], 0.0, left1[1]],
+            [right1[0], 0.0, right1[1]],
+            [right0[0], 0.0, right0[1]],
+            [0.0, -1.0, 0.0],
+            face_id,
+        );
+        face_id += 1;
+
+        // Left outer wall face
+        let perp = seg_perp[i];
+        mb.push_quad(
+            [left0[0], 0.0, left0[1]],
+            [left1[0], 0.0, left1[1]],
+            [left1[0], height, left1[1]],
+            [left0[0], height, left0[1]],
+            [perp[0], 0.0, perp[1]],
+            face_id,
+        );
+        face_id += 1;
+
+        // Right inner wall face
+        mb.push_quad(
+            [right1[0], 0.0, right1[1]],
+            [right0[0], 0.0, right0[1]],
+            [right0[0], height, right0[1]],
+            [right1[0], height, right1[1]],
+            [-perp[0], 0.0, -perp[1]],
+            face_id,
+        );
+        face_id += 1;
+
+        // Architectural edge lines
+        mb.push_line([left0[0], height, left0[1]], [left1[0], height, left1[1]]);
+        mb.push_line([right0[0], height, right0[1]], [right1[0], height, right1[1]]);
+        mb.push_line([left0[0], 0.0, left0[1]], [left1[0], 0.0, left1[1]]);
+        mb.push_line([right0[0], 0.0, right0[1]], [right1[0], 0.0, right1[1]]);
+        mb.push_line([left0[0], 0.0, left0[1]], [left0[0], height, left0[1]]);
+        mb.push_line([right0[0], 0.0, right0[1]], [right0[0], height, right0[1]]);
+        if i == seg_count - 1 {
+            mb.push_line([left1[0], 0.0, left1[1]], [left1[0], height, left1[1]]);
+            mb.push_line([right1[0], 0.0, right1[1]], [right1[0], height, right1[1]]);
         }
-        let (nx, nz) = (dx / len, dz / len);
-        let a = [start[0] - nx * half, start[1] - nz * half];
-        let b = [end[0] + nx * half, end[1] + nz * half];
-        let (px, pz) = (-nz * half, nx * half);
-        let c0 = [a[0] + px, a[1] + pz];
-        let c1 = [a[0] - px, a[1] - pz];
-        let c2 = [b[0] - px, b[1] - pz];
-        let c3 = [b[0] + px, b[1] + pz];
-        next_face = emit_wall_slab(mb, c0, c1, c2, c3, 0.0, height, next_face);
+
+        // End caps if open path
+        if !is_closed {
+            if i == 0 {
+                let dx = p1[0] - p0[0];
+                let dz = p1[1] - p0[1];
+                let len = (dx * dx + dz * dz).sqrt().max(1e-9);
+                mb.push_quad(
+                    [right0[0], 0.0, right0[1]],
+                    [left0[0], 0.0, left0[1]],
+                    [left0[0], height, left0[1]],
+                    [right0[0], height, right0[1]],
+                    [-dx / len, 0.0, -dz / len],
+                    face_id,
+                );
+                face_id += 1;
+            }
+            if i == seg_count - 1 {
+                let dx = p1[0] - p0[0];
+                let dz = p1[1] - p0[1];
+                let len = (dx * dx + dz * dz).sqrt().max(1e-9);
+                mb.push_quad(
+                    [left1[0], 0.0, left1[1]],
+                    [right1[0], 0.0, right1[1]],
+                    [right1[0], height, right1[1]],
+                    [left1[0], height, left1[1]],
+                    [dx / len, 0.0, dz / len],
+                    face_id,
+                );
+                face_id += 1;
+            }
+        }
     }
 }
 
+#[allow(dead_code)]
 fn emit_wall_slab(
     mb: &mut MeshBuilder,
     c0: [f64; 2],
@@ -781,6 +926,28 @@ fn gen_door(mb: &mut MeshBuilder, width: f64, height: f64, depth: f64, swing_deg
         mb.push_quad(aa, bb, cc, dd, n, face_id);
         face_id += 1;
     }
+
+    // Push architectural swing arc and leaf line into mb.lines
+    let arc_steps = 16;
+    let mut arc_pts = Vec::with_capacity(arc_steps + 1);
+    for s in 0..=arc_steps {
+        let frac = s as f64 / arc_steps as f64;
+        let ang = -swing_deg.to_radians() * frac;
+        arc_pts.push([
+            hinge[0] + panel_w * ang.cos(),
+            0.05,
+            hinge[2] + panel_w * ang.sin(),
+        ]);
+    }
+    mb.push_polyline(&arc_pts);
+    mb.push_line(
+        [hinge[0], 0.05, hinge[2]],
+        [
+            hinge[0] + panel_w * (-swing_deg.to_radians()).cos(),
+            0.05,
+            hinge[2] + panel_w * (-swing_deg.to_radians()).sin(),
+        ],
+    );
 }
 
 fn gen_window(
@@ -850,6 +1017,181 @@ fn gen_window(
         [-width / 2.0 + frame, -height / 2.0 + frame, -glass_t],
         [width / 2.0 - frame, height / 2.0 - frame, glass_t],
         next_face,
+    );
+}
+
+fn gen_component(mb: &mut MeshBuilder, comp_type: &str, width: f64, depth: f64, height: f64) {
+    let mut next_face = 0u32;
+    let hw = width / 2.0;
+    let hd = depth / 2.0;
+
+    match comp_type {
+        "table" => {
+            let top_th = (0.05 * height).max(2.0);
+            next_face = emit_cuboid(mb, [-hw, height - top_th, -hd], [hw, height, hd], next_face);
+            let leg_w = (width.min(depth) * 0.08).clamp(3.0, 10.0);
+            let margin = leg_w * 0.5;
+            for (lx, lz) in [
+                (-hw + margin, -hd + margin),
+                (hw - margin - leg_w, -hd + margin),
+                (-hw + margin, hd - margin - leg_w),
+                (hw - margin - leg_w, hd - margin - leg_w),
+            ] {
+                next_face = emit_cuboid(
+                    mb,
+                    [lx, 0.0, lz],
+                    [lx + leg_w, height - top_th, lz + leg_w],
+                    next_face,
+                );
+            }
+        }
+        "sofa" => {
+            let seat_h = height * 0.45;
+            let back_th = depth * 0.25;
+            let arm_w = width * 0.12;
+            next_face = emit_cuboid(mb, [-hw, 0.08 * height, -hd], [hw, seat_h, hd - back_th], next_face);
+            next_face = emit_cuboid(mb, [-hw, 0.08 * height, hd - back_th], [hw, height, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw, 0.08 * height, -hd], [-hw + arm_w, height * 0.65, hd], next_face);
+            let _ = emit_cuboid(mb, [hw - arm_w, 0.08 * height, -hd], [hw, height * 0.65, hd], next_face);
+        }
+        "chair" => {
+            let seat_h = height * 0.48;
+            next_face = emit_cuboid(mb, [-hw, seat_h - 0.04 * height, -hd], [hw, seat_h, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw, seat_h, hd - 0.06 * depth], [hw, height, hd], next_face);
+            let leg_w = (width.min(depth) * 0.08).clamp(2.0, 6.0);
+            for (lx, lz) in [
+                (-hw, -hd),
+                (hw - leg_w, -hd),
+                (-hw, hd - leg_w),
+                (hw - leg_w, hd - leg_w),
+            ] {
+                next_face = emit_cuboid(
+                    mb,
+                    [lx, 0.0, lz],
+                    [lx + leg_w, seat_h - 0.04 * height, lz + leg_w],
+                    next_face,
+                );
+            }
+        }
+        "desk" => {
+            let top_th = (0.04 * height).max(2.5);
+            next_face = emit_cuboid(mb, [-hw, height - top_th, -hd], [hw, height, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw, 0.0, -hd], [-hw + 0.05 * width, height - top_th, hd], next_face);
+            let ped_w = width * 0.32;
+            next_face = emit_cuboid(mb, [hw - ped_w, 0.0, -hd], [hw, height - top_th, hd], next_face);
+            let _ = emit_cuboid(mb, [-hw + 0.05 * width, height * 0.35, hd - 0.03 * depth], [hw - ped_w, height - top_th, hd], next_face);
+        }
+        "bed" => {
+            let mat_h = height * 0.55;
+            next_face = emit_cuboid(mb, [-hw, 0.15 * height, -hd], [hw, mat_h, hd - 0.1 * depth], next_face);
+            next_face = emit_cuboid(mb, [-hw, 0.0, hd - 0.1 * depth], [hw, height, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw - 2.0, 0.0, -hd - 2.0], [hw + 2.0, 0.18 * height, hd - 0.1 * depth], next_face);
+            let pw = width * 0.4;
+            let pd = depth * 0.22;
+            next_face = emit_cuboid(mb, [-hw + 0.06 * width, mat_h, hd - 0.1 * depth - pd - 2.0], [-hw + 0.06 * width + pw, mat_h + 0.12 * height, hd - 0.1 * depth - 2.0], next_face);
+            let _ = emit_cuboid(mb, [hw - 0.06 * width - pw, mat_h, hd - 0.1 * depth - pd - 2.0], [hw - 0.06 * width, mat_h + 0.12 * height, hd - 0.1 * depth - 2.0], next_face);
+        }
+        "cabinet" => {
+            next_face = emit_cuboid(mb, [-hw, 0.0, -hd], [hw, 0.08 * height, hd], next_face);
+            let _ = emit_cuboid(mb, [-hw, 0.08 * height, -hd], [hw, height, hd], next_face);
+        }
+        "toilet" => {
+            let tank_d = depth * 0.35;
+            next_face = emit_cuboid(mb, [-hw * 0.8, height * 0.45, hd - tank_d], [hw * 0.8, height, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw * 0.6, 0.0, -hd], [hw * 0.6, height * 0.45, hd], next_face);
+            let _ = emit_cuboid(mb, [-hw * 0.7, height * 0.45, -hd], [hw * 0.7, height * 0.48, hd - tank_d], next_face);
+        }
+        "sink" => {
+            next_face = emit_cuboid(mb, [-hw, 0.0, -hd], [hw, height * 0.88, hd], next_face);
+            next_face = emit_cuboid(mb, [-hw * 1.02, height * 0.88, -hd * 1.02], [hw * 1.02, height, hd * 1.02], next_face);
+            next_face = emit_cuboid(mb, [-0.03 * width, height, hd * 0.5], [0.03 * width, height + 0.15 * height, hd * 0.8], next_face);
+            let _ = emit_cuboid(mb, [-0.02 * width, height + 0.12 * height, hd * 0.1], [0.02 * width, height + 0.15 * height, hd * 0.5], next_face);
+        }
+        _ => {
+            let _ = emit_cuboid(mb, [-hw, 0.0, -hd], [hw, height, hd], next_face);
+        }
+    }
+}
+
+fn gen_room(mb: &mut MeshBuilder, polygon: &[[f64; 2]]) {
+    if polygon.len() < 3 {
+        return;
+    }
+    let mut line_pts = Vec::with_capacity(polygon.len() + 1);
+    for p in polygon {
+        line_pts.push([p[0], 0.05, p[1]]);
+    }
+    line_pts.push([polygon[0][0], 0.05, polygon[0][1]]);
+    mb.push_polyline(&line_pts);
+
+    let n = polygon.len();
+    for i in 1..n - 1 {
+        let (p0, p1, p2) = (polygon[0], polygon[i], polygon[i + 1]);
+        mb.push_tri(
+            [p0[0], 0.02, p0[1]],
+            [p1[0], 0.02, p1[1]],
+            [p2[0], 0.02, p2[1]],
+            [0.0, 1.0, 0.0],
+            0,
+        );
+    }
+}
+
+fn gen_railing(mb: &mut MeshBuilder, path: &[[f64; 3]], height: f64) {
+    if path.len() < 2 {
+        return;
+    }
+    let mut next_face = 0u32;
+    let post_r = 2.5;
+    let top_r = 3.5;
+
+    for p in path {
+        next_face = emit_cuboid(
+            mb,
+            [p[0] - post_r, p[1], p[2] - post_r],
+            [p[0] + post_r, p[1] + height, p[2] + post_r],
+            next_face,
+        );
+    }
+
+    for i in 0..path.len() - 1 {
+        let (p0, p1) = (path[i], path[i + 1]);
+        let t0 = [p0[0], p0[1] + height, p0[2]];
+        let t1 = [p1[0], p1[1] + height, p1[2]];
+        next_face = emit_cuboid(
+            mb,
+            [t0[0] - top_r, t0[1] - top_r, t0[2] - top_r],
+            [t1[0] + top_r, t1[1] + top_r, t1[2] + top_r],
+            next_face,
+        );
+    }
+}
+
+fn gen_grid_line(mb: &mut MeshBuilder, start: [f64; 2], end: [f64; 2]) {
+    mb.push_polyline(&[[start[0], 0.0, start[1]], [end[0], 0.0, end[1]]]);
+
+    let bubble_r = 25.0;
+    let steps = 24;
+    for center in [start, end] {
+        let mut circle = Vec::with_capacity(steps + 1);
+        for s in 0..=steps {
+            let a = 2.0 * std::f64::consts::PI * (s as f64) / (steps as f64);
+            circle.push([center[0] + bubble_r * a.cos(), 0.05, center[1] + bubble_r * a.sin()]);
+        }
+        mb.push_polyline(&circle);
+    }
+}
+
+fn gen_level_datum(mb: &mut MeshBuilder, elevation: f64) {
+    let extent = 800.0;
+    mb.push_polyline(&[[-extent, elevation, 0.0], [extent, elevation, 0.0]]);
+    let s = 20.0;
+    mb.push_tri(
+        [0.0, elevation, 0.0],
+        [-s, elevation + s, 0.0],
+        [s, elevation + s, 0.0],
+        [0.0, 0.0, 1.0],
+        0,
     );
 }
 
@@ -1528,5 +1870,63 @@ mod tests {
         let buf = generate(&csg).expect("transformed csg difference");
         assert!(!buf.positions.is_empty());
         assert!(!buf.lines.is_empty());
+    }
+
+    #[test]
+    fn architecture_wall_and_elements_mesh_generation() {
+        let wall = Geometry::Wall {
+            path: vec![
+                [0.0, 0.0],
+                [400.0, 0.0],
+                [400.0, 300.0],
+                [0.0, 300.0],
+            ],
+            width: 20.0,
+            height: 280.0,
+        };
+        let wall_mesh = generate(&wall).expect("mitered wall mesh");
+        assert!(!wall_mesh.positions.is_empty());
+        assert!(!wall_mesh.lines.is_empty());
+
+        let door = Geometry::Door {
+            width: 90.0,
+            height: 210.0,
+            depth: 15.0,
+            swing_deg: 90.0,
+        };
+        let door_mesh = generate(&door).expect("door mesh");
+        assert!(!door_mesh.positions.is_empty());
+        assert!(!door_mesh.lines.is_empty());
+
+        let sofa = Geometry::Component {
+            component_type: "sofa".to_string(),
+            width: 200.0,
+            depth: 90.0,
+            height: 80.0,
+        };
+        let sofa_mesh = generate(&sofa).expect("sofa mesh");
+        assert!(!sofa_mesh.positions.is_empty());
+
+        let room = Geometry::Room {
+            name: "Living Room".to_string(),
+            number: "101".to_string(),
+            polygon: vec![
+                [0.0, 0.0],
+                [400.0, 0.0],
+                [400.0, 300.0],
+                [0.0, 300.0],
+            ],
+            level: None,
+        };
+        let room_mesh = generate(&room).expect("room mesh");
+        assert!(!room_mesh.positions.is_empty());
+        assert!(!room_mesh.lines.is_empty());
+
+        let railing = Geometry::Railing {
+            path: vec![[0.0, 0.0, 0.0], [300.0, 0.0, 0.0]],
+            height: 95.0,
+        };
+        let railing_mesh = generate(&railing).expect("railing mesh");
+        assert!(!railing_mesh.positions.is_empty());
     }
 }

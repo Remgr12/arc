@@ -152,6 +152,37 @@ pub enum Geometry {
         panes_x: u32,
         panes_y: u32,
     },
+    /// Architectural component / furniture (sofa, table, desk, chair, bed, cabinet, sink, toilet).
+    Component {
+        component_type: String,
+        width: f64,
+        depth: f64,
+        height: f64,
+    },
+    /// Enclosed architectural space / room.
+    Room {
+        name: String,
+        number: String,
+        polygon: Vec<[f64; 2]>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        level: Option<String>,
+    },
+    /// Railing / balustrade along a path.
+    Railing {
+        path: Vec<[f64; 3]>,
+        height: f64,
+    },
+    /// Architectural grid line with bubble marker.
+    GridLine {
+        name: String,
+        start: [f64; 2],
+        end: [f64; 2],
+    },
+    /// Level datum plane with elevation marker.
+    LevelDatum {
+        name: String,
+        elevation: f64,
+    },
 
     // --- annotation ---
     /// Dimension between two points (rendered as line + arrows + label).
@@ -258,6 +289,11 @@ impl Geometry {
             Geometry::Beam { .. } => "beam",
             Geometry::Door { .. } => "door",
             Geometry::Window { .. } => "window",
+            Geometry::Component { .. } => "component",
+            Geometry::Room { .. } => "room",
+            Geometry::Railing { .. } => "railing",
+            Geometry::GridLine { .. } => "grid_line",
+            Geometry::LevelDatum { .. } => "level_datum",
             Geometry::Dimension { .. } => "dimension",
         }
     }
@@ -293,7 +329,12 @@ impl Geometry {
             | Geometry::Column { .. }
             | Geometry::Beam { .. }
             | Geometry::Door { .. }
-            | Geometry::Window { .. } => GeometryCategory::Architecture,
+            | Geometry::Window { .. }
+            | Geometry::Component { .. }
+            | Geometry::Room { .. }
+            | Geometry::Railing { .. }
+            | Geometry::GridLine { .. }
+            | Geometry::LevelDatum { .. } => GeometryCategory::Architecture,
             Geometry::Dimension { .. } => GeometryCategory::Annotation,
             Geometry::ImportedMesh { .. } => GeometryCategory::Solid,
         }
@@ -311,6 +352,8 @@ impl Geometry {
                 | Geometry::RectangleCurve { .. }
                 | Geometry::PolygonCurve { .. }
                 | Geometry::Dimension { .. }
+                | Geometry::GridLine { .. }
+                | Geometry::LevelDatum { .. }
         )
     }
 
@@ -324,7 +367,14 @@ impl Geometry {
                 | Geometry::ArcCurve { .. }
                 | Geometry::RectangleCurve { .. }
                 | Geometry::PolygonCurve { .. }
-        ) || matches!(self, Geometry::Dimension { .. })
+                | Geometry::Dimension { .. }
+                | Geometry::GridLine { .. }
+                | Geometry::LevelDatum { .. }
+                | Geometry::Door { .. }
+                | Geometry::Window { .. }
+                | Geometry::Room { .. }
+                | Geometry::Railing { .. }
+        )
     }
 
     /// All polygons must be closed for cap triangulation.

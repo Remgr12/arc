@@ -4,7 +4,7 @@ import { useArcStore } from "./store";
 import { MATERIALS } from "./materials";
 import { DEFAULT_GEOMETRY } from "../data/tools";
 import { deriveFaces, facePlaneInfo } from "../tools/topology";
-import type { Geometry, ToolId, Transform } from "./types";
+import type { Geometry, ProjectMode, ToolId, Transform } from "./types";
 
 function guard<A extends unknown[]>(
   action: (...args: A) => Promise<unknown>,
@@ -53,8 +53,8 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
     }
   }),
 
-  newDocument: guard(async () => {
-    await ipc.newDocument();
+  newDocument: guard(async (name?: string, mode?: ProjectMode) => {
+    await ipc.newDocument(name, mode);
     const overview = await ipc.getState();
     useArcStore.getState().setOverview(overview);
     if (overview.active) {
@@ -104,7 +104,7 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
   }),
 
   /** Create a named project inside the workspace folder and open it. */
-  createWorkspaceProject: guard(async (rawName: string) => {
+  createWorkspaceProject: guard(async (rawName: string, mode?: ProjectMode) => {
     const name = rawName.trim().replace(/[\\/:*?"<>|]/g, "-");
     if (!name) return;
     let folder = useArcStore.getState().workspaceFolder;
@@ -113,7 +113,7 @@ export const actions = {  booleanApply: guard(async (operation: "union" | "diffe
       return;
     }
     folder = folder.replace(/[\\/]+$/, "");
-    const doc = await ipc.newDocument(name);
+    const doc = await ipc.newDocument(name, mode);
     const filePath = `${folder}/${name}.arc`;
     await ipc.saveDocument(doc.id, filePath);
     useArcStore.getState().addProjectToCache(folder, {

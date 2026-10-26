@@ -125,6 +125,9 @@ interface ViewportRefs {
   sectionPlane: THREE.Plane;
   overlayKey: string;
   ctx: ToolContext;
+  archDatumsRoot: THREE.Group;
+  lastArchViewMode?: "3d" | "floorplan" | "section" | "elevation";
+  lastArchDatumsKey?: string;
 }
 
 /** The main editor viewport. Handles navigation, picking and tools. */
@@ -479,6 +482,9 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
   gridNode.visible = false;
   sceneRoot.add(gridNode);
 
+  const archDatumsRoot = new THREE.Group();
+  sceneRoot.add(archDatumsRoot);
+
   const ref: ViewportRefs = {
     host,
     measureEl,
@@ -536,6 +542,7 @@ function createViewport(host: HTMLDivElement): ViewportRefs {
     sectionPlane: new THREE.Plane(new THREE.Vector3(0, -1, 0), 15),
     overlayKey: "",
     ctx: null as unknown as ToolContext,
+    archDatumsRoot,
   };
 
   ref.gizmo = new ViewCube(
@@ -874,6 +881,32 @@ function syncSceneToThree(ref: ViewportRefs): void {
   }
   updateOverlays(ref);
 
+  // Sync architectural datums (grid lines, level planes)
+  syncArchDatums(ref, scene);
+
+  // Handle architectural view mode changes (Floor Plan, Elevation, 3D)
+  const archMode = state.archViewMode ?? "3d";
+  if (archMode !== ref.lastArchViewMode) {
+    ref.lastArchViewMode = archMode;
+    if (scene && scene.projectMode === "architecture") {
+      const activeLvl = scene.levels?.find((l) => l.id === scene.activeLevel) ?? scene.levels?.[0];
+      const elev = activeLvl?.elevation ?? 0;
+      if (archMode === "floorplan") {
+        const targetTo = new THREE.Vector3(0, elev, 0);
+        const posTo = new THREE.Vector3(0, elev + 850, 0.001);
+        flyCamera(ref, posTo, targetTo, 350);
+      } else if (archMode === "elevation") {
+        const targetTo = new THREE.Vector3(0, elev + 140, 0);
+        const posTo = new THREE.Vector3(0, elev + 140, 850);
+        flyCamera(ref, posTo, targetTo, 350);
+      } else if (archMode === "3d") {
+        const targetTo = new THREE.Vector3(0, elev, 0);
+        const posTo = new THREE.Vector3(500, elev + 400, 500);
+        flyCamera(ref, posTo, targetTo, 350);
+      }
+    }
+  }
+
   const settings = state.settings;
   const isCreatingOrSketching =
     state.sketchMode ||
@@ -1162,6 +1195,149 @@ function makeDimensionBadge(text: string): THREE.Sprite {
   sprite.scale.set(16, 4.8, 1);
   sprite.renderOrder = 10;
   return sprite;
+}
+
+function makeGridBubbleBadge(label: string, active = false): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.beginPath();
+    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.fillStyle = active ? "rgba(33, 179, 237, 0.95)" : "rgba(30, 41, 59, 0.9)";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = active ? "#ffffff" : "#94a3b8";
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 32, 32);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(18, 18, 1);
+  sprite.renderOrder = 12;
+  return sprite;
+}
+
+function makeLevelHeadBadge(name: string, elevation: number, active = false): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 240;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = active ? "rgba(33, 179, 237, 0.9)" : "rgba(15, 23, 42, 0.85)";
+    ctx.beginPath();
+    ctx.roundRect(4, 8, 232, 48, 8);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = active ? "#38bdf8" : "#475569";
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(name, 16, 32);
+
+    ctx.fillStyle = active ? "#e0f2fe" : "#94a3b8";
+    ctx.font = "16px monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(`${elevation} cm`, 220, 32);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(30, 8, 1);
+  sprite.renderOrder = 12;
+  return sprite;
+}
+
+function syncArchDatums(ref: ViewportRefs, scene: SceneData | null): void {
+  if (!scene || scene.projectMode !== "architecture") {
+    if (ref.archDatumsRoot.children.length > 0) {
+      while (ref.archDatumsRoot.children.length > 0) {
+        const c = ref.archDatumsRoot.children[0];
+        ref.archDatumsRoot.remove(c);
+        disposeObject(c);
+      }
+      ref.needsRender = true;
+    }
+    return;
+  }
+
+  const gridsKey = (scene.grids ?? [])
+    .map((g) => `${g.id}:${g.name}:${g.start.join(",")}:${g.end.join(",")}`)
+    .join("|");
+  const levelsKey =
+    (scene.levels ?? [])
+      .map((l) => `${l.id}:${l.name}:${l.elevation}`)
+      .join("|") + `:${scene.activeLevel}`;
+  const datumsKey = `${gridsKey}__${levelsKey}`;
+
+  if (datumsKey === ref.lastArchDatumsKey) return;
+  ref.lastArchDatumsKey = datumsKey;
+
+  while (ref.archDatumsRoot.children.length > 0) {
+    const c = ref.archDatumsRoot.children[0];
+    ref.archDatumsRoot.remove(c);
+    disposeObject(c);
+  }
+
+  // 1. Render Grids
+  for (const grid of scene.grids ?? []) {
+    const p1 = new THREE.Vector3(grid.start[0], 0.15, grid.start[1]);
+    const p2 = new THREE.Vector3(grid.end[0], 0.15, grid.end[1]);
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineDashedMaterial({
+      color: 0x64748b,
+      dashSize: 8,
+      gapSize: 4,
+    });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.computeLineDistances();
+    ref.archDatumsRoot.add(line);
+
+    const b1 = makeGridBubbleBadge(grid.name);
+    b1.position.copy(p1);
+    ref.archDatumsRoot.add(b1);
+
+    const b2 = makeGridBubbleBadge(grid.name);
+    b2.position.copy(p2);
+    ref.archDatumsRoot.add(b2);
+  }
+
+  // 2. Render Levels
+  for (const lvl of scene.levels ?? []) {
+    const isActive = lvl.id === scene.activeLevel;
+    const y = lvl.elevation;
+
+    const p1 = new THREE.Vector3(-450, y, 0);
+    const p2 = new THREE.Vector3(450, y, 0);
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineDashedMaterial({
+      color: isActive ? 0x21b3ed : 0x475569,
+      dashSize: 12,
+      gapSize: 6,
+    });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.computeLineDistances();
+    ref.archDatumsRoot.add(line);
+
+    const badge = makeLevelHeadBadge(lvl.name, lvl.elevation, isActive);
+    badge.position.set(-475, y, 0);
+    ref.archDatumsRoot.add(badge);
+  }
+
+  ref.needsRender = true;
 }
 
 function buildClosedSketchFill(lineData: number[], entityId: string, color: THREE.Color): THREE.Mesh | null {

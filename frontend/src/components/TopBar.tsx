@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Command, Redo2, Settings, Undo2, ArrowLeft, ArrowRight } from "lucide-react";
+import { Check, ChevronDown, Command, Redo2, Settings, Undo2, ArrowLeft, ArrowRight, Layers, Plus, Table, DraftingCompass, Building2 } from "lucide-react";
 import { actions } from "../lib/actions";
 import { useArcStore } from "../lib/store";
 import { bindingHint } from "../lib/keybinds";
@@ -100,6 +100,187 @@ function Menu({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function LevelSelector({ docId }: { docId: string }) {
+  const scene = useArcStore((s) => s.scene);
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newLevelName, setNewLevelName] = useState("");
+  const [newElevation, setNewElevation] = useState(300);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const levels = scene?.levels ?? [];
+  const activeLevel = levels.find((l) => l.id === scene?.activeLevel) ?? levels[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setAdding(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleAddLevel = async () => {
+    if (!newLevelName.trim()) return;
+    try {
+      await ipc.addLevel(docId, newLevelName.trim(), Number(newElevation), 300);
+      setNewLevelName("");
+      setAdding(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-7 items-center gap-1.5 rounded-md border border-base-300 bg-base-100 px-2 text-[11px] font-medium text-base-700 hover:bg-base-200 transition-colors cursor-pointer shadow-2xs"
+      >
+        <Layers size={12} className="text-accent-500" />
+        <span className="font-semibold text-base-900">{activeLevel?.name ?? "Storey"}</span>
+        <span className="text-[10px] text-base-500">({activeLevel?.elevation ?? 0} cm)</span>
+        <ChevronDown size={11} className="text-base-400" />
+      </button>
+
+      {open && (
+        <div className="anim-pop absolute left-0 top-full mt-1 z-50 flex w-56 flex-col rounded-lg border border-base-300 bg-base-100 p-1.5 shadow-lg shadow-black/40">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-base-400">
+            Storeys & Levels
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {levels.map((lvl) => {
+              const isActive = lvl.id === scene?.activeLevel;
+              return (
+                <button
+                  key={lvl.id}
+                  type="button"
+                  onClick={() => {
+                    void ipc.setActiveLevel(docId, lvl.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11.5px] transition-colors cursor-pointer",
+                    isActive
+                      ? "bg-accent-500/15 text-accent-600 font-semibold"
+                      : "text-base-700 hover:bg-base-200 hover:text-base-900",
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        isActive ? "bg-accent-500" : "bg-base-300",
+                      )}
+                    />
+                    <span>{lvl.name}</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-base-500">{lvl.elevation} cm</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="my-1 border-t border-base-200" />
+
+          {adding ? (
+            <div className="flex flex-col gap-1.5 p-1">
+              <input
+                type="text"
+                placeholder="Level name (e.g. Level 3)"
+                value={newLevelName}
+                onChange={(e) => setNewLevelName(e.target.value)}
+                className="h-6 rounded border border-base-300 bg-base-50 px-2 text-[11px] text-base-800"
+                autoFocus
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  placeholder="Elevation (cm)"
+                  value={newElevation}
+                  onChange={(e) => setNewElevation(Number(e.target.value))}
+                  className="h-6 w-24 rounded border border-base-300 bg-base-50 px-2 font-mono text-[11px] text-base-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAddLevel()}
+                  className="flex-1 rounded bg-accent-500 h-6 text-[11px] font-semibold text-white hover:bg-accent-600 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(true);
+                const maxElev = levels.reduce((m, l) => Math.max(m, l.elevation), 0);
+                setNewElevation(maxElev + 300);
+                setNewLevelName(`Level ${levels.length + 1}`);
+              }}
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-medium text-accent-500 hover:bg-accent-500/10 cursor-pointer"
+            >
+              <Plus size={12} />
+              <span>Add New Level…</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArchViewSelector() {
+  const archViewMode = useArcStore((s) => s.archViewMode);
+  const setArchViewMode = useArcStore((s) => s.setArchViewMode);
+
+  return (
+    <div className="flex items-center rounded-md border border-base-300 bg-base-100 p-0.5 shadow-2xs">
+      <button
+        type="button"
+        onClick={() => setArchViewMode("3d")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+          archViewMode === "3d"
+            ? "bg-base-300 text-base-900 font-semibold"
+            : "text-base-600 hover:text-base-900",
+        )}
+      >
+        3D
+      </button>
+      <button
+        type="button"
+        onClick={() => setArchViewMode("floorplan")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+          archViewMode === "floorplan"
+            ? "bg-base-300 text-base-900 font-semibold"
+            : "text-base-600 hover:text-base-900",
+        )}
+      >
+        Floor Plan
+      </button>
+      <button
+        type="button"
+        onClick={() => setArchViewMode("elevation")}
+        className={cn(
+          "rounded px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+          archViewMode === "elevation"
+            ? "bg-base-300 text-base-900 font-semibold"
+            : "text-base-600 hover:text-base-900",
+        )}
+      >
+        Elevation
+      </button>
     </div>
   );
 }
@@ -294,6 +475,56 @@ export function TopBar({ children }: { children?: ReactNode }) {
         )}
       </div>
 
+      {view === "editor" && docId && (
+        <div className="flex items-center gap-2 ml-1">
+          {/* Workbench Switcher */}
+          <div className="flex items-center rounded-lg border border-base-300 bg-base-100 p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => void ipc.setProjectMode(docId, "cad")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                (scene?.projectMode ?? "cad") === "cad"
+                  ? "bg-accent-500 text-white shadow-2xs"
+                  : "text-base-600 hover:text-base-900",
+              )}
+            >
+              <DraftingCompass size={12} strokeWidth={2} />
+              <span>CAD</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void ipc.setProjectMode(docId, "architecture")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+                scene?.projectMode === "architecture"
+                  ? "bg-accent-500 text-white shadow-2xs"
+                  : "text-base-600 hover:text-base-900",
+              )}
+            >
+              <Building2 size={12} strokeWidth={2} />
+              <span>Architecture</span>
+            </button>
+          </div>
+
+          {/* Architecture Workbench Controls */}
+          {scene?.projectMode === "architecture" && (
+            <div className="flex items-center gap-1.5">
+              <LevelSelector docId={docId} />
+              <ArchViewSelector />
+              <button
+                type="button"
+                onClick={() => useArcStore.getState().setBuildingScheduleOpen(true)}
+                className="flex items-center gap-1 rounded-md border border-base-300 bg-base-100 px-2 py-1 text-[11px] font-medium text-base-700 hover:bg-base-200 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Table size={12} className="text-accent-500" />
+                <span>Schedule</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Draggable spacer left of title */}
       <div
         data-tauri-drag-region
@@ -324,14 +555,14 @@ export function TopBar({ children }: { children?: ReactNode }) {
             {overview?.active && (
               <IconButton
                 icon={<ArrowRight size={16} strokeWidth={1.75} />}
-                title="Return to editor"
+                title="Editor"
                 onClick={() => useArcStore.getState().setView("editor")}
                 className="text-base-600 hover:bg-base-200"
               />
             )}
             <IconButton
               icon={<Command size={16} strokeWidth={1.75} />}
-              title="Command palette"
+              title="Commands"
               onClick={() => useArcStore.getState().setPaletteOpen(true)}
               className="text-base-600 hover:bg-base-200"
             />
@@ -346,7 +577,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
           <>
             <IconButton
               icon={<ArrowLeft size={16} strokeWidth={1.75} />}
-              title="Return to projects dashboard"
+              title="Projects"
               onClick={() => useArcStore.getState().setView("dashboard")}
               className="text-base-600 hover:bg-base-200"
             />
@@ -354,12 +585,14 @@ export function TopBar({ children }: { children?: ReactNode }) {
             {children}
             <IconButton
               icon={<Undo2 size={16} strokeWidth={1.75} />}
+              title="Undo"
               disabled={!scene?.canUndo}
               onClick={() => void actions.undo()}
               className="text-base-600 hover:bg-base-200"
             />
             <IconButton
               icon={<Redo2 size={16} strokeWidth={1.75} />}
+              title="Redo"
               disabled={!scene?.canRedo}
               onClick={() => void actions.redo()}
               className="text-base-600 hover:bg-base-200"
@@ -369,7 +602,7 @@ export function TopBar({ children }: { children?: ReactNode }) {
 
             <IconButton
               icon={<Command size={16} strokeWidth={1.75} />}
-              title="Command palette"
+              title="Commands"
               onClick={() => useArcStore.getState().setPaletteOpen(true)}
               className="text-base-600 hover:bg-base-200"
             />

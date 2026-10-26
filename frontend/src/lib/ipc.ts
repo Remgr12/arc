@@ -1,10 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppOverview,
+  BuildingSchedule,
   DocumentInfo,
   Geometry,
+  GridData,
   LayerData,
+  LevelData,
   PluginInfo,
+  ProjectMode,
   ProjectSummary,
   RayHit,
   SceneData,
@@ -27,13 +31,37 @@ export const ipc = {
     invoke("read_project_thumbnail", { projectPath }),
   setSettings: (settings: Settings): Promise<Settings> => invoke("set_settings", { settings }),
 
-  newDocument: (name?: string): Promise<DocumentInfo> =>
-    invoke("new_document", { name: name ?? null }),
+  newDocument: (name?: string, mode?: ProjectMode): Promise<DocumentInfo> =>
+    invoke("new_document", { name: name ?? null, mode: mode ?? null }),
   openDocument: (path: string): Promise<DocumentInfo> => invoke("open_document", { path }),
   saveDocument: (documentId: string, path?: string): Promise<DocumentInfo> =>
     invoke("save_document", { documentId, path: path ?? null }),
   closeDocument: (id: string): Promise<void> => invoke("close_document", { id }),
   setActiveDocument: (id: string): Promise<void> => invoke("set_active_document", { id }),
+
+  // architecture & BIM
+  setProjectMode: (documentId: string, mode: ProjectMode): Promise<SceneData> =>
+    invoke("set_project_mode", { documentId, mode }),
+  addLevel: (
+    documentId: string,
+    name: string,
+    elevation: number,
+    height: number,
+  ): Promise<LevelData> => invoke("add_level", { documentId, name, elevation, height }),
+  removeLevel: (documentId: string, levelId: string): Promise<boolean> =>
+    invoke("remove_level", { documentId, levelId }),
+  setActiveLevel: (documentId: string, levelId: string | null): Promise<void> =>
+    invoke("set_active_level", { documentId, levelId }),
+  addGrid: (
+    documentId: string,
+    name: string,
+    start: [number, number],
+    end: [number, number],
+  ): Promise<GridData> => invoke("add_grid", { documentId, name, start, end }),
+  removeGrid: (documentId: string, gridId: string): Promise<boolean> =>
+    invoke("remove_grid", { documentId, gridId }),
+  getBuildingSchedule: (documentId: string): Promise<BuildingSchedule> =>
+    invoke("get_building_schedule", { documentId }),
 
   // scene
   getScene: (documentId: string): Promise<SceneData> =>

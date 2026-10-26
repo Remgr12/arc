@@ -581,6 +581,156 @@ function EntityForm({
   );
 }
 
+function WallInspector({ geometry }: { geometry: Record<string, unknown> }) {
+  const start = geometry.start as [number, number, number] | undefined;
+  const end = geometry.end as [number, number, number] | undefined;
+  const poly = geometry.polyline as [number, number][] | undefined;
+  let length = 0;
+  if (poly && poly.length >= 2) {
+    for (let i = 0; i < poly.length - 1; i++) {
+      length += Math.hypot(poly[i + 1][0] - poly[i][0], poly[i + 1][1] - poly[i][1]);
+    }
+  } else if (start && end) {
+    length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
+  }
+  const height = typeof geometry.height === "number" ? geometry.height : 280;
+  const areaM2 = ((length * height) / 10000).toFixed(2);
+
+  return (
+    <>
+      <Row label="Total Length">
+        <span className="font-mono text-[11.5px] text-base-800">
+          {(length / 100).toFixed(2)} m ({Math.round(length)} cm)
+        </span>
+      </Row>
+      <Row label="Surface Area">
+        <span className="font-mono text-[11.5px] text-accent-500 font-semibold">
+          {areaM2} m²
+        </span>
+      </Row>
+    </>
+  );
+}
+
+function ComponentInspector({
+  geometry,
+  update,
+}: {
+  geometry: Record<string, unknown>;
+  update: (patch: Record<string, unknown>) => void;
+}) {
+  const kinds = [
+    { value: "sofa", label: "Sofa / Couch" },
+    { value: "table", label: "Dining Table" },
+    { value: "desk", label: "Office Desk" },
+    { value: "chair", label: "Chair" },
+    { value: "bed", label: "Double Bed" },
+    { value: "cabinet", label: "Storage Cabinet" },
+    { value: "toilet", label: "Bathroom Toilet" },
+    { value: "sink", label: "Counter & Sink" },
+  ];
+  return (
+    <Row label="Furniture Kind">
+      <SelectField
+        className="h-7 text-[11.5px]"
+        value={(geometry.kind as string) ?? "sofa"}
+        options={kinds}
+        onChange={(kind) => update({ kind })}
+      />
+    </Row>
+  );
+}
+
+function RoomInspector({
+  geometry,
+  update,
+}: {
+  geometry: Record<string, unknown>;
+  update: (patch: Record<string, unknown>) => void;
+}) {
+  const boundary = (geometry.boundary as [number, number][]) ?? [];
+  let areaCm2 = 0;
+  if (boundary.length >= 3) {
+    let sum = 0;
+    for (let i = 0; i < boundary.length; i++) {
+      const p1 = boundary[i];
+      const p2 = boundary[(i + 1) % boundary.length];
+      sum += p1[0] * p2[1] - p2[0] * p1[1];
+    }
+    areaCm2 = Math.abs(sum) * 0.5;
+  }
+  const areaM2 = (areaCm2 / 10000).toFixed(2);
+  const areaSqFt = ((areaCm2 / 10000) * 10.7639).toFixed(1);
+
+  return (
+    <>
+      <Row label="Room Name">
+        <TextField
+          className="h-7 text-[11.5px]"
+          value={(geometry.name as string) ?? "Room"}
+          onCommit={(name) => update({ name })}
+        />
+      </Row>
+      <Row label="Room Number">
+        <TextField
+          className="h-7 text-[11.5px]"
+          mono
+          value={(geometry.number as string) ?? "101"}
+          onCommit={(number) => update({ number })}
+        />
+      </Row>
+      <Row label="Calculated Area">
+        <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-accent-500">
+          <span>{areaM2} m²</span>
+          <span className="text-base-400">({areaSqFt} sq ft)</span>
+        </div>
+      </Row>
+    </>
+  );
+}
+
+function DoorWindowInspector({
+  geometry,
+  update,
+}: {
+  geometry: Record<string, unknown>;
+  update: (patch: Record<string, unknown>) => void;
+}) {
+  const flipHand = Boolean(geometry.flip_hand);
+  const flipFacing = Boolean(geometry.flip_facing);
+
+  return (
+    <Row label="Hand / Orientation">
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => update({ flip_hand: !flipHand })}
+          className={cn(
+            "rounded border px-2 py-1 text-[10.5px] font-semibold transition-all cursor-pointer",
+            flipHand
+              ? "border-accent-500 bg-accent-500/15 text-accent-500"
+              : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
+          )}
+        >
+          {flipHand ? "Right Hand" : "Left Hand"}
+        </button>
+        <button
+          type="button"
+          onClick={() => update({ flip_facing: !flipFacing })}
+          className={cn(
+            "rounded border px-2 py-1 text-[10.5px] font-semibold transition-all cursor-pointer",
+            flipFacing
+              ? "border-accent-500 bg-accent-500/15 text-accent-500"
+              : "border-base-300 bg-base-100 text-base-700 hover:bg-base-200",
+          )}
+        >
+          {flipFacing ? "Exterior" : "Interior"}
+        </button>
+      </div>
+    </Row>
+  );
+}
+
 function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) {
   const geometry = entity.geometry as Record<string, unknown>;
   const numericKeys = Object.keys(geometry).filter(
@@ -596,6 +746,16 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
 
   return (
     <div className="flex flex-col gap-1 py-0.5">
+      {entity.kind === "wall" && <WallInspector geometry={geometry} />}
+      {entity.kind === "component" && (
+        <ComponentInspector geometry={geometry} update={update} />
+      )}
+      {entity.kind === "room" && (
+        <RoomInspector geometry={geometry} update={update} />
+      )}
+      {(entity.kind === "door" || entity.kind === "window") && (
+        <DoorWindowInspector geometry={geometry} update={update} />
+      )}
       {numericKeys.map((key) => (
         <Row key={key} label={humanize(key)}>
           <NumField
@@ -618,12 +778,11 @@ function GeometryForm({ docId, entity }: { docId: string; entity: EntityData }) 
               } catch {
                 // keep previous value on bad input
               }
-            }
-            }
+            }}
           />
         </Row>
       ))}
-      {numericKeys.length === 0 && pointKeys.length === 0 && (
+      {numericKeys.length === 0 && pointKeys.length === 0 && entity.kind !== "component" && entity.kind !== "room" && (
         <div className="text-[11px] text-base-500">No editable parameters.</div>
       )}
     </div>

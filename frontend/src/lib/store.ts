@@ -56,6 +56,10 @@ interface ArcState {
   dimSnapStep: number;
   /** Laptop performance mode: disables shadows, IBL, and caps DPR at 1.0. */
   lowSpecMode: boolean;
+  archViewMode: "3d" | "floorplan" | "section" | "elevation";
+  setArchViewMode: (mode: "3d" | "floorplan" | "section" | "elevation") => void;
+  buildingScheduleOpen: boolean;
+  setBuildingScheduleOpen: (open: boolean) => void;
   /** Left Items/Layers sidebar open state (Shapr3D Items toggle). */
   leftSidebarOpen: boolean;
   /** Right History/Properties sidebar open state (Shapr3D History toggle). */
@@ -214,6 +218,10 @@ export const useArcStore = create<ArcState>((set) => ({
   dimSnapStep: 1,
   adaptiveGridSize: 2,
   lowSpecMode: loadStoredFastMode(),
+  archViewMode: "3d",
+  setArchViewMode: (archViewMode) => set({ archViewMode }),
+  buildingScheduleOpen: false,
+  setBuildingScheduleOpen: (buildingScheduleOpen) => set({ buildingScheduleOpen }),
   leftSidebarOpen: true,
   rightSidebarOpen: true,
   contextMenu: { open: false, x: 0, y: 0, items: [] },

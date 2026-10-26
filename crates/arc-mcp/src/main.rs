@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const SERVER_NAME: &str = "arc-mcp";
-const SERVER_VERSION: &str = "0.25.0";
+const SERVER_VERSION: &str = "0.26.0";
 
 // ============================================================================
 // Bridge Connection & Auto-Discovery
@@ -649,6 +649,119 @@ fn execute_tool(
                 "count": count,
             });
             create_solid(bridge, args, geom, "Stair")
+        }
+        "slab" | "create_slab" => {
+            let polygon = args.get("polygon").cloned().ok_or("missing 'polygon' [[x, z], ...]")?;
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(20.0);
+            let geom = json!({
+                "type": "slab",
+                "polygon": polygon,
+                "height": height,
+            });
+            create_solid(bridge, args, geom, "Slab")
+        }
+        "roof" | "create_roof" => {
+            let width = args.get("width").and_then(|v| v.as_f64()).ok_or("missing 'width'")?;
+            let depth = args.get("depth").and_then(|v| v.as_f64()).ok_or("missing 'depth'")?;
+            let pitch_deg = args.get("pitch_deg").and_then(|v| v.as_f64()).unwrap_or(30.0);
+            let overhang = args.get("overhang").and_then(|v| v.as_f64()).unwrap_or(30.0);
+            let geom = json!({
+                "type": "roof",
+                "width": width,
+                "depth": depth,
+                "pitch_deg": pitch_deg,
+                "overhang": overhang,
+            });
+            create_solid(bridge, args, geom, "Roof")
+        }
+        "door" | "create_door" => {
+            let width = args.get("width").and_then(|v| v.as_f64()).unwrap_or(90.0);
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(210.0);
+            let depth = args.get("depth").and_then(|v| v.as_f64()).unwrap_or(15.0);
+            let swing_deg = args.get("swing_deg").and_then(|v| v.as_f64()).unwrap_or(90.0);
+            let geom = json!({
+                "type": "door",
+                "width": width,
+                "height": height,
+                "depth": depth,
+                "swing_deg": swing_deg,
+            });
+            create_solid(bridge, args, geom, "Door")
+        }
+        "window" | "create_window" => {
+            let width = args.get("width").and_then(|v| v.as_f64()).unwrap_or(120.0);
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(150.0);
+            let depth = args.get("depth").and_then(|v| v.as_f64()).unwrap_or(15.0);
+            let panes_x = args.get("panes_x").and_then(|v| v.as_u64()).unwrap_or(2) as u32;
+            let panes_y = args.get("panes_y").and_then(|v| v.as_u64()).unwrap_or(2) as u32;
+            let geom = json!({
+                "type": "window",
+                "width": width,
+                "height": height,
+                "depth": depth,
+                "panes_x": panes_x,
+                "panes_y": panes_y,
+            });
+            create_solid(bridge, args, geom, "Window")
+        }
+        "column" | "create_column" => {
+            let radius = args.get("radius").and_then(|v| v.as_f64()).unwrap_or(20.0);
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(300.0);
+            let sides = args.get("sides").and_then(|v| v.as_u64()).unwrap_or(4) as u32;
+            let geom = json!({
+                "type": "column",
+                "radius": radius,
+                "height": height,
+                "sides": sides,
+            });
+            create_solid(bridge, args, geom, "Column")
+        }
+        "beam" | "create_beam" => {
+            let length = args.get("length").and_then(|v| v.as_f64()).ok_or("missing 'length'")?;
+            let width = args.get("width").and_then(|v| v.as_f64()).unwrap_or(20.0);
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(40.0);
+            let geom = json!({
+                "type": "beam",
+                "length": length,
+                "width": width,
+                "height": height,
+            });
+            create_solid(bridge, args, geom, "Beam")
+        }
+        "room" | "create_room" => {
+            let polygon = args.get("polygon").cloned().ok_or("missing 'polygon' [[x, z], ...]")?;
+            let room_name = args.get("name").and_then(|v| v.as_str()).unwrap_or("Room").to_string();
+            let room_number = args.get("number").and_then(|v| v.as_str()).unwrap_or("101").to_string();
+            let geom = json!({
+                "type": "room",
+                "name": room_name,
+                "number": room_number,
+                "polygon": polygon,
+            });
+            create_solid(bridge, args, geom, "Room")
+        }
+        "component" | "create_component" => {
+            let comp_type = args.get("component_type").and_then(|v| v.as_str()).unwrap_or("sofa");
+            let width = args.get("width").and_then(|v| v.as_f64()).unwrap_or(200.0);
+            let depth = args.get("depth").and_then(|v| v.as_f64()).unwrap_or(90.0);
+            let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(80.0);
+            let geom = json!({
+                "type": "component",
+                "component_type": comp_type,
+                "width": width,
+                "depth": depth,
+                "height": height,
+            });
+            create_solid(bridge, args, geom, "Component")
+        }
+        "set_project_mode" => {
+            let doc_id = resolve_or_create_doc(bridge, args)?;
+            let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("architecture");
+            bridge.call("set_project_mode", json!({ "document_id": doc_id, "mode": mode }))
+        }
+        "schedule" | "get_building_schedule" => {
+            let doc_id = resolve_or_create_doc(bridge, args)?;
+            bridge.call("get_building_schedule", json!({ "document_id": doc_id }))
         }
 
         // --- Wireframe Curves & Sketches ---

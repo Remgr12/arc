@@ -43,7 +43,7 @@ export function StatusPill() {
             {selectionCount === 1 ? "" : "s"}
           </span>
         )}
-        <span className="shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums text-base-500" title="Cursor position">
+        <span className="shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums text-base-500">
           {fmt(cursorWorld[0])} · {fmt(cursorWorld[2])}
         </span>
       </div>

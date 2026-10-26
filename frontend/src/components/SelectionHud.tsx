@@ -932,7 +932,6 @@ export function SelectionHud() {
               </button>
               <button
                 type="button"
-                title="Isolate (Alt+I)"
                 onClick={() => void actions.isolateSelection()}
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12px] font-medium text-base-700 hover:bg-base-200 transition-colors"
               >
@@ -941,7 +940,6 @@ export function SelectionHud() {
               </button>
               <button
                 type="button"
-                title="Export STL"
                 onClick={() => void actions.exportSelectedStl()}
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12px] font-medium text-base-700 hover:bg-base-200 transition-colors"
               >
@@ -1032,7 +1030,6 @@ export function SelectionHud() {
               {/* Construction toggle (X key) */}
               <button
                 type="button"
-                title="Construction (X)"
                 onClick={() => void actions.toggleConstruction()}
                 className={cn(
                   "flex h-7 items-center gap-1.5 rounded-md px-2 font-mono text-[11px] font-semibold transition-colors",

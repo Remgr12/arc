@@ -14,6 +14,38 @@ use crate::core::units::Units;
 use crate::core::{Color, EntityId, Layer, Transform};
 use crate::kernel::meshgen;
 
+/// Project mode / workbench discipline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectMode {
+    #[default]
+    Cad,
+    Architecture,
+}
+
+/// A building storey / level datum.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LevelData {
+    pub id: String,
+    pub name: String,
+    pub elevation: f64,
+    #[serde(default = "default_level_height")]
+    pub height: f64,
+}
+
+fn default_level_height() -> f64 {
+    300.0
+}
+
+/// An architectural structural grid line with bubble marker.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GridData {
+    pub id: String,
+    pub name: String,
+    pub start: [f64; 2],
+    pub end: [f64; 2],
+}
+
 /// Serializable document (without derived mesh buffers).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentData {
@@ -23,6 +55,14 @@ pub struct DocumentData {
     pub path: Option<String>,
     #[serde(default)]
     pub units: Units,
+    #[serde(default)]
+    pub project_mode: ProjectMode,
+    #[serde(default)]
+    pub levels: Vec<LevelData>,
+    #[serde(default)]
+    pub active_level: Option<String>,
+    #[serde(default)]
+    pub grids: Vec<GridData>,
     pub layers: Vec<Layer>,
     #[serde(default)]
     pub active_layer: EntityId,
@@ -44,6 +84,10 @@ pub struct Document {
     pub modified: bool,
     #[allow(dead_code)]
     pub data_version: u32,
+    pub project_mode: ProjectMode,
+    pub levels: Vec<LevelData>,
+    pub active_level: Option<String>,
+    pub grids: Vec<GridData>,
     pub layers: Vec<Layer>,
     pub active_layer: EntityId,
     pub entities: BTreeMap<EntityId, Entity>,
@@ -63,10 +107,92 @@ impl Default for Document {
 
 impl Document {
     pub fn new(name: String) -> Self {
+        Self::new_with_mode(name, ProjectMode::Cad)
+    }
+
+    pub fn new_with_mode(name: String, mode: ProjectMode) -> Self {
         let mut layers = Vec::new();
-        let default_layer = Layer::new("Default".to_string(), Some(Color::GRAY));
-        let active_layer = default_layer.id;
-        layers.push(default_layer);
+        let levels = if mode == ProjectMode::Architecture {
+            vec![
+                LevelData {
+                    id: "level-1".to_string(),
+                    name: "Level 1".to_string(),
+                    elevation: 0.0,
+                    height: 300.0,
+                },
+                LevelData {
+                    id: "level-2".to_string(),
+                    name: "Level 2".to_string(),
+                    elevation: 300.0,
+                    height: 300.0,
+                },
+                LevelData {
+                    id: "level-roof".to_string(),
+                    name: "Roof Level".to_string(),
+                    elevation: 600.0,
+                    height: 0.0,
+                },
+            ]
+        } else {
+            Vec::new()
+        };
+
+        let grids = if mode == ProjectMode::Architecture {
+            vec![
+                GridData {
+                    id: "grid-1".to_string(),
+                    name: "1".to_string(),
+                    start: [-600.0, -400.0],
+                    end: [-600.0, 400.0],
+                },
+                GridData {
+                    id: "grid-2".to_string(),
+                    name: "2".to_string(),
+                    start: [0.0, -400.0],
+                    end: [0.0, 400.0],
+                },
+                GridData {
+                    id: "grid-3".to_string(),
+                    name: "3".to_string(),
+                    start: [600.0, -400.0],
+                    end: [600.0, 400.0],
+                },
+                GridData {
+                    id: "grid-a".to_string(),
+                    name: "A".to_string(),
+                    start: [-800.0, -300.0],
+                    end: [800.0, -300.0],
+                },
+                GridData {
+                    id: "grid-b".to_string(),
+                    name: "B".to_string(),
+                    start: [-800.0, 300.0],
+                    end: [800.0, 300.0],
+                },
+            ]
+        } else {
+            Vec::new()
+        };
+
+        let active_level = if mode == ProjectMode::Architecture {
+            Some("level-1".to_string())
+        } else {
+            None
+        };
+
+        if mode == ProjectMode::Architecture {
+            layers.push(Layer::new("Walls".to_string(), Some(Color::rgb(0.82, 0.45, 0.25))));
+            layers.push(Layer::new("Openings".to_string(), Some(Color::rgb(0.20, 0.60, 0.90))));
+            layers.push(Layer::new("Floors & Roofs".to_string(), Some(Color::rgb(0.55, 0.58, 0.65))));
+            layers.push(Layer::new("Structure".to_string(), Some(Color::rgb(0.90, 0.60, 0.15))));
+            layers.push(Layer::new("Stairs".to_string(), Some(Color::rgb(0.35, 0.70, 0.45))));
+            layers.push(Layer::new("Rooms & Furniture".to_string(), Some(Color::rgb(0.65, 0.40, 0.80))));
+            layers.push(Layer::new("Grids & Levels".to_string(), Some(Color::rgb(0.40, 0.45, 0.50))));
+        } else {
+            layers.push(Layer::new("Default".to_string(), Some(Color::GRAY)));
+        }
+
+        let active_layer = layers[0].id;
         Self {
             id: EntityId::new(),
             name,
@@ -74,6 +200,10 @@ impl Document {
             units: Units::default(),
             modified: false,
             data_version: 1,
+            project_mode: mode,
+            levels,
+            active_level,
+            grids,
             layers,
             active_layer,
             entities: BTreeMap::new(),
@@ -149,6 +279,11 @@ impl Document {
             Geometry::Beam { .. } => "Beam",
             Geometry::Door { .. } => "Door",
             Geometry::Window { .. } => "Window",
+            Geometry::Component { .. } => "Component",
+            Geometry::Room { .. } => "Room",
+            Geometry::Railing { .. } => "Railing",
+            Geometry::GridLine { .. } => "Grid Line",
+            Geometry::LevelDatum { .. } => "Level Datum",
             Geometry::Dimension { .. } => "Dimension",
         }
     }
@@ -547,12 +682,101 @@ impl Document {
 
     // --------------------------------------------------------- persistence
 
+    pub fn set_project_mode(&mut self, mode: ProjectMode) {
+        self.project_mode = mode;
+        if mode == ProjectMode::Architecture && self.levels.is_empty() {
+            self.levels = vec![
+                LevelData {
+                    id: "level-1".to_string(),
+                    name: "Level 1".to_string(),
+                    elevation: 0.0,
+                    height: 300.0,
+                },
+                LevelData {
+                    id: "level-2".to_string(),
+                    name: "Level 2".to_string(),
+                    elevation: 300.0,
+                    height: 300.0,
+                },
+                LevelData {
+                    id: "level-roof".to_string(),
+                    name: "Roof Level".to_string(),
+                    elevation: 600.0,
+                    height: 0.0,
+                },
+            ];
+            self.active_level = Some("level-1".to_string());
+        }
+        self.touch();
+    }
+
+    pub fn add_level(&mut self, name: String, elevation: f64, height: f64) -> LevelData {
+        let id = format!("level-{}", uuid::Uuid::new_v4().simple());
+        let level = LevelData {
+            id: id.clone(),
+            name,
+            elevation,
+            height,
+        };
+        self.levels.push(level.clone());
+        self.levels.sort_by(|a, b| {
+            a.elevation
+                .partial_cmp(&b.elevation)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        if self.active_level.is_none() {
+            self.active_level = Some(id);
+        }
+        self.touch();
+        level
+    }
+
+    pub fn remove_level(&mut self, level_id: &str) -> bool {
+        let initial_len = self.levels.len();
+        self.levels.retain(|l| l.id != level_id);
+        if self.active_level.as_deref() == Some(level_id) {
+            self.active_level = self.levels.first().map(|l| l.id.clone());
+        }
+        let removed = self.levels.len() < initial_len;
+        if removed {
+            self.touch();
+        }
+        removed
+    }
+
+    pub fn set_active_level(&mut self, level_id: Option<String>) {
+        self.active_level = level_id;
+        self.touch();
+    }
+
+    pub fn add_grid(&mut self, name: String, start: [f64; 2], end: [f64; 2]) -> GridData {
+        let id = format!("grid-{}", uuid::Uuid::new_v4().simple());
+        let grid = GridData { id, name, start, end };
+        self.grids.push(grid.clone());
+        self.touch();
+        grid
+    }
+
+    pub fn remove_grid(&mut self, grid_id: &str) -> bool {
+        let initial_len = self.grids.len();
+        self.grids.retain(|g| g.id != grid_id);
+        let removed = self.grids.len() < initial_len;
+        if removed {
+            self.touch();
+        }
+        removed
+    }
+
     pub fn to_data(&self) -> DocumentData {
         DocumentData {
             version: 1,
             name: self.name.clone(),
             path: self.path.clone(),
             units: self.units.clone(),
+            project_mode: self.project_mode,
+            levels: self.levels.clone(),
+            active_level: self.active_level.clone(),
+            grids: self.grids.clone(),
             layers: self.layers.clone(),
             active_layer: self.active_layer,
             entities: self.entities.values().cloned().collect(),
@@ -562,12 +786,18 @@ impl Document {
     }
 
     pub fn from_data(data: DocumentData) -> Self {
-        let mut doc = Document::new(data.name.clone());
+        let mut doc = Document::new_with_mode(data.name.clone(), data.project_mode);
         doc.name = data.name;
         doc.path = data.path;
         doc.units = data.units;
-        doc.layers = data.layers;
-        doc.active_layer = data.active_layer;
+        doc.project_mode = data.project_mode;
+        doc.levels = data.levels;
+        doc.active_level = data.active_level;
+        doc.grids = data.grids;
+        if !data.layers.is_empty() {
+            doc.layers = data.layers;
+            doc.active_layer = data.active_layer;
+        }
         for entity in data.entities {
             doc.entities.insert(entity.id, entity);
         }
@@ -663,6 +893,10 @@ pub struct SceneData {
     pub modified: bool,
     pub path: Option<String>,
     pub units: Units,
+    pub project_mode: ProjectMode,
+    pub levels: Vec<LevelData>,
+    pub active_level: Option<String>,
+    pub grids: Vec<GridData>,
     pub active_layer: String,
     pub entities: Vec<SceneEntity>,
     pub layers: Vec<LayerData>,
@@ -744,6 +978,10 @@ impl Document {
             modified: self.modified,
             path: self.path.clone(),
             units: self.units.clone(),
+            project_mode: self.project_mode,
+            levels: self.levels.clone(),
+            active_level: self.active_level.clone(),
+            grids: self.grids.clone(),
             active_layer: self.active_layer.as_string(),
             entities,
             layers,

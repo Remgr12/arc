@@ -1,5 +1,52 @@
 // Types mirroring the Rust backend payloads.
 
+export type ProjectMode = "cad" | "architecture";
+
+export interface LevelData {
+  id: string;
+  name: string;
+  elevation: number;
+  height: number;
+}
+
+export interface GridData {
+  id: string;
+  name: string;
+  start: [number, number];
+  end: [number, number];
+}
+
+export interface RoomScheduleItem {
+  name: string;
+  number: string;
+  areaM2: number;
+}
+
+export interface OpeningScheduleItem {
+  name: string;
+  widthCm: number;
+  heightCm: number;
+}
+
+export interface BuildingSchedule {
+  totalElements: number;
+  wallCount: number;
+  totalWallLengthM: number;
+  totalWallAreaM2: number;
+  doorCount: number;
+  windowCount: number;
+  floorAreaM2: number;
+  roofCount: number;
+  columnCount: number;
+  beamCount: number;
+  stairCount: number;
+  roomCount: number;
+  furnitureCount: number;
+  rooms: RoomScheduleItem[];
+  doors: OpeningScheduleItem[];
+  windows: OpeningScheduleItem[];
+}
+
 export type ToolId =
   | "select"
   | "move"
@@ -19,6 +66,17 @@ export type ToolId =
   | "polygon"
   | "dimension"
   | "wall"
+  | "door"
+  | "window"
+  | "slab"
+  | "roof"
+  | "column"
+  | "beam"
+  | "stair"
+  | "room"
+  | "component"
+  | "grid"
+  | "level"
   | "offset"
   | "trim"
   | "extend"
@@ -79,6 +137,10 @@ export interface SceneData {
   name: string;
   modified: boolean;
   path: string | null;
+  projectMode?: ProjectMode;
+  levels?: LevelData[];
+  activeLevel?: string | null;
+  grids?: GridData[];
   activeLayer: string;
   entities: EntityData[];
   layers: LayerData[];

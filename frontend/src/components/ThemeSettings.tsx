@@ -148,7 +148,7 @@ export function ThemeSettings() {
         <Button onClick={() => void exportActive()}>
           <Download size={13} /> Export
         </Button>
-        <Button onClick={duplicateActive} title="Create an editable copy of the current theme">
+        <Button onClick={duplicateActive}>
           <Plus size={13} /> New from current
         </Button>
       </div>

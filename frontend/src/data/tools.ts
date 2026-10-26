@@ -6,12 +6,19 @@ import {
   BrickWall,
   Cable,
   Circle,
+  Columns3,
   Cone,
   Cylinder,
+  DoorOpen,
   Equal,
   FlipHorizontal2,
+  Footprints,
+  GalleryVerticalEnd,
   Globe,
+  Grid,
+  Home,
   Layers,
+  Layers3,
   LifeBuoy,
   Maximize2,
   Minus,
@@ -23,13 +30,22 @@ import {
   RotateCw,
   Ruler,
   Slice,
+  Sofa,
   Spline,
+  SquareDashed,
   Waypoints,
 } from "lucide-react";
 import type { Geometry, ToolId } from "../lib/types";
 import type { LucideIcon } from "lucide-react";
 
-export type ToolGroup = "select" | "sketch" | "modify" | "solid" | "primitives" | "annotate";
+export type ToolGroup =
+  | "select"
+  | "sketch"
+  | "modify"
+  | "solid"
+  | "primitives"
+  | "architecture"
+  | "annotate";
 
 export interface ToolDef {
   id: ToolId;
@@ -73,8 +89,20 @@ export const TOOLS: ToolDef[] = [
   { id: "torus", label: "Torus", tip: "Click center, drag radius (Y)", icon: LifeBuoy, group: "primitives" },
   { id: "plane", label: "Plane", tip: "Two clicks: near and far corners (P)", icon: PanelBottom, group: "primitives" },
 
+  { id: "wall", label: "Wall", tip: "Continuous wall with mitered corners. Enter or double-click commits", icon: BrickWall, group: "architecture" },
+  { id: "door", label: "Door", tip: "Insert a door into a wall. Space = flip hinge, F = flip swing", icon: DoorOpen, group: "architecture" },
+  { id: "window", label: "Window", tip: "Insert a window into a wall with frames, sill and glass", icon: SquareDashed, group: "architecture" },
+  { id: "slab", label: "Floor / Slab", tip: "Polygonal floor slab. Click boundary points, Enter commits", icon: Layers3, group: "architecture" },
+  { id: "roof", label: "Roof", tip: "Pitched gable or hip roof with eaves overhang", icon: Home, group: "architecture" },
+  { id: "column", label: "Column", tip: "Place architectural or structural columns", icon: Columns3, group: "architecture" },
+  { id: "beam", label: "Beam", tip: "Draw a structural framing beam between two points", icon: GalleryVerticalEnd, group: "architecture" },
+  { id: "stair", label: "Stair", tip: "Draw a staircase with treads, risers and landings", icon: Footprints, group: "architecture" },
+  { id: "room", label: "Room", tip: "Define an enclosed room space with area takeoff", icon: Home, group: "architecture" },
+  { id: "component", label: "Furniture", tip: "Place furniture (sofa, desk, table, bed). Space = rotate", icon: Sofa, group: "architecture" },
+  { id: "grid", label: "Grid", tip: "Place structural grid line with bubble marker", icon: Grid, group: "architecture" },
+  { id: "level", label: "Level", tip: "Place or adjust building storey level datum", icon: Layers3, group: "architecture" },
+
   { id: "dimension", label: "Dimension", tip: "Annotate the distance between two points", icon: Ruler, group: "annotate" },
-  { id: "wall", label: "Wall", tip: "Draw a wall along a path. Double-click or Enter to finish", icon: BrickWall, group: "annotate" },
 ];
 
 /** Kept for compatibility with older profiles stored in localStorage. */
@@ -100,7 +128,18 @@ export const DEFAULT_GEOMETRY: Partial<Record<ToolId, Geometry>> = {
   polyline: { type: "polyline_curve", points: [] },
   rectangle: { type: "rectangle_curve", width: 80, depth: 50 },
   dimension: { type: "dimension", start: [0, 0, 0], end: [80, 0, 0] },
-  wall: { type: "wall", path: [], width: 10, height: 80 },
+  wall: { type: "wall", path: [], width: 20, height: 300 },
+  door: { type: "door", width: 90, height: 210, depth: 15, swing_deg: 90 },
+  window: { type: "window", width: 120, height: 150, depth: 15, panes_x: 2, panes_y: 2 },
+  slab: { type: "slab", polygon: [[-200, -200], [200, -200], [200, 200], [-200, 200]], height: 20 },
+  roof: { type: "roof", width: 400, depth: 400, pitch_deg: 30, overhang: 40 },
+  column: { type: "column", radius: 20, height: 300, sides: 4 },
+  beam: { type: "beam", length: 400, width: 20, height: 40 },
+  stair: { type: "stair", width: 100, rise: 18, run: 28, count: 16 },
+  room: { type: "room", name: "Living Room", number: "101", polygon: [] },
+  component: { type: "component", component_type: "sofa", width: 200, depth: 90, height: 80 },
+  grid: { type: "grid_line", name: "1", start: [0, -400], end: [0, 400] },
+  level: { type: "level_datum", name: "Level 1", elevation: 0 },
 };
 
 /** Export format choices shared by the File menu and command palette. */
@@ -110,4 +149,5 @@ export const EXPORT_FORMATS: { id: string; label: string; ext: string }[] = [
   { id: "stl_ascii", label: "Export STL (ASCII)", ext: "stl" },
   { id: "gltf", label: "Export glTF", ext: "gltf" },
   { id: "step", label: "Export STEP", ext: "step" },
+  { id: "ifc", label: "Export IFC (BIM)", ext: "ifc" },
 ];

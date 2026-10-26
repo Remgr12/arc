@@ -7,7 +7,21 @@ import { offsetTool, trimTool, extendTool, filletTool, mirrorTool } from "./edit
 import { extrudeTool, revolveTool, sweepTool, loftTool } from "./solid";
 import { extrudeFaceTool, offsetFaceTool, filletEdgeTool } from "./faceTools";
 import { boxTool, sphereTool, cylinderTool, coneTool, torusTool, planeTool } from "./primitives";
-import { dimensionTool, wallTool } from "./annotate";
+import { dimensionTool } from "./annotate";
+import {
+  wallTool,
+  doorTool,
+  windowTool,
+  slabTool,
+  roofTool,
+  columnTool,
+  beamTool,
+  stairTool,
+  roomTool,
+  componentTool,
+  gridTool,
+  levelTool,
+} from "./architecture";
 
 /** Handler for every registered tool id. */
 export const HANDLERS: ReadonlyMap<ToolId, ToolHandler> = new Map([
@@ -41,6 +55,17 @@ export const HANDLERS: ReadonlyMap<ToolId, ToolHandler> = new Map([
   ["plane", planeTool],
   ["dimension", dimensionTool],
   ["wall", wallTool],
+  ["door", doorTool],
+  ["window", windowTool],
+  ["slab", slabTool],
+  ["roof", roofTool],
+  ["column", columnTool],
+  ["beam", beamTool],
+  ["stair", stairTool],
+  ["room", roomTool],
+  ["component", componentTool],
+  ["grid", gridTool],
+  ["level", levelTool],
 ]);
 
 /** "sketch" is a legacy alias for the polyline tool. */

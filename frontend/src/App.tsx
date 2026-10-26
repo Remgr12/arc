@@ -24,6 +24,7 @@ import { SelectionHud } from "./components/SelectionHud";
 import { UtilityRail } from "./components/UtilityRail";
 import { ContextMenu } from "./components/ContextMenu";
 import { Dashboard } from "./components/Dashboard";
+import { BuildingScheduleDialog } from "./components/BuildingScheduleDialog";
 import { initAutoSave } from "./lib/autosave";
 
 export default function App() {
@@ -115,7 +116,6 @@ export default function App() {
               {/* Draggable right-edge resizer */}
               <div
                 onPointerDown={startResizing}
-                title="Drag to resize sidebar"
                 className="group absolute -right-1.5 top-0 bottom-0 z-20 w-3 cursor-col-resize flex items-center justify-center hover:bg-accent-500/20 active:bg-accent-500/40"
               >
                 <div className="h-8 w-0.5 rounded-full bg-base-300 transition-colors group-hover:bg-accent-500" />
@@ -164,6 +164,7 @@ export default function App() {
       <CommandPalette />
       <SettingsDialog />
       <UpdateDialog />
+      <BuildingScheduleDialog />
       <StartupScreen />
       <Onboarding />
       {materialsMount}

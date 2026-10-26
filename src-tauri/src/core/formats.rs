@@ -39,6 +39,8 @@ pub enum Format {
     Gltf,
     /// STEP (ISO 10303-21) text (`.step` / `.stp`).
     Step,
+    /// Industry Foundation Classes IFC4 (ISO 16739) (`.ifc`).
+    Ifc,
 }
 
 impl Format {
@@ -51,6 +53,7 @@ impl Format {
             Format::Dxf => "dxf",
             Format::Gltf => "gltf",
             Format::Step => "step",
+            Format::Ifc => "ifc",
         }
     }
 
@@ -65,6 +68,7 @@ impl Format {
             "dxf" => Some(Format::Dxf),
             "gltf" => Some(Format::Gltf),
             "step" | "stp" => Some(Format::Step),
+            "ifc" => Some(Format::Ifc),
             "stl" => {
                 let ascii = std::fs::read(path)
                     .map(|bytes| looks_ascii_stl(&bytes))
@@ -999,5 +1003,209 @@ fn weld_key(v: [f64; 3]) -> [i64; 3] {
 }
 
 // ---------------------------------------------------------------------------
+// IFC4 BIM Export (ISO 16739 / ISO 10303-21 STEP)
+// ---------------------------------------------------------------------------
+
+use crate::core::Document;
+use crate::core::entity::Geometry;
+
+/// Export document as an ISO 10303-21 IFC4 STEP file.
+pub fn export_ifc(doc: &Document) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let name = if doc.name.is_empty() { "ArcProject" } else { &doc.name };
+    let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+
+    writeln!(out, "ISO-10303-21;").unwrap();
+    writeln!(out, "HEADER;").unwrap();
+    writeln!(out, "FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');").unwrap();
+    writeln!(out, "FILE_NAME('{name}.ifc','{timestamp}',('Arc User'),('Arc BIM'),'Arc CAD/BIM v0.26','Arc','');").unwrap();
+    writeln!(out, "FILE_SCHEMA(('IFC4'));").unwrap();
+    writeln!(out, "ENDSEC;").unwrap();
+    writeln!(out, "DATA;").unwrap();
+
+    writeln!(out, "#1=IFCPERSON($,$,'User',$,$,$,$,$);").unwrap();
+    writeln!(out, "#2=IFCORGANIZATION($,'Arc CAD',$,$,$);").unwrap();
+    writeln!(out, "#3=IFCPERSONANDORGANIZATION(#1,#2,$);").unwrap();
+    writeln!(out, "#4=IFCAPPLICATION(#2,'0.26.0','Arc','Arc');").unwrap();
+    writeln!(out, "#5=IFCOWNERHISTORY(#3,#4,$,.ADDED.,$,$,$,$);").unwrap();
+
+    writeln!(out, "#6=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);").unwrap();
+    writeln!(out, "#7=IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.);").unwrap();
+    writeln!(out, "#8=IFCUNITASSIGNMENT((#6,#7));").unwrap();
+
+    writeln!(out, "#9=IFCCARTESIANPOINT((0.,0.,0.));").unwrap();
+    writeln!(out, "#10=IFCDIRECTION((0.,0.,1.));").unwrap();
+    writeln!(out, "#11=IFCDIRECTION((1.,0.,0.));").unwrap();
+    writeln!(out, "#12=IFCAXIS2PLACEMENT3D(#9,#10,#11);").unwrap();
+    writeln!(out, "#13=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#12,$);").unwrap();
+
+    writeln!(out, "#14=IFCPROJECT('{}',#5,'{}',$,$,$,$,(#13),#8);", uuid::Uuid::new_v4().simple(), name).unwrap();
+    writeln!(out, "#15=IFCSITE('{}',#5,'Site',$,$,#12,$,$,.ELEMENT.,$,$,$,$,$);", uuid::Uuid::new_v4().simple()).unwrap();
+    writeln!(out, "#16=IFCBUILDING('{}',#5,'{} Building',$,$,#12,$,$,.ELEMENT.,$,$,$);", uuid::Uuid::new_v4().simple(), name).unwrap();
+
+    let mut id_counter = 20u64;
+    let mut storey_ids = Vec::new();
+
+    let levels = if doc.levels.is_empty() {
+        vec![crate::core::document::LevelData {
+            id: "level-1".to_string(),
+            name: "Level 1".to_string(),
+            elevation: 0.0,
+            height: 300.0,
+        }]
+    } else {
+        doc.levels.clone()
+    };
+
+    let mut element_ids_per_storey: Vec<(u64, Vec<u64>)> = Vec::new();
+
+    for level in &levels {
+        let sid = id_counter; id_counter += 1;
+        let pt_id = id_counter; id_counter += 1;
+        let pl_id = id_counter; id_counter += 1;
+        let elev_m = level.elevation / 100.0;
+        writeln!(out, "#{pt_id}=IFCCARTESIANPOINT((0.,0.,{elev_m:.4}));").unwrap();
+        writeln!(out, "#{pl_id}=IFCAXIS2PLACEMENT3D(#{pt_id},#10,#11);").unwrap();
+        writeln!(out, "#{sid}=IFCBUILDINGSTOREY('{}',#5,'{}',$,$,#{pl_id},$,$,.ELEMENT.,{elev_m:.4});",
+            uuid::Uuid::new_v4().simple(), level.name).unwrap();
+        storey_ids.push(sid);
+        element_ids_per_storey.push((sid, Vec::new()));
+    }
+
+    let default_storey_idx = 0;
+
+    for entity in doc.entities.values() {
+        if !entity.visible {
+            continue;
+        }
+        let pos = entity.transform.position;
+        let px = pos[0] / 100.0;
+        let py = pos[1] / 100.0;
+        let pz = pos[2] / 100.0;
+
+        let pt_id = id_counter; id_counter += 1;
+        let pl_id = id_counter; id_counter += 1;
+        writeln!(out, "#{pt_id}=IFCCARTESIANPOINT(({px:.4},{pz:.4},{py:.4}));").unwrap();
+        writeln!(out, "#{pl_id}=IFCAXIS2PLACEMENT3D(#{pt_id},#10,#11);").unwrap();
+
+        let elem_id = id_counter; id_counter += 1;
+        let guid = uuid::Uuid::new_v4().simple();
+        let ename = if entity.name.is_empty() { entity.kind.type_name() } else { &entity.name };
+
+        match &entity.kind {
+            Geometry::Wall { width, height, .. } => {
+                let w_m = width / 100.0;
+                let h_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCWALLSTANDARDCASE('{guid}',#5,'{ename}','Wall width={w_m:.2}m height={h_m:.2}m',$,#{pl_id},$,$);").unwrap();
+            }
+            Geometry::Door { width, height, .. } => {
+                let w_m = width / 100.0;
+                let h_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCDOOR('{guid}',#5,'{ename}','Door {w_m:.2}x{h_m:.2}m',$,#{pl_id},$,$,{h_m:.4},{w_m:.4},.DOOR.,.NOTDEFINED.,$);").unwrap();
+            }
+            Geometry::Window { width, height, .. } => {
+                let w_m = width / 100.0;
+                let h_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCWINDOW('{guid}',#5,'{ename}','Window {w_m:.2}x{h_m:.2}m',$,#{pl_id},$,$,{h_m:.4},{w_m:.4},.WINDOW.,.NOTDEFINED.,.NOTDEFINED.,$);").unwrap();
+            }
+            Geometry::Slab { height, .. } => {
+                let th_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCSLAB('{guid}',#5,'{ename}','Floor Slab th={th_m:.2}m',$,#{pl_id},$,$,.FLOOR.);").unwrap();
+            }
+            Geometry::Roof { pitch_deg, .. } => {
+                writeln!(out, "#{elem_id}=IFCROOF('{guid}',#5,'{ename}','Roof pitch={pitch_deg}deg',$,#{pl_id},$,$,.GABLE_ROOF.);").unwrap();
+            }
+            Geometry::Column { radius, height, .. } => {
+                let r_m = radius / 100.0;
+                let h_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCCOLUMN('{guid}',#5,'{ename}','Column r={r_m:.2}m h={h_m:.2}m',$,#{pl_id},$,$,.COLUMN.);").unwrap();
+            }
+            Geometry::Beam { length, width, height } => {
+                let l_m = length / 100.0;
+                let w_m = width / 100.0;
+                let h_m = height / 100.0;
+                writeln!(out, "#{elem_id}=IFCBEAM('{guid}',#5,'{ename}','Beam {l_m:.2}x{w_m:.2}x{h_m:.2}m',$,#{pl_id},$,$,.BEAM.);").unwrap();
+            }
+            Geometry::Stair { count, rise, run, .. } => {
+                writeln!(out, "#{elem_id}=IFCSTAIR('{guid}',#5,'{ename}','Stair steps={count} rise={rise} run={run}',$,#{pl_id},$,$,.STRAIGHT_RUN_STAIR.);").unwrap();
+            }
+            Geometry::Room { name, number, .. } => {
+                writeln!(out, "#{elem_id}=IFCSPACE('{guid}',#5,'{name}','Room {number}',$,#{pl_id},$,$,.ELEMENT.,.INTERNAL.,$);").unwrap();
+            }
+            Geometry::Component { component_type, .. } => {
+                writeln!(out, "#{elem_id}=IFCFURNISHINGELEMENT('{guid}',#5,'{ename}','Component {component_type}',$,#{pl_id},$,$);").unwrap();
+            }
+            _ => {
+                if entity.kind.has_triangles() {
+                    writeln!(out, "#{elem_id}=IFCBUILDINGELEMENTPROXY('{guid}',#5,'{ename}',$,$,#{pl_id},$,$,.ELEMENT.);").unwrap();
+                } else {
+                    continue;
+                }
+            }
+        }
+        element_ids_per_storey[default_storey_idx].1.push(elem_id);
+    }
+
+    for (sid, elems) in &element_ids_per_storey {
+        if !elems.is_empty() {
+            let rel_id = id_counter; id_counter += 1;
+            let elem_refs: Vec<String> = elems.iter().map(|e| format!("#{e}")).collect();
+            writeln!(out, "#{rel_id}=IFCRELCONTAINEDINSPATIALSTRUCTURE('{}',#5,$,$,({}),#{sid});",
+                uuid::Uuid::new_v4().simple(), elem_refs.join(",")).unwrap();
+        }
+    }
+
+    let rel_proj_site = id_counter; id_counter += 1;
+    writeln!(out, "#{rel_proj_site}=IFCRELAGGREGATES('{}',#5,$,$,#14,(#15));", uuid::Uuid::new_v4().simple()).unwrap();
+
+    let rel_site_bldg = id_counter; id_counter += 1;
+    writeln!(out, "#{rel_site_bldg}=IFCRELAGGREGATES('{}',#5,$,$,#15,(#16));", uuid::Uuid::new_v4().simple()).unwrap();
+
+    let rel_bldg_storeys = id_counter;
+    let storey_refs: Vec<String> = storey_ids.iter().map(|s| format!("#{s}")).collect();
+    writeln!(out, "#{rel_bldg_storeys}=IFCRELAGGREGATES('{}',#5,$,$,#16,({}));",
+        uuid::Uuid::new_v4().simple(), storey_refs.join(",")).unwrap();
+
+    writeln!(out, "ENDSEC;").unwrap();
+    writeln!(out, "END-ISO-10303-21;").unwrap();
+
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::document::{Document, ProjectMode};
+    use crate::core::entity::{Entity, Geometry};
+
+    #[test]
+    fn test_architecture_document_and_ifc_export() {
+        let mut doc = Document::new_with_mode("Architectural Villa".to_string(), ProjectMode::Architecture);
+        assert_eq!(doc.project_mode, ProjectMode::Architecture);
+        assert_eq!(doc.levels.len(), 3);
+        assert_eq!(doc.grids.len(), 5);
+
+        let wall = Geometry::Wall {
+            path: vec![[0.0, 0.0], [500.0, 0.0]],
+            width: 25.0,
+            height: 300.0,
+        };
+        let layer_id = doc.layers[0].id;
+        let entity = Entity::new(crate::core::EntityId::new(), "Exterior Wall".to_string(), layer_id, wall);
+        let _ = doc.add_entity(entity);
+
+        let ifc = export_ifc(&doc);
+        assert!(ifc.contains("ISO-10303-21;"));
+        assert!(ifc.contains("IFCPROJECT"));
+        assert!(ifc.contains("IFCSITE"));
+        assert!(ifc.contains("IFCBUILDING"));
+        assert!(ifc.contains("IFCBUILDINGSTOREY"));
+        assert!(ifc.contains("IFCWALLSTANDARDCASE"));
+        assert!(ifc.contains("END-ISO-10303-21;"));
+    }
+}
